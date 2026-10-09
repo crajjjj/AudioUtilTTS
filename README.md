@@ -67,8 +67,12 @@ directly, call the natives and guard them:
 If SKSE.GetPluginVersion("AudioUtilTTS") >= 0
     AudioUtilTTS.SpeakAs("Not so loud.", "whisper")
     AudioUtilTTS.Speak("The road to Whiterun lay open.", 9)
+    AudioUtilTTS.SpeakActor(akSpeaker, "Not so loud.")
 EndIf
 ```
+
+`Speak` and `SpeakAs` are narration and take no actor. `SpeakActor` is the
+character form: the actor comes first, then the text, then an optional preset.
 
 When a line starts playing, the mod event `AudioUtilTTS_Spoken` fires with
 `strArg` = the text and `numArg` = the AudioUtil instance handle. The full API is
