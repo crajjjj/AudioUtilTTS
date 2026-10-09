@@ -73,6 +73,13 @@ namespace Config
 			settings->outputRate = (*playback)["output_rate"].value_or(settings->outputRate);
 		}
 
+		if (const auto* speech = root["speech"].as_table()) {
+			settings->speechGroup = (*speech)["group"].value_or(settings->speechGroup);
+			settings->speechChannel = (*speech)["channel"].value_or(settings->speechChannel);
+			settings->speechSlots = (*speech)["slots"].value_or(settings->speechSlots);
+			settings->speechLipSync = (*speech)["lipsync"].value_or(settings->speechLipSync);
+		}
+
 		if (!IsFolderName(settings->model)) {
 			logger::warn("[model] dir = '{}' is not a plain folder name, using the default", settings->model);
 			settings->model = Settings{}.model;
@@ -84,6 +91,13 @@ namespace Config
 		settings->maxPending = std::clamp(settings->maxPending, 1, 16);
 		settings->maxChars = std::clamp(settings->maxChars, 16, 4000);
 		settings->slots = std::clamp(settings->slots, 1, 16);
+		settings->speechSlots = std::clamp(settings->speechSlots, 1, 16);
+		if (Normalize(settings->speechChannel) == Normalize(settings->channel)) {
+			// the two lanes must not share a channel: each relies on its own channel
+			// to have stopped a line before that line's file is rewritten
+			logger::warn("[speech] channel must differ from [playback] channel, using 'speech'");
+			settings->speechChannel = Normalize(settings->channel) == "speech" ? "speech2" : "speech";
+		}
 		settings->outputRate = settings->outputRate <= 0 ? 0 : std::clamp(settings->outputRate, 8000, 96000);
 
 		if (const auto* presets = root["preset"].as_table()) {
@@ -115,10 +129,12 @@ namespace Config
 		}
 
 		logger::info("Config: model '{}' ({}), voice {}, speed {:.2f}, volume {:.2f}, threads {}, max_loaded {}, "
-					 "group '{}', channel '{}', interrupt {}, max_pending {}, slots {}, output_rate {}, {} presets{}",
+					 "group '{}', channel '{}', interrupt {}, max_pending {}, slots {}, output_rate {}, {} presets, "
+					 "speech group '{}', channel '{}', slots {}, lipsync {}{}",
 			settings->model, settings->family, settings->voice, settings->speed, settings->volume,
 			settings->threads, settings->maxLoaded, settings->group, settings->channel, settings->interrupt,
 			settings->maxPending, settings->slots, settings->outputRate, settings->presets.size(),
+			settings->speechGroup, settings->speechChannel, settings->speechSlots, settings->speechLipSync,
 			settings->enable ? "" : " [disabled]");
 
 		std::scoped_lock lock{ g_lock };

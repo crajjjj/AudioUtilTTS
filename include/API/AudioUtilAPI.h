@@ -57,6 +57,12 @@ namespace RE
 //   authored `.lip`/fuz phoneme curves when available, else the amplitude envelope
 //   (needs loose PCM wav or fuz). The global [lipsync] toggle and the gag / tongue /
 //   player-dialogue guards all apply. The plain variant NEVER moves the mouth.
+// - A file may be rewritten between plays. The engine re-reads a file's bytes every
+//   time it plays one, so a plugin that generates audio can keep a few placeholder
+//   wavs that exist at game launch (only those are playable) and overwrite one per
+//   line. From AudioUtil 0.9.26 (AudioUtil_GetVersion() >= 900026) the lipsync follows
+//   the rewritten audio too; before that it replayed the mouth movement of the first
+//   audio it had seen at that path.
 //
 // -------------------------------------------------------------------------------------
 // THREADING / LIFECYCLE

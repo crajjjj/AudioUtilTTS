@@ -68,8 +68,26 @@ voice = 2    # af_nicole
 # model = "vits-piper-en_US-lessac-medium"
 # speed = 1.1
 
+# Character speech: a line spoken by an actor, positioned at them, with their
+# mouth moving (AudioUtilTTS.SpeakActor, or the actor sending AudioUtilTTS_Say).
+# It has its own channel and its own placeholder files, so a character and the
+# narrator can talk at the same time; two characters take turns.
+[speech]
+# AudioUtil volume group and exclusivity channel. The channel must differ from
+# the [playback] one.
+group = "speech"
+channel = "speech"
+# Move the speaker's mouth (AudioUtil lipsync, driven by loudness). Needs
+# AudioUtil 0.9.26 or newer; with an older one the mouth stays still.
+lipsync = true
+# Placeholder wav files for character lines (Data\Sound\AudioUtilTTS).
+slots = 4
+# With no preset named, a character uses the preset "female" or "male" by their
+# sex when those exist above, else the default voice.
+
+# Narration: lines with no speaker (AudioUtilTTS.Speak, AudioUtilTTS_Speak).
 [playback]
-# AudioUtil volume group and exclusivity channel the speech plays on.
+# AudioUtil volume group and exclusivity channel the narration plays on.
 group = "narration"
 channel = "narration"
 # false = a new line waits for the one being spoken to finish.

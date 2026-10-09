@@ -8,7 +8,8 @@ and no helper program.
 ## Requirements
 
 - Skyrim SE / AE with SKSE64 and Address Library
-- AudioUtil 0.9.9 or newer (it does the actual playback)
+- AudioUtil 0.9.9 or newer (it does the actual playback); 0.9.26 or newer for
+  the mouth to move on character speech
 - ConsoleUtil Extended, only for the `autts` test commands
 
 ## Using it from a mod
@@ -34,6 +35,18 @@ A preset is a voice the user defines in the config under one name (see
 [Presets](#presets)). An unknown name falls back to the default voice, so a mod
 can ask for a role without knowing what the user has installed.
 
+Those are narration: flat, with no speaker. To make a character say a line, let
+that actor send `AudioUtilTTS_Say`. The line is positioned at them and their
+mouth moves:
+
+```papyrus
+akSpeaker.SendModEvent("AudioUtilTTS_Say", "Not so loud.")
+akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper", "Not so loud.")
+```
+
+With no preset named, the speaker gets the preset `female` or `male` by their sex
+when the config defines those. See [Character speech](#character-speech).
+
 To learn whether a line was accepted, or to pass a voice number, volume or speed
 directly, call the natives and guard them:
 
@@ -55,8 +68,26 @@ documented in `papyrus\Source\AudioUtilTTS.psc`.
   i7-12700KF with the game closed, and longer while the game is busy.
 - **Lines do not pile up.** A new line waits for the one being spoken; if more
   arrive meanwhile, only the newest is kept (`[playback] max_pending`).
-- **It is narration, not dialogue.** Speech plays flat, not positioned at an
-  actor, and moves no mouth.
+- **Narration and character speech are separate.** Narration plays flat and moves
+  no mouth. A character line plays at the actor and moves their mouth. Neither
+  goes through the game's dialogue system, so there are no dialogue subtitles.
+
+## Character speech
+
+`AudioUtilTTS.SpeakActor(akSpeaker, "text")`, or the actor sending
+`AudioUtilTTS_Say`, makes that actor say the line.
+
+- The mouth follows the loudness of the line (AudioUtil's lipsync). It opens and
+  closes with the speech; it does not form real phonemes. Needs AudioUtil
+  0.9.26 or newer, otherwise the mouth stays still.
+- AudioUtil's guards still apply: a gag, a worn tongue item, a dialogue with the
+  player or another mod's claim on the mouth all keep it still.
+- Character lines use their own channel and placeholder files (`[speech]` in the
+  config), so a character and the narrator can talk at once. Two characters
+  take turns.
+- A generated voice will not match an NPC's recorded voice.
+- If the speaker is gone or unloaded by the time the line is ready, it is
+  dropped.
 
 ## Cost
 
@@ -88,6 +119,9 @@ frame rate was noticed while lines were generated (observed, not benchmarked).
 | `autts say "text"` | Speak a line with the configured voice |
 | `autts sayv "text" 9` | Speak a line with voice number 9 of the default model |
 | `autts sayas "text" whisper` | Speak a line through the preset `whisper` |
+| `autts sayactor "text"` | Make the console-selected actor (or the player) say a line |
+| `autts sayactoras "text" whisper` | The same through the preset `whisper` |
+| `autts sayevent "text"` | The same through the `AudioUtilTTS_Say` mod event |
 | `autts event "text"` | Speak a line through the mod event |
 | `autts eventas "text" whisper` | Speak a line through the mod event with a preset |
 | `autts status` | Show whether speech is ready, and why not |

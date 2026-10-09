@@ -46,6 +46,38 @@ string Function ViaEventAs(string text, string preset) global
     return "event AudioUtilTTS_Speak:" + preset + " sent"
 EndFunction
 
+; Make a character say a line: the reference selected in the console, or the
+; player when nothing is selected (third person to see the mouth). The voice is
+; the preset "female" or "male" by the speaker's sex.
+;   autts sayactor "Not so loud."
+string Function SayActor(string text) global
+    return SayActorAs(text, "")
+EndFunction
+
+; The same with a named preset.
+;   autts sayactoras "Not so loud." whisper
+string Function SayActorAs(string text, string preset) global
+    Actor speaker = Game.GetCurrentConsoleRef() as Actor
+    if !speaker
+        speaker = Game.GetPlayer()
+    endif
+    if AudioUtilTTS.SpeakActor(speaker, text, preset)
+        return "queued for " + speaker.GetDisplayName()
+    endif
+    return "not queued - " + AudioUtilTTS.GetStatus()
+EndFunction
+
+; The same through the mod event, sent by that character.
+;   autts sayevent "Not so loud."
+string Function SayEvent(string text) global
+    Actor speaker = Game.GetCurrentConsoleRef() as Actor
+    if !speaker
+        speaker = Game.GetPlayer()
+    endif
+    speaker.SendModEvent("AudioUtilTTS_Say", text)
+    return "event AudioUtilTTS_Say sent by " + speaker.GetDisplayName()
+EndFunction
+
 ;   autts status
 string Function Status() global
     return AudioUtilTTS.GetStatus()

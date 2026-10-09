@@ -9,7 +9,7 @@ version: 1
 name: AudioUtilTTSTest
 alias: autts
 script: AudioUtilTTSTest
-help: AudioUtilTTS console test harness (say, sayv, sayas, event, eventas, status, stop, reload, enable)
+help: AudioUtilTTS console test harness (say, sayv, sayas, sayactor, sayactoras, event, eventas, sayevent, status, stop, reload, enable)
 subs:
   - name: say
     func: Say
@@ -63,6 +63,34 @@ subs:
         type: String
         required: true
         help: Preset name, e.g. narrator, female, male, whisper
+  - name: sayactor
+    func: SayActor
+    help: Make the console-selected actor (or the player) say a line, with lipsync
+    args:
+      - name: text
+        type: String
+        required: true
+        help: The line to say, in quotes
+  - name: sayactoras
+    func: SayActorAs
+    help: The same with a named preset instead of female or male by the speaker's sex
+    args:
+      - name: text
+        type: String
+        required: true
+        help: The line to say, in quotes
+      - name: preset
+        type: String
+        required: true
+        help: Preset name, e.g. narrator, female, male, whisper
+  - name: sayevent
+    func: SayEvent
+    help: The same through the AudioUtilTTS_Say mod event, sent by that actor
+    args:
+      - name: text
+        type: String
+        required: true
+        help: The line to say, in quotes
   - name: status
     func: Status
     help: Show whether speech is ready, and why not if it is not

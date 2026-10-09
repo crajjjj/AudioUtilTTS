@@ -41,6 +41,12 @@ namespace Config
 		int         slots = 4;
 		int         outputRate = 0;
 
+		// [speech]: lines spoken by a character (SpeakActor / AudioUtilTTS_Say)
+		std::string speechGroup = "speech";
+		std::string speechChannel = "speech";
+		int         speechSlots = 4;
+		bool        speechLipSync = true;
+
 		// [preset.<name>], keyed by Normalize(name)
 		std::unordered_map<std::string, Preset> presets;
 	};

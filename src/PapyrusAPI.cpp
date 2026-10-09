@@ -30,6 +30,12 @@ namespace PapyrusAPI
 			return Speaker::SpeakAs(a_text.c_str(), a_preset.c_str());
 		}
 
+		bool SpeakActor(RE::StaticFunctionTag*, RE::Actor* a_speaker, RE::BSFixedString a_text,
+			RE::BSFixedString a_preset, bool a_lipSync)
+		{
+			return Speaker::SpeakActor(a_speaker, a_text.c_str(), a_preset.c_str(), a_lipSync);
+		}
+
 		bool HasPreset(RE::StaticFunctionTag*, RE::BSFixedString a_preset)
 		{
 			return Speaker::HasPreset(a_preset.c_str());
@@ -74,6 +80,11 @@ namespace PapyrusAPI
 		{
 			return Speaker::Channel();
 		}
+
+		RE::BSFixedString GetSpeechChannel(RE::StaticFunctionTag*)
+		{
+			return Speaker::SpeechChannel();
+		}
 	}
 
 	bool RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm)
@@ -82,6 +93,7 @@ namespace PapyrusAPI
 		REGISTERFUNC(IsReady, SCRIPT_NAME);
 		REGISTERFUNC(Speak, SCRIPT_NAME);
 		REGISTERFUNC(SpeakAs, SCRIPT_NAME);
+		REGISTERFUNC(SpeakActor, SCRIPT_NAME);
 		REGISTERFUNC(HasPreset, SCRIPT_NAME);
 		REGISTERFUNC(CancelPending, SCRIPT_NAME);
 		REGISTERFUNC(IsBusy, SCRIPT_NAME);
@@ -91,6 +103,7 @@ namespace PapyrusAPI
 		REGISTERFUNC(ReloadConfig, SCRIPT_NAME);
 		REGISTERFUNC(GetStatus, SCRIPT_NAME);
 		REGISTERFUNC(GetChannel, SCRIPT_NAME);
+		REGISTERFUNC(GetSpeechChannel, SCRIPT_NAME);
 		return true;
 	}
 }

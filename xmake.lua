@@ -110,7 +110,8 @@ target(PROJECT_NAME)
         -- placeholder wavs the plugin speaks into; they ship with the mod so the
         -- game indexes them at the first launch (see scripts\slots.lua)
         import("scripts.slots")
-        slots(path.join(os.projectdir(), "dist", "Sound", "AudioUtilTTS"), 4)
+        slots(path.join(os.projectdir(), "dist", "Sound", "AudioUtilTTS"), 4, "_tts_slot")
+        slots(path.join(os.projectdir(), "dist", "Sound", "AudioUtilTTS"), 4, "_tts_speech")
 
         local mod_folder = os.getenv("XSE_TES5_MODS_PATH")
         if mod_folder and has_config("copy_to_mod") then

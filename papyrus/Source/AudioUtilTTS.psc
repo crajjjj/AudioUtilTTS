@@ -14,7 +14,17 @@ Scriptname AudioUtilTTS Hidden
 ; name). An unknown preset name falls back to the default voice, so a mod can
 ; ask for a role without knowing what the user has installed.
 ;
-; When AudioUtilTTS is not installed the event simply goes nowhere. Use
+; Those two are narration: flat, with no speaker. To make a CHARACTER say a
+; line, let that actor send AudioUtilTTS_Say instead. The line is positioned at
+; them and their mouth moves:
+;
+;     akSpeaker.SendModEvent("AudioUtilTTS_Say", "Not so loud.")
+;     akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper", "Not so loud.")
+;
+; With no preset named, the speaker gets the preset "female" or "male" by their
+; sex when the config defines those.
+;
+; When AudioUtilTTS is not installed the events simply go nowhere. Use
 ; SendModEvent (the Form function), not the ModEvent.Create / Send pair.
 ;
 ; Call the natives directly when you need a voice number, volume or speed per
@@ -27,7 +37,8 @@ Scriptname AudioUtilTTS Hidden
 ;
 ; When a line starts playing, the mod event AudioUtilTTS_Spoken fires:
 ; strArg = the text, numArg = the AudioUtil instance handle (works with
-; AudioUtil.StopHandle, IsHandlePlaying, SetHandleVolume, GetHandleDuration).
+; AudioUtil.StopHandle, IsHandlePlaying, SetHandleVolume, GetHandleDuration),
+; sender = the speaking actor, or None for narration.
 ; ---------------------------------------------------------------------------
 
 ; API version of the installed plugin. 1 = first release.
@@ -50,6 +61,15 @@ bool Function Speak(string asText, int aiVoice = -1, float afVolume = -1.0, floa
 ; (the line is about a second later that once) and then stays in memory. An
 ; empty or unknown preset name uses the default voice.
 bool Function SpeakAs(string asText, string asPreset) global native
+
+; Make an actor say a line: positioned at them, on the character channel, with
+; their mouth moving when abLipSync is true and [speech] lipsync is on. The
+; mouth follows the loudness of the line, it does not form real phonemes, and
+; AudioUtil's own guards still apply (a gag, a worn tongue, a dialogue with the
+; player and a mouth claim all keep it still). An empty asPreset picks "female"
+; or "male" by the speaker's sex when the config defines those. The line is
+; dropped if the speaker is gone or not loaded by the time it is ready.
+bool Function SpeakActor(Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
 
 ; True when AudioUtilTTS.toml defines [preset.<asPreset>].
 bool Function HasPreset(string asPreset) global native
@@ -75,11 +95,15 @@ bool Function ReloadConfig() global native
 ; One line of status text: "ready | model ..." or "not ready: <why>".
 string Function GetStatus() global native
 
-; The AudioUtil channel speech plays on ([playback] channel).
+; The AudioUtil channel narration plays on ([playback] channel).
 string Function GetChannel() global native
 
-; Drop waiting lines and cut the line being spoken.
+; The AudioUtil channel character speech plays on ([speech] channel).
+string Function GetSpeechChannel() global native
+
+; Drop waiting lines and cut whatever is being spoken, narration and characters.
 Function StopSpeaking() global
     CancelPending()
     AudioUtil.StopChannel(GetChannel())
+    AudioUtil.StopChannel(GetSpeechChannel())
 EndFunction
