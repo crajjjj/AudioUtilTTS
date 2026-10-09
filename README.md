@@ -58,6 +58,29 @@ documented in `papyrus\Source\AudioUtilTTS.psc`.
 - **It is narration, not dialogue.** Speech plays flat, not positioned at an
   actor, and moves no mouth.
 
+## Cost
+
+Measured outside the game on an i7-12700KF, for lines of about five seconds of
+speech. Nothing here uses the GPU. The effect on frame rate in a running game
+has not been measured.
+
+| | Kokoro (default) | Piper voice |
+|---|---|---|
+| Memory, settled after a few lines | about 625 MB | about 350 MB |
+| Time to generate a line, 2 threads | about 2 s | about 0.25 s |
+| CPU while generating | 2 cores fully busy | 2 cores fully busy |
+| CPU between lines | none | none |
+| Time to load, on a background thread | 0.8 s | 0.6 s |
+
+- A line costs CPU only while it is generated, plus a short wind-down right
+  after (about a third of a CPU-second with two threads). `[model] threads` trades burst
+  width for length: one thread keeps a single core busy for about 3.2 s per
+  line, four threads keep four busy for about 1.2 s.
+- Memory does not grow with use: it was flat from the fifth line to the
+  thirtieth.
+- Presets on the default model cost nothing extra. A preset on another model
+  adds that model's memory once it has been used.
+
 ## Console commands
 
 | Command | Does |
@@ -97,8 +120,8 @@ Anything a preset leaves out comes from the defaults. The shipped config defines
 
 A preset may name a different model. That model is loaded the first time a line
 asks for it, which delays that one line by about a second, and then stays in
-memory at roughly its file size. `[model] max_loaded` (default 3) caps how many
-are kept; the least recently used one is unloaded first, never the default.
+memory (see [Cost](#cost)). `[model] max_loaded` (default 3) caps how many are
+kept; the least recently used one is unloaded first, never the default.
 
 ### Models
 

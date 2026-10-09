@@ -3,7 +3,8 @@
 # Reload this file in game with:  autts reload
 
 [general]
-# Master switch. false also skips loading any model (about 350 MB of memory).
+# Master switch. false also skips loading any model (the default one settles at
+# about 625 MB of memory).
 enable = true
 
 [model]
@@ -23,7 +24,8 @@ lang = ""
 # How many models may be in memory at once, the default one included. A preset
 # can name another model; it is loaded the first time a line asks for it and
 # kept. Past this limit the least recently used one is unloaded (never the
-# default). Each loaded model costs roughly its file size in memory.
+# default). Measured memory per loaded model, settled after a few lines: about
+# 625 MB for kokoro-en-v0_19, about 350 MB for a Piper voice.
 max_loaded = 3
 
 [voice]
