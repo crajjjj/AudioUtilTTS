@@ -26,6 +26,10 @@ dist/**
 !dist/SKSE/Plugins/
 !dist/SKSE/Plugins/AudioUtilTTS/
 !dist/SKSE/Plugins/AudioUtilTTS/AudioUtilTTS.toml
+!dist/SKSE/Plugins/AudioUtilTTS/licenses/
+!dist/SKSE/Plugins/AudioUtilTTS/licenses/*.txt
+# a copy of LICENSE that scripts\package.lua places beside the other licenses
+dist/SKSE/Plugins/AudioUtilTTS/licenses/GPL-3.0.txt
 !dist/SKSE/CustomConsole/
 !dist/SKSE/CustomConsole/*.yaml
 

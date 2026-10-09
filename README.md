@@ -12,6 +12,19 @@ and no helper program.
   the mouth to move on character speech
 - ConsoleUtil Extended, only for the `autts` test commands
 
+## Installing
+
+Take both archives from the [latest release](https://github.com/crajjjj/AudioUtilTTS/releases/latest)
+and install them like any mod:
+
+- `AudioUtilTTS-<version>.zip`: the plugin, its config, scripts and console
+  commands.
+- `AudioUtilTTS-Voice-kokoro-en-v0_19.zip`: the default voice model. It is a
+  separate download because it is large and does not change with the plugin.
+
+Without a voice model the plugin loads but stays silent; `autts status` says
+why.
+
 ## Using it from a mod
 
 The simplest way needs no dependency on this mod at all. Send a mod event from
@@ -189,6 +202,7 @@ powershell -ExecutionPolicy Bypass -File scripts\fetch-deps.ps1
 xmake f -m release
 xmake                      # DLL -> dist\SKSE\Plugins\AudioUtilTTS.dll
 xmake build papyrus        # scripts -> dist\Scripts
+xmake build package        # release archives -> Release\
 ```
 
 - Needs VS 2022 (v143, C++23) and xmake 3.0 or newer.
@@ -207,6 +221,9 @@ xmake run probe dist\SKSE\Plugins\AudioUtilTTS\models\kokoro-en-v0_19 "Some text
 ```
 
 ## Licenses
+
+The plugin archive carries the full notices and license texts in
+`SKSE\Plugins\AudioUtilTTS\licenses`.
 
 AudioUtilTTS is GPLv3 (see `LICENSE`). It links
 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache 2.0),

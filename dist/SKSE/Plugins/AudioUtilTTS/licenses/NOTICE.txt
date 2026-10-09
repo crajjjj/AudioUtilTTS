@@ -1,0 +1,44 @@
+AudioUtilTTS - third-party notices
+==================================
+
+AudioUtilTTS itself is licensed under the GNU General Public License v3.0
+(GPL-3.0.txt in this folder). Source: https://github.com/crajjjj/AudioUtilTTS
+
+AudioUtilTTS.dll contains the following third-party software, linked statically.
+
+sherpa-onnx 1.13.8
+    The speech runtime.
+    Copyright (c) Xiaomi Corporation
+    Apache License 2.0 (Apache-2.0.txt in this folder)
+    https://github.com/k2-fsa/sherpa-onnx
+
+ONNX Runtime
+    Runs the voice model. Built into sherpa-onnx.
+    Copyright (c) Microsoft Corporation
+    MIT License (MIT-onnxruntime.txt in this folder)
+    https://github.com/microsoft/onnxruntime
+
+espeak-ng
+    Turns text into phonemes. Built into sherpa-onnx.
+    GNU General Public License v3.0 (GPL-3.0.txt in this folder)
+    https://github.com/espeak-ng/espeak-ng
+
+CommonLibSSE-NG
+    Skyrim engine bindings.
+    MIT License
+    https://github.com/alandtse/CommonLibSSE-NG
+
+toml++
+    Reads the config file.
+    Copyright (c) Mark Gillard
+    MIT License
+    https://github.com/marzer/tomlplusplus
+
+sherpa-onnx and ONNX Runtime bundle further libraries of their own (among them
+kaldi-native-fbank, kaldifst, piper-phonemize, protobuf and abseil). Their
+notices are in the two projects' repositories, linked above.
+
+Voice models are separate downloads and carry their own license inside the model
+folder. The default model, kokoro-en-v0_19, is Kokoro-82M by hexgrad, released
+under the Apache License 2.0 (https://huggingface.co/hexgrad/Kokoro-82M). Its
+folder also holds espeak-ng-data, which is part of espeak-ng (GPL v3.0).

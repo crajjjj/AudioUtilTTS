@@ -132,6 +132,18 @@ target("probe")
     add_cxxflags("cl::/utf-8")
 target_end()
 
+-- Release archives: xmake build package
+-- Zips dist\ into Release\ as the plugin archive plus one archive per voice
+-- model (see scripts\package.lua). Build the plugin and the scripts first.
+target("package")
+    set_kind("phony")
+    set_default(false)
+    on_build(function (target)
+        import("scripts.package")
+        package()
+    end)
+target_end()
+
 -- Papyrus compile: xmake build papyrus
 -- Runs Pyro on AudioUtilTTS.ppj (see scripts\pyro.lua; overrides: PYRO_EXE,
 -- SKYRIM_GAME_PATH)
