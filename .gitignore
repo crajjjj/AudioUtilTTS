@@ -1,16 +1,26 @@
+# Build output
 build/
 Release/
 .xmake/
 .cache/
-.vs/
-.vscode/
 compile_commands.json
-# third-party build inputs, fetched by scripts\fetch-deps.ps1
+*.pdb
+*.ilk
+*.obj
+*.exp
+
+# Third-party build inputs (about 1 GB), fetched by scripts\fetch-deps.ps1
 extern/
-# machine-local paths
-*.ppj
-# dist/ is generated (DLL by xmake, scripts by Pyro, model by fetch-deps), except
-# the hand-written config and the console command map
+
+# Voice models and speech-runtime files never belong in git, wherever they land
+*.onnx
+voices.bin
+espeak-ng-data/
+*.tar.bz2
+
+# dist/ is the mod as installed. It is generated (DLL by xmake, scripts by Pyro,
+# placeholder wavs by scripts\slots.lua, model by fetch-deps), except the
+# hand-written config and the console command map
 dist/**
 !dist/SKSE/
 !dist/SKSE/Plugins/
@@ -18,3 +28,26 @@ dist/**
 !dist/SKSE/Plugins/AudioUtilTTS/AudioUtilTTS.toml
 !dist/SKSE/CustomConsole/
 !dist/SKSE/CustomConsole/*.yaml
+
+# Machine-local: the Pyro project holds absolute paths to the game and to
+# AudioUtil's sources
+*.ppj
+
+# Audio written by the probe (xmake run probe ... out.wav) and other scratch output
+/*.wav
+*.log
+*.zip
+*.7z
+
+# Editors and IDEs
+.vs/
+.vscode/
+.idea/
+vsxmake*/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
