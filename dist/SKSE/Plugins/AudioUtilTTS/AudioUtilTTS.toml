@@ -1,0 +1,52 @@
+# AudioUtilTTS - live text-to-speech for AudioUtil.
+# A mod hands it a line of text; the line is spoken in game a moment later.
+# Reload this file in game with:  autts reload
+
+[general]
+# Master switch. false also skips loading the model (about 350 MB of memory).
+enable = true
+
+[model]
+# Folder under Data\SKSE\Plugins\AudioUtilTTS\models\ that holds the voice model.
+dir = "kokoro-en-v0_19"
+# "auto" reads the folder: voices.bin present = Kokoro, otherwise VITS (Piper voices).
+family = "auto"
+# CPU threads used while a line is being generated. More threads = the line is
+# ready sooner, but the game loses those cores for that moment. Measured on an
+# i7-12700KF with the game closed, for a 4.5 second line:
+#   1 thread 3.2 s    2 threads 1.9 s    4 threads 1.2 s
+threads = 2
+# Only for models that need them (multi-language Kokoro builds).
+lexicon = ""
+lang = ""
+
+[voice]
+# Speaker number inside the model. kokoro-en-v0_19:
+#   0 af          1 af_bella     2 af_nicole    3 af_sarah    4 af_sky
+#   5 am_adam     6 am_michael   7 bf_emma      8 bf_isabella 9 bm_george
+#   10 bm_lewis
+voice = 7
+# 1.0 = the model's natural pace (0.5 to 2.0).
+speed = 1.0
+# 0.0 to 1.0, before AudioUtil's group volume is applied.
+volume = 1.0
+
+[playback]
+# AudioUtil volume group and exclusivity channel the speech plays on.
+group = "narration"
+channel = "narration"
+# false = a new line waits for the one being spoken to finish.
+# true  = a new line cuts in as soon as it is ready.
+interrupt = false
+# Lines allowed to wait behind the one being generated. When more arrive, the
+# oldest waiting line is dropped, so speech never falls far behind the scene.
+max_pending = 1
+# Longer text is cut at the last sentence that fits.
+max_chars = 400
+# Placeholder wav files the speech is written into (Data\Sound\AudioUtilTTS).
+# The game only plays files it saw at launch, so a slot added by raising this
+# number starts working after the next restart.
+slots = 4
+# 0 = write the model's own sample rate (24000 for Kokoro). Set 44100 if speech
+# plays at the wrong pitch or speed.
+output_rate = 0

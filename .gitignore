@@ -1,0 +1,20 @@
+build/
+Release/
+.xmake/
+.cache/
+.vs/
+.vscode/
+compile_commands.json
+# third-party build inputs, fetched by scripts\fetch-deps.ps1
+extern/
+# machine-local paths
+*.ppj
+# dist/ is generated (DLL by xmake, scripts by Pyro, model by fetch-deps), except
+# the hand-written config and the console command map
+dist/**
+!dist/SKSE/
+!dist/SKSE/Plugins/
+!dist/SKSE/Plugins/AudioUtilTTS/
+!dist/SKSE/Plugins/AudioUtilTTS/AudioUtilTTS.toml
+!dist/SKSE/CustomConsole/
+!dist/SKSE/CustomConsole/*.yaml

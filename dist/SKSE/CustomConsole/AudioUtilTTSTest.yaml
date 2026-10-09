@@ -1,0 +1,58 @@
+# ConsoleUtil Extended (CUE) command config for the AudioUtilTTS test harness.
+# Requires: ConsoleUtil Extended  https://www.nexusmods.com/skyrimspecialedition/mods/133569
+# Drops into Data\SKSE\CustomConsole\ ; maps console subcommands onto the
+# global functions in AudioUtilTTSTest.psc. Each function's return value
+# prints to the console.
+#
+# Usage in console:  AudioUtilTTSTest say "Some text"     (or the alias)  autts say "Some text"
+version: 1
+name: AudioUtilTTSTest
+alias: autts
+script: AudioUtilTTSTest
+help: AudioUtilTTS console test harness (say, sayv, event, status, stop, reload, enable)
+subs:
+  - name: say
+    func: Say
+    help: Speak a line with the configured voice
+    args:
+      - name: text
+        type: String
+        required: true
+        help: The line to speak, in quotes
+  - name: sayv
+    func: SayVoice
+    help: Speak a line with an explicit voice number
+    args:
+      - name: text
+        type: String
+        required: true
+        help: The line to speak, in quotes
+      - name: voice
+        type: int
+        default: 7
+        help: Speaker number inside the model (see AudioUtilTTS.toml)
+  - name: event
+    func: ViaEvent
+    help: Speak a line through the AudioUtilTTS_Speak mod event, the way other mods do
+    args:
+      - name: text
+        type: String
+        required: true
+        help: The line to speak, in quotes
+  - name: status
+    func: Status
+    help: Show whether speech is ready, and why not if it is not
+  - name: stop
+    func: Stop
+    help: Drop waiting lines and stop the line being spoken
+  - name: reload
+    func: Reload
+    help: Re-read AudioUtilTTS.toml and reload the model
+  - name: enable
+    func: Enable
+    help: Switch speech on or off for this session
+    args:
+      - name: on
+        type: int
+        default: 1
+        help: 1 = on, 0 = off
