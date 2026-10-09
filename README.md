@@ -75,8 +75,9 @@ EndIf
 character form: the actor comes first, then the text, then an optional preset.
 
 When a line starts playing, the mod event `AudioUtilTTS_Spoken` fires with
-`strArg` = the text and `numArg` = the AudioUtil instance handle. The full API is
-documented in `papyrus\Source\AudioUtilTTS.psc`.
+`strArg` = the text, `numArg` = the AudioUtil instance handle and the sender =
+the speaking actor (none for narration). The full API is documented in
+`papyrus\Source\AudioUtilTTS.psc`.
 
 ## What to expect
 
