@@ -61,8 +61,8 @@ documented in `papyrus\Source\AudioUtilTTS.psc`.
 ## Cost
 
 Measured outside the game on an i7-12700KF, for lines of about five seconds of
-speech. Nothing here uses the GPU. The effect on frame rate in a running game
-has not been measured.
+speech. Nothing here uses the GPU. In a running game on that machine no drop in
+frame rate was noticed while lines were generated (observed, not benchmarked).
 
 | | Kokoro (default) | Piper voice |
 |---|---|---|
