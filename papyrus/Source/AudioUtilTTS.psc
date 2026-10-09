@@ -6,17 +6,23 @@ Scriptname AudioUtilTTS Hidden
 ; below and no compile-time dependency: send a mod event from any Form.
 ;
 ;     SendModEvent("AudioUtilTTS_Speak", "The road to Whiterun lay open.")
+;     SendModEvent("AudioUtilTTS_Speak:whisper", "Not so loud.")
 ;
-; It is spoken with the configured voice. When AudioUtilTTS is not installed
-; the event simply goes nowhere. Use SendModEvent (the Form function), not the
-; ModEvent.Create / Send pair.
+; The first is spoken with the configured default voice. The second names a
+; preset after the colon: a voice the user defines in AudioUtilTTS.toml as
+; [preset.whisper] (a model, a voice number, a speed and a volume under one
+; name). An unknown preset name falls back to the default voice, so a mod can
+; ask for a role without knowing what the user has installed.
 ;
-; Call the natives directly when you need a voice, volume or speed per line, or
-; want to know whether a line was accepted. Guard the calls so they never run
-; without the plugin:
+; When AudioUtilTTS is not installed the event simply goes nowhere. Use
+; SendModEvent (the Form function), not the ModEvent.Create / Send pair.
+;
+; Call the natives directly when you need a voice number, volume or speed per
+; line, or want to know whether a line was accepted. Guard the calls so they
+; never run without the plugin:
 ;
 ;     If SKSE.GetPluginVersion("AudioUtilTTS") >= 0
-;         AudioUtilTTS.Speak("The road to Whiterun lay open.", 9)
+;         AudioUtilTTS.SpeakAs("Not so loud.", "whisper")
 ;     EndIf
 ;
 ; When a line starts playing, the mod event AudioUtilTTS_Spoken fires:
@@ -27,16 +33,26 @@ Scriptname AudioUtilTTS Hidden
 ; API version of the installed plugin. 1 = first release.
 int Function GetAPIVersion() global native
 
-; True when a line can be spoken right now: the model is loaded, AudioUtil is
-; present, a playable slot exists and speech is switched on.
+; True when a line can be spoken right now: the default model is loaded,
+; AudioUtil is present, a playable slot exists and speech is switched on.
 bool Function IsReady() global native
 
-; Queue a line. Returns false when nothing was queued (not ready, switched off,
-; or no speakable text). Arguments below zero take the configured defaults.
-; The line is generated in the background, so it starts a moment later: about
-; two seconds for a sentence with the default model. A line that arrives while
-; others wait replaces the oldest waiting one (see [playback] max_pending).
+; Queue a line on the default model. Returns false when nothing was queued (not
+; ready, switched off, or no speakable text). Arguments below zero take the
+; configured defaults. The line is generated in the background, so it starts a
+; moment later: about two seconds for a sentence with the default model. A line
+; that arrives while others wait replaces the oldest waiting one (see
+; [playback] max_pending).
 bool Function Speak(string asText, int aiVoice = -1, float afVolume = -1.0, float afSpeed = -1.0) global native
+
+; Queue a line through a named preset from AudioUtilTTS.toml. A preset can name
+; a different model; that model is loaded the first time a line asks for it
+; (the line is about a second later that once) and then stays in memory. An
+; empty or unknown preset name uses the default voice.
+bool Function SpeakAs(string asText, string asPreset) global native
+
+; True when AudioUtilTTS.toml defines [preset.<asPreset>].
+bool Function HasPreset(string asPreset) global native
 
 ; Drop every line that is waiting or being generated. The line already playing
 ; carries on; StopSpeaking silences that too.
@@ -45,14 +61,14 @@ Function CancelPending() global native
 ; True while a line is waiting or being generated.
 bool Function IsBusy() global native
 
-; Number of voices in the loaded model (0 while none is loaded).
+; Number of voices in the default model (0 while it is not loaded).
 int Function GetVoiceCount() global native
 
 ; Session switch on top of [general] enable. Switching off drops waiting lines.
 Function SetEnabled(bool abEnabled) global native
 bool Function IsEnabled() global native
 
-; Re-read AudioUtilTTS.toml and reload the model. False = the file did not
+; Re-read AudioUtilTTS.toml and reload the models. False = the file did not
 ; parse and the previous settings were kept.
 bool Function ReloadConfig() global native
 

@@ -3,14 +3,14 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
+struct SherpaOnnxOfflineTts;
+
 // Text-to-speech core: a thin wrapper over the statically linked sherpa-onnx
 // runtime. No game dependencies, so tools\probe can drive it outside Skyrim.
-//
-// Threading: Load / Unload / Synthesize belong to ONE thread (the plugin's
-// worker). The status getters read atomics and are safe from anywhere.
 namespace TtsEngine
 {
 	struct ModelSpec
@@ -43,20 +43,36 @@ namespace TtsEngine
 		Failed
 	};
 
-	// Replaces any model already loaded. Checks the folder itself first: the
-	// runtime answers some bad model files by ending the process, so everything
-	// that can be verified up front is.
-	bool Load(const ModelSpec& a_spec, std::string& a_error);
-	void Unload();
+	// One loaded voice model. Several can be alive at once; each is used from
+	// one thread at a time (the plugin's worker owns them all).
+	class Model
+	{
+	public:
+		// nullptr and a_error when the folder is not a usable model. Checks the
+		// folder itself first: the runtime answers some bad model files by ending
+		// the process, so everything that can be verified up front is.
+		static std::unique_ptr<Model> Load(const ModelSpec& a_spec, std::string& a_error);
 
-	bool        IsLoaded();
-	int         SampleRate();
-	int         VoiceCount();
+		~Model();
+		Model(const Model&) = delete;
+		Model& operator=(const Model&) = delete;
+
+		int SampleRate() const { return _sampleRate; }
+		int VoiceCount() const { return _voices; }
+
+		// a_keepGoing is polled between sentences; returning false abandons the line.
+		Result Synthesize(const std::string& a_text, int a_voice, float a_speed,
+			const std::function<bool()>& a_keepGoing, Audio& a_out, std::string& a_error) const;
+
+	private:
+		Model() = default;
+
+		const SherpaOnnxOfflineTts* _tts = nullptr;
+		int                         _sampleRate = 0;
+		int                         _voices = 0;
+	};
+
 	std::string RuntimeVersion();
-
-	// a_keepGoing is polled between sentences; returning false abandons the line.
-	Result Synthesize(const std::string& a_text, int a_voice, float a_speed,
-		const std::function<bool()>& a_keepGoing, Audio& a_out, std::string& a_error);
 
 	// Cubic resample in place, meant for raising the rate (there is no low-pass
 	// for lowering it). A no-op when a_targetRate <= 0 or already matches.

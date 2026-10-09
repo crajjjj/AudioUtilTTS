@@ -29,16 +29,17 @@ int main(int argc, char** argv)
 
 	std::string error;
 	const auto  t0 = std::chrono::steady_clock::now();
-	if (!TtsEngine::Load(spec, error)) {
+	const auto  model = TtsEngine::Model::Load(spec, error);
+	if (!model) {
 		std::printf("load failed: %s\n", error.c_str());
 		return 1;
 	}
 	const auto t1 = std::chrono::steady_clock::now();
 	std::printf("sherpa-onnx %s, %d voices, %d Hz, loaded in %lld ms\n", TtsEngine::RuntimeVersion().c_str(),
-		TtsEngine::VoiceCount(), TtsEngine::SampleRate(), ms(t0, t1));
+		model->VoiceCount(), model->SampleRate(), ms(t0, t1));
 
 	TtsEngine::Audio audio;
-	const auto       result = TtsEngine::Synthesize(text, voice, 1.0f, {}, audio, error);
+	const auto       result = model->Synthesize(text, voice, 1.0f, {}, audio, error);
 	const auto       t2 = std::chrono::steady_clock::now();
 	if (result != TtsEngine::Result::Ok) {
 		std::printf("synthesis failed: %s\n", error.c_str());
@@ -52,6 +53,5 @@ int main(int argc, char** argv)
 		return 1;
 	}
 	std::printf("wrote %s (%d Hz, %zu samples)\n", out.c_str(), audio.sampleRate, audio.samples.size());
-	TtsEngine::Unload();
 	return 0;
 }

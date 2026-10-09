@@ -10,7 +10,7 @@ string Function Say(string text) global
     return "not queued - " + AudioUtilTTS.GetStatus()
 EndFunction
 
-; The same through an explicit voice number.
+; The same through an explicit voice number of the default model.
 ;   autts sayv "Hello there." 9
 string Function SayVoice(string text, int voice) global
     if AudioUtilTTS.Speak(text, voice)
@@ -19,11 +19,31 @@ string Function SayVoice(string text, int voice) global
     return "not queued - " + AudioUtilTTS.GetStatus()
 EndFunction
 
-; The same through the mod event other mods use.
+; The same through a named preset from AudioUtilTTS.toml.
+;   autts sayas "Not so loud." whisper
+string Function SayAs(string text, string preset) global
+    string note = ""
+    if !AudioUtilTTS.HasPreset(preset)
+        note = " (preset '" + preset + "' is not defined, default voice used)"
+    endif
+    if AudioUtilTTS.SpeakAs(text, preset)
+        return "queued" + note
+    endif
+    return "not queued - " + AudioUtilTTS.GetStatus()
+EndFunction
+
+; A line through the mod event other mods use.
 ;   autts event "Hello there."
 string Function ViaEvent(string text) global
     Game.GetPlayer().SendModEvent("AudioUtilTTS_Speak", text)
     return "event sent"
+EndFunction
+
+; A line through the mod event, naming a preset.
+;   autts eventas "Not so loud." whisper
+string Function ViaEventAs(string text, string preset) global
+    Game.GetPlayer().SendModEvent("AudioUtilTTS_Speak:" + preset, text)
+    return "event AudioUtilTTS_Speak:" + preset + " sent"
 EndFunction
 
 ;   autts status
@@ -40,7 +60,7 @@ EndFunction
 ;   autts reload
 string Function Reload() global
     if AudioUtilTTS.ReloadConfig()
-        return "config reloaded, model reloading"
+        return "config reloaded, models reloading"
     endif
     return "config did not parse, previous settings kept (see AudioUtilTTS.log)"
 EndFunction

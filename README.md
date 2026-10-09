@@ -20,13 +20,26 @@ any Form:
 SendModEvent("AudioUtilTTS_Speak", "The road to Whiterun lay open.")
 ```
 
-It is spoken with the configured voice. Without AudioUtilTTS installed the event
-goes nowhere. Use `SendModEvent` (the Form function), not `ModEvent.Create`.
+It is spoken with the configured default voice. Without AudioUtilTTS installed
+the event goes nowhere. Use `SendModEvent` (the Form function), not
+`ModEvent.Create`.
 
-For a voice, volume or speed per line, call the native and guard it:
+To choose who speaks, name a preset after a colon:
+
+```papyrus
+SendModEvent("AudioUtilTTS_Speak:whisper", "Not so loud.")
+```
+
+A preset is a voice the user defines in the config under one name (see
+[Presets](#presets)). An unknown name falls back to the default voice, so a mod
+can ask for a role without knowing what the user has installed.
+
+To learn whether a line was accepted, or to pass a voice number, volume or speed
+directly, call the natives and guard them:
 
 ```papyrus
 If SKSE.GetPluginVersion("AudioUtilTTS") >= 0
+    AudioUtilTTS.SpeakAs("Not so loud.", "whisper")
     AudioUtilTTS.Speak("The road to Whiterun lay open.", 9)
 EndIf
 ```
@@ -50,8 +63,10 @@ documented in `papyrus\Source\AudioUtilTTS.psc`.
 | Command | Does |
 |---|---|
 | `autts say "text"` | Speak a line with the configured voice |
-| `autts sayv "text" 9` | Speak a line with voice number 9 |
+| `autts sayv "text" 9` | Speak a line with voice number 9 of the default model |
+| `autts sayas "text" whisper` | Speak a line through the preset `whisper` |
 | `autts event "text"` | Speak a line through the mod event |
+| `autts eventas "text" whisper` | Speak a line through the mod event with a preset |
 | `autts status` | Show whether speech is ready, and why not |
 | `autts stop` | Drop waiting lines and cut the current one |
 | `autts reload` | Re-read the config and reload the model |
@@ -59,14 +74,39 @@ documented in `papyrus\Source\AudioUtilTTS.psc`.
 
 ## Configuration
 
-`Data\SKSE\Plugins\AudioUtilTTS\AudioUtilTTS.toml` holds the model folder, the
-voice number, speed, volume, thread count and playback behaviour. Every key is
-commented in the file. Volume also follows AudioUtil's `narration` group.
+`Data\SKSE\Plugins\AudioUtilTTS\AudioUtilTTS.toml` holds the default model and
+voice, the presets, thread count and playback behaviour. Every key is commented
+in the file. Volume also follows AudioUtil's `narration` group.
 
-Other models go into `Data\SKSE\Plugins\AudioUtilTTS\models\<folder>`. Kokoro
+### Presets
+
+A preset gives a model, a voice number, a speed and a volume one name that mods
+ask for:
+
+```toml
+[preset.whisper]
+voice = 2
+
+[preset.fast]
+model = "vits-piper-en_US-lessac-medium"
+speed = 1.1
+```
+
+Anything a preset leaves out comes from the defaults. The shipped config defines
+`narrator`, `female`, `male` and `whisper`, all on the default model.
+
+A preset may name a different model. That model is loaded the first time a line
+asks for it, which delays that one line by about a second, and then stays in
+memory at roughly its file size. `[model] max_loaded` (default 3) caps how many
+are kept; the least recently used one is unloaded first, never the default.
+
+### Models
+
+Models go into `Data\SKSE\Plugins\AudioUtilTTS\models\<folder>`. Kokoro
 (`kokoro-en-v0_19`, the default) and VITS models such as the Piper voices from
 the [sherpa-onnx model list](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models)
-are supported. Only the default model has been run in game.
+are supported. `kokoro-en-v0_19` and `vits-piper-en_US-lessac-medium` have been
+checked outside the game, loaded together.
 
 A model that the runtime cannot read can close the game while loading, because
 the runtime exits on some malformed files. Check a new model outside the game

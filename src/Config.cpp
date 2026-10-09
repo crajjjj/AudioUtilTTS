@@ -10,6 +10,26 @@ namespace Config
 
 		std::shared_ptr<const Settings> g_settings = std::make_shared<Settings>();
 		std::mutex                      g_lock;
+
+		// a model name becomes part of a path: it must be one plain folder name
+		bool IsFolderName(const std::string& a_name)
+		{
+			return !a_name.empty() && a_name.find_first_of("\\/:") == std::string::npos &&
+				   a_name.find("..") == std::string::npos;
+		}
+	}
+
+	std::string Normalize(std::string_view a_text)
+	{
+		const auto first = a_text.find_first_not_of(" \t");
+		if (first == std::string_view::npos) {
+			return {};
+		}
+		const auto  last = a_text.find_last_not_of(" \t");
+		std::string out(a_text.substr(first, last - first + 1));
+		std::transform(out.begin(), out.end(), out.begin(),
+			[](unsigned char a_c) { return static_cast<char>(std::tolower(a_c)); });
+		return out;
 	}
 
 	bool Load()
@@ -36,6 +56,7 @@ namespace Config
 			settings->threads = (*model)["threads"].value_or(settings->threads);
 			settings->lexicon = (*model)["lexicon"].value_or(settings->lexicon);
 			settings->lang = (*model)["lang"].value_or(settings->lang);
+			settings->maxLoaded = (*model)["max_loaded"].value_or(settings->maxLoaded);
 		}
 		if (const auto* voice = root["voice"].as_table()) {
 			settings->voice = (*voice)["voice"].value_or(settings->voice);
@@ -52,13 +73,12 @@ namespace Config
 			settings->outputRate = (*playback)["output_rate"].value_or(settings->outputRate);
 		}
 
-		// the model name becomes part of a path: keep it to one folder name
-		if (settings->model.empty() || settings->model.find_first_of("\\/:") != std::string::npos ||
-			settings->model.find("..") != std::string::npos) {
+		if (!IsFolderName(settings->model)) {
 			logger::warn("[model] dir = '{}' is not a plain folder name, using the default", settings->model);
 			settings->model = Settings{}.model;
 		}
 		settings->threads = std::clamp(settings->threads, 1, 16);
+		settings->maxLoaded = std::clamp(settings->maxLoaded, 1, 8);
 		settings->speed = std::clamp(settings->speed, 0.5f, 2.0f);
 		settings->volume = std::clamp(settings->volume, 0.0f, 1.0f);
 		settings->maxPending = std::clamp(settings->maxPending, 1, 16);
@@ -66,11 +86,40 @@ namespace Config
 		settings->slots = std::clamp(settings->slots, 1, 16);
 		settings->outputRate = settings->outputRate <= 0 ? 0 : std::clamp(settings->outputRate, 8000, 96000);
 
-		logger::info("Config: model '{}' ({}), voice {}, speed {:.2f}, volume {:.2f}, threads {}, group '{}', "
-					 "channel '{}', interrupt {}, max_pending {}, slots {}, output_rate {}{}",
+		if (const auto* presets = root["preset"].as_table()) {
+			for (auto&& [name, node] : *presets) {
+				const auto  key = Normalize(name.str());
+				const auto* table = node.as_table();
+				if (!table || key.empty()) {
+					logger::warn("[preset.{}] is not a table, ignored", name.str());
+					continue;
+				}
+				Preset preset;
+				preset.model = (*table)["model"].value_or(""s);
+				preset.voice = (*table)["voice"].value_or(-1);
+				preset.speed = (*table)["speed"].value_or(0.0f);
+				preset.volume = (*table)["volume"].value_or(-1.0f);
+				if (!preset.model.empty() && !IsFolderName(preset.model)) {
+					logger::warn("[preset.{}] model = '{}' is not a plain folder name, using the default model", key,
+						preset.model);
+					preset.model.clear();
+				}
+				if (preset.speed > 0.0f) {
+					preset.speed = std::clamp(preset.speed, 0.5f, 2.0f);
+				}
+				if (preset.volume > 1.0f) {
+					preset.volume = 1.0f;
+				}
+				settings->presets[key] = std::move(preset);
+			}
+		}
+
+		logger::info("Config: model '{}' ({}), voice {}, speed {:.2f}, volume {:.2f}, threads {}, max_loaded {}, "
+					 "group '{}', channel '{}', interrupt {}, max_pending {}, slots {}, output_rate {}, {} presets{}",
 			settings->model, settings->family, settings->voice, settings->speed, settings->volume,
-			settings->threads, settings->group, settings->channel, settings->interrupt, settings->maxPending,
-			settings->slots, settings->outputRate, settings->enable ? "" : " [disabled]");
+			settings->threads, settings->maxLoaded, settings->group, settings->channel, settings->interrupt,
+			settings->maxPending, settings->slots, settings->outputRate, settings->presets.size(),
+			settings->enable ? "" : " [disabled]");
 
 		std::scoped_lock lock{ g_lock };
 		g_settings = std::move(settings);

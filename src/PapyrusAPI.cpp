@@ -1,7 +1,6 @@
 #include "PapyrusAPI.h"
 
 #include "Speaker.h"
-#include "TtsEngine.h"
 
 namespace PapyrusAPI
 {
@@ -26,6 +25,16 @@ namespace PapyrusAPI
 			return Speaker::Speak(a_text.c_str(), a_voice, a_volume, a_speed);
 		}
 
+		bool SpeakAs(RE::StaticFunctionTag*, RE::BSFixedString a_text, RE::BSFixedString a_preset)
+		{
+			return Speaker::SpeakAs(a_text.c_str(), a_preset.c_str());
+		}
+
+		bool HasPreset(RE::StaticFunctionTag*, RE::BSFixedString a_preset)
+		{
+			return Speaker::HasPreset(a_preset.c_str());
+		}
+
 		void CancelPending(RE::StaticFunctionTag*)
 		{
 			Speaker::Cancel();
@@ -38,7 +47,7 @@ namespace PapyrusAPI
 
 		std::int32_t GetVoiceCount(RE::StaticFunctionTag*)
 		{
-			return TtsEngine::VoiceCount();
+			return Speaker::VoiceCount();
 		}
 
 		void SetEnabled(RE::StaticFunctionTag*, bool a_enabled)
@@ -72,6 +81,8 @@ namespace PapyrusAPI
 		REGISTERFUNC(GetAPIVersion, SCRIPT_NAME);
 		REGISTERFUNC(IsReady, SCRIPT_NAME);
 		REGISTERFUNC(Speak, SCRIPT_NAME);
+		REGISTERFUNC(SpeakAs, SCRIPT_NAME);
+		REGISTERFUNC(HasPreset, SCRIPT_NAME);
 		REGISTERFUNC(CancelPending, SCRIPT_NAME);
 		REGISTERFUNC(IsBusy, SCRIPT_NAME);
 		REGISTERFUNC(GetVoiceCount, SCRIPT_NAME);

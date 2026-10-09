@@ -3,11 +3,12 @@
 # Reload this file in game with:  autts reload
 
 [general]
-# Master switch. false also skips loading the model (about 350 MB of memory).
+# Master switch. false also skips loading any model (about 350 MB of memory).
 enable = true
 
 [model]
-# Folder under Data\SKSE\Plugins\AudioUtilTTS\models\ that holds the voice model.
+# The default model: a folder under Data\SKSE\Plugins\AudioUtilTTS\models\.
+# It is loaded at game start and never unloaded.
 dir = "kokoro-en-v0_19"
 # "auto" reads the folder: voices.bin present = Kokoro, otherwise VITS (Piper voices).
 family = "auto"
@@ -19,9 +20,15 @@ threads = 2
 # Only for models that need them (multi-language Kokoro builds).
 lexicon = ""
 lang = ""
+# How many models may be in memory at once, the default one included. A preset
+# can name another model; it is loaded the first time a line asks for it and
+# kept. Past this limit the least recently used one is unloaded (never the
+# default). Each loaded model costs roughly its file size in memory.
+max_loaded = 3
 
 [voice]
-# Speaker number inside the model. kokoro-en-v0_19:
+# The default voice: what a line gets when it names no preset.
+# Speaker number inside the default model. kokoro-en-v0_19:
 #   0 af          1 af_bella     2 af_nicole    3 af_sarah    4 af_sky
 #   5 am_adam     6 am_michael   7 bf_emma      8 bf_isabella 9 bm_george
 #   10 bm_lewis
@@ -30,6 +37,34 @@ voice = 7
 speed = 1.0
 # 0.0 to 1.0, before AudioUtil's group volume is applied.
 volume = 1.0
+
+# Presets: named voices a mod asks for by name.
+#   SendModEvent("AudioUtilTTS_Speak:whisper", "Not so loud.")
+#   AudioUtilTTS.SpeakAs("Not so loud.", "whisper")
+# Each [preset.<name>] may set model, voice, speed and volume; anything left out
+# comes from [model] and [voice] above. A name nobody defined falls back to the
+# default voice, so rename, change or add presets freely. Names ignore case.
+#
+# The four below all use the default model, so they cost no extra memory.
+
+[preset.narrator]
+voice = 7    # bf_emma
+
+[preset.female]
+voice = 1    # af_bella
+
+[preset.male]
+voice = 9    # bm_george
+
+[preset.whisper]
+voice = 2    # af_nicole
+
+# A preset on another model. Put the model folder under models\ first; it is
+# loaded on first use. With no "voice" it uses that model's first voice.
+#
+# [preset.fast]
+# model = "vits-piper-en_US-lessac-medium"
+# speed = 1.1
 
 [playback]
 # AudioUtil volume group and exclusivity channel the speech plays on.

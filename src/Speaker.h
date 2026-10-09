@@ -13,24 +13,35 @@
 // rewritten is never the one still playing. AudioUtil itself needs no change:
 // this goes through its public AudioUtil_PlayFile export.
 //
-// Lines arrive two ways: the AudioUtilTTS.Speak native, and the mod event
+// Lines arrive two ways: the AudioUtilTTS natives, and the mod event
 // AudioUtilTTS_Speak (strArg = text), which needs no dependency on this mod.
-// When a line starts playing, AudioUtilTTS_Spoken is sent back (strArg = text,
-// numArg = the AudioUtil handle).
+// "AudioUtilTTS_Speak:<preset>" speaks through a named preset. When a line
+// starts playing, AudioUtilTTS_Spoken is sent back (strArg = text, numArg = the
+// AudioUtil handle).
+//
+// Presets ([preset.<name>] in the config) name a model + voice + speed +
+// volume. The default model is loaded at start; any other model a preset names
+// is loaded the first time a line asks for it and then kept, up to
+// [model] max_loaded (least recently used goes first, the default never does).
 namespace Speaker
 {
-	void Start();   // kDataLoaded: slots, AudioUtil lookup, worker (loads the model)
-	bool Reload();  // re-read the config and reload the model; false = config kept
+	void Start();   // kDataLoaded: slots, AudioUtil lookup, worker (loads the default model)
+	bool Reload();  // re-read the config and reload the models; false = config kept
 	void Cancel();  // drop every line waiting or being generated
 
 	// false = nothing queued (disabled, not ready, or no speakable text).
 	// a_voice < 0, a_volume < 0, a_speed <= 0 take the configured defaults.
 	bool Speak(std::string_view a_text, int a_voice, float a_volume, float a_speed);
 
+	// Speak through a named preset. An empty or unknown name uses the defaults.
+	bool SpeakAs(std::string_view a_text, std::string_view a_preset);
+	bool HasPreset(std::string_view a_preset);
+
 	bool IsReady();
 	bool IsBusy();
 	void SetEnabled(bool a_enabled);
 	bool IsEnabled();
+	int  VoiceCount();  // voices in the default model, 0 while it is not loaded
 
 	std::string Status();   // one line, for the console
 	std::string Channel();  // the AudioUtil channel speech plays on

@@ -1,7 +1,6 @@
 #include "TtsEngine.h"
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -14,11 +13,6 @@ namespace TtsEngine
 	namespace
 	{
 		namespace fs = std::filesystem;
-
-		const SherpaOnnxOfflineTts* g_tts = nullptr;  // owned by the worker thread
-		std::atomic<bool>           g_loaded{ false };
-		std::atomic<int>            g_sampleRate{ 0 };
-		std::atomic<int>            g_voices{ 0 };
 
 		// config text is UTF-8; fs::path would read a narrow string in the ANSI code page
 		fs::path U8(const std::string& a_text)
@@ -94,24 +88,22 @@ namespace TtsEngine
 		}
 	}
 
-	bool Load(const ModelSpec& a_spec, std::string& a_error)
+	std::unique_ptr<Model> Model::Load(const ModelSpec& a_spec, std::string& a_error)
 	{
-		Unload();
-
 		const auto      dir = U8(a_spec.dir);
 		std::error_code ec;
 		if (!fs::is_directory(dir, ec)) {
 			a_error = "model folder not found: " + a_spec.dir;
-			return false;
+			return nullptr;
 		}
 		const auto modelName = FindModel(dir);
 		if (modelName.empty()) {
 			a_error = "no .onnx model in " + a_spec.dir;
-			return false;
+			return nullptr;
 		}
 		if (!fs::is_regular_file(dir / "tokens.txt", ec)) {
 			a_error = "tokens.txt missing in " + a_spec.dir;
-			return false;
+			return nullptr;
 		}
 
 		const bool  hasVoices = fs::is_regular_file(dir / "voices.bin", ec);
@@ -121,20 +113,20 @@ namespace TtsEngine
 		}
 		if (family == "kokoro" && !hasVoices) {
 			a_error = "voices.bin missing in " + a_spec.dir + " (Kokoro model)";
-			return false;
+			return nullptr;
 		}
 
 		std::string       missing;
 		const std::string lexicon = LexiconPaths(a_spec, missing);
 		if (!missing.empty()) {
 			a_error = "lexicon file not found: " + missing;
-			return false;
+			return nullptr;
 		}
 		const std::string dataDir =
 			fs::is_directory(dir / "espeak-ng-data", ec) ? Join(a_spec.dir, "espeak-ng-data") : std::string{};
 		if (dataDir.empty() && lexicon.empty()) {
 			a_error = "neither espeak-ng-data nor a lexicon in " + a_spec.dir;
-			return false;
+			return nullptr;
 		}
 
 		const std::string model = Join(a_spec.dir, modelName);
@@ -165,40 +157,34 @@ namespace TtsEngine
 		config.max_num_sentences = 1;  // one sentence per step, so a cancel lands between sentences
 		config.silence_scale = 0.2f;
 
+		const SherpaOnnxOfflineTts* tts = nullptr;
 		try {
-			g_tts = SherpaOnnxCreateOfflineTts(&config);
+			tts = SherpaOnnxCreateOfflineTts(&config);
 		} catch (const std::exception& e) {
 			a_error = std::string("speech runtime error: ") + e.what();
-			return false;
+			return nullptr;
 		} catch (...) {
 			a_error = "speech runtime error";
-			return false;
+			return nullptr;
 		}
-		if (!g_tts) {
+		if (!tts) {
 			a_error = "the speech runtime rejected the model in " + a_spec.dir + " (read as " + family + ")";
-			return false;
+			return nullptr;
 		}
 
-		g_sampleRate.store(SherpaOnnxOfflineTtsSampleRate(g_tts));
-		g_voices.store(SherpaOnnxOfflineTtsNumSpeakers(g_tts));
-		g_loaded.store(true);
-		return true;
+		std::unique_ptr<Model> loaded(new Model());
+		loaded->_tts = tts;
+		loaded->_sampleRate = SherpaOnnxOfflineTtsSampleRate(tts);
+		loaded->_voices = SherpaOnnxOfflineTtsNumSpeakers(tts);
+		return loaded;
 	}
 
-	void Unload()
+	Model::~Model()
 	{
-		g_loaded.store(false);
-		g_sampleRate.store(0);
-		g_voices.store(0);
-		if (g_tts) {
-			SherpaOnnxDestroyOfflineTts(g_tts);
-			g_tts = nullptr;
+		if (_tts) {
+			SherpaOnnxDestroyOfflineTts(_tts);
 		}
 	}
-
-	bool IsLoaded() { return g_loaded.load(); }
-	int  SampleRate() { return g_sampleRate.load(); }
-	int  VoiceCount() { return g_voices.load(); }
 
 	std::string RuntimeVersion()
 	{
@@ -206,24 +192,20 @@ namespace TtsEngine
 		return version ? version : "";
 	}
 
-	Result Synthesize(const std::string& a_text, int a_voice, float a_speed,
-		const std::function<bool()>& a_keepGoing, Audio& a_out, std::string& a_error)
+	Result Model::Synthesize(const std::string& a_text, int a_voice, float a_speed,
+		const std::function<bool()>& a_keepGoing, Audio& a_out, std::string& a_error) const
 	{
 		a_out = {};
-		if (!g_tts) {
-			a_error = "no model loaded";
-			return Result::Failed;
-		}
 
 		SherpaOnnxGenerationConfig gen;
 		std::memset(&gen, 0, sizeof(gen));
-		gen.sid = std::clamp(a_voice, 0, std::max(0, g_voices.load() - 1));
+		gen.sid = std::clamp(a_voice, 0, std::max(0, _voices - 1));
 		gen.speed = std::clamp(a_speed, 0.5f, 2.0f);
 		gen.silence_scale = 0.2f;
 
 		const SherpaOnnxGeneratedAudio* audio = nullptr;
 		try {
-			audio = SherpaOnnxOfflineTtsGenerateWithConfig(g_tts, a_text.c_str(), &gen, OnProgress,
+			audio = SherpaOnnxOfflineTtsGenerateWithConfig(_tts, a_text.c_str(), &gen, OnProgress,
 				const_cast<void*>(static_cast<const void*>(&a_keepGoing)));
 		} catch (const std::exception& e) {
 			a_error = std::string("speech runtime error: ") + e.what();
