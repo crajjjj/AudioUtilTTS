@@ -153,6 +153,33 @@ frame rate was noticed while lines were generated (observed, not benchmarked).
 voice, the presets, thread count and playback behaviour. Every key is commented
 in the file. Volume also follows AudioUtil's `narration` group.
 
+### Voices
+
+A voice is a number inside a model. The default model, `kokoro-en-v0_19`, has 11
+English voices:
+
+| Number | Name | Voice |
+|---|---|---|
+| 0 | af | American female (the model's default blend) |
+| 1 | af_bella | American female |
+| 2 | af_nicole | American female, whispered |
+| 3 | af_sarah | American female |
+| 4 | af_sky | American female |
+| 5 | am_adam | American male |
+| 6 | am_michael | American male |
+| 7 | bf_emma | British female (the plugin's default) |
+| 8 | bf_isabella | British female |
+| 9 | bm_george | British male |
+| 10 | bm_lewis | British male |
+
+Set the default with `voice = N` under `[voice]`, or give a preset its own
+`voice = N`. To hear one in game, run `autts sayv "Some text" 4` with any number
+from the table.
+
+Other models number their voices differently; most Piper voices have just one,
+number 0. Larger multi-language Kokoro builds are on the same model list but
+have not been tried with this plugin.
+
 ### Presets
 
 A preset gives a model, a voice number, a speed and a volume one name that mods
