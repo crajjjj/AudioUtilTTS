@@ -83,7 +83,7 @@ the speaking actor (none for narration). The full API is documented in
 
 - **Speech starts late.** A line is generated when it is asked for. With the
   default model a sentence takes about two seconds on two threads of an
-  i7-12700KF with the game closed, and longer while the game is busy.
+  i7-12700KF, and longer while the game is busy.
 - **Lines do not pile up.** A new line waits for the one being spoken; if more
   arrive meanwhile, only the newest is kept (`[playback] max_pending`).
 - **Narration and character speech are separate.** Narration plays flat and moves
