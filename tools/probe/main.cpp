@@ -9,6 +9,10 @@
 //   probe --text file
 // Reads the file's bytes as a line of game text and prints, in hex and as
 // text, what the speech runtime would be handed (TtsEngine::ToSpeakable).
+//   probe --batch <model dir> <list file> <out dir> [voice] [threads] [output rate] [lip strength]
+// Speaks a whole list with the model loaded once. The list is UTF-8, one line
+// each: a file name, a tab, the text. Writes <out dir>\<file name>.wav and
+// .lip. A line whose wav is already there is skipped, so a stopped run resumes.
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -21,9 +25,100 @@
 #include "Lip.h"
 #include "TtsEngine.h"
 
+namespace
+{
+	int Batch(int argc, char** argv)
+	{
+		namespace fs = std::filesystem;
+		using clock = std::chrono::steady_clock;
+
+		TtsEngine::ModelSpec spec;
+		spec.dir = argv[2];
+		const fs::path outDir = argv[4];
+		const int      voice = argc > 5 ? std::atoi(argv[5]) : 0;
+		spec.threads = argc > 6 ? std::atoi(argv[6]) : 2;
+		const int   outputRate = argc > 7 ? std::atoi(argv[7]) : 0;
+		const float strength = argc > 8 ? static_cast<float>(std::atof(argv[8])) : 0.8f;
+
+		std::ifstream list(argv[3], std::ios::binary);
+		if (!list) {
+			std::printf("cannot read the list: %s\n", argv[3]);
+			return 1;
+		}
+		std::error_code ec;
+		fs::create_directories(outDir, ec);
+
+		std::string error;
+		const auto  model = TtsEngine::Model::Load(spec, error);
+		if (!model) {
+			std::printf("load failed: %s\n", error.c_str());
+			return 1;
+		}
+		std::printf("sherpa-onnx %s, %d voices, %d Hz, voice %d, %d threads\n", TtsEngine::RuntimeVersion().c_str(),
+			model->VoiceCount(), model->SampleRate(), voice, spec.threads);
+
+		const auto  start = clock::now();
+		int         spoken = 0, skipped = 0, failed = 0;
+		double      seconds = 0.0;
+		std::string line;
+		while (std::getline(list, line)) {
+			if (!line.empty() && line.back() == '\r') {
+				line.pop_back();
+			}
+			const auto tab = line.find('\t');
+			if (tab == std::string::npos || tab == 0 || tab + 1 >= line.size()) {
+				continue;
+			}
+			// the list is UTF-8; a narrow string would be read in the ANSI code page
+			const auto        name = std::u8string(line.begin(), line.begin() + static_cast<std::ptrdiff_t>(tab));
+			const std::string text = line.substr(tab + 1);
+			auto              wav = outDir / fs::path(name);
+			wav += ".wav";
+			if (fs::exists(wav, ec)) {
+				++skipped;
+				continue;
+			}
+
+			TtsEngine::Audio audio;
+			if (model->Synthesize(TtsEngine::ToSpeakable(text), voice, 1.0f, {}, audio, error) != TtsEngine::Result::Ok ||
+				audio.samples.empty()) {
+				std::printf("failed: %s (%s)\n", line.substr(0, tab).c_str(), error.c_str());
+				++failed;
+				continue;
+			}
+			TtsEngine::Resample(audio, outputRate);
+			auto lipPath = wav;
+			lipPath.replace_extension(".lip");
+			// the wav goes last and under its final name only when whole: it is what marks a line as done
+			auto part = wav;
+			part += ".part";
+			if (!Lip::Write(lipPath, Lip::FromAudio(audio, text, strength), error) ||
+				!TtsEngine::WriteWav(part, audio, error)) {
+				std::printf("write failed: %s (%s)\n", line.substr(0, tab).c_str(), error.c_str());
+				++failed;
+				continue;
+			}
+			fs::rename(part, wav, ec);
+			seconds += static_cast<double>(audio.Seconds());
+			if (++spoken % 100 == 0) {
+				const auto took = std::chrono::duration<double>(clock::now() - start).count();
+				std::printf("%d lines, %.0f s of speech in %.0f s\n", spoken, seconds, took);
+				std::fflush(stdout);
+			}
+		}
+		const auto took = std::chrono::duration<double>(clock::now() - start).count();
+		std::printf("done: %d spoken (%.0f s of speech in %.0f s), %d already there, %d failed\n", spoken, seconds, took,
+			skipped, failed);
+		return failed > 0 && spoken == 0 ? 1 : 0;
+	}
+}
+
 int main(int argc, char** argv)
 {
 	std::string error;
+	if (argc >= 5 && std::strcmp(argv[1], "--batch") == 0) {
+		return Batch(argc, argv);
+	}
 	if (argc == 3 && std::strcmp(argv[1], "--rest") == 0) {
 		if (!Lip::Write(argv[2], Lip::Rest(), error)) {
 			std::printf("write failed: %s\n", error.c_str());
@@ -45,7 +140,8 @@ int main(int argc, char** argv)
 	if (argc < 3) {
 		std::printf("usage: probe <model dir> \"text\" [voice] [out.wav] [threads] [output rate]\n"
 					"       probe --rest out.lip\n"
-					"       probe --text file\n");
+					"       probe --text file\n"
+					"       probe --batch <model dir> <list file> <out dir> [voice] [threads] [output rate] [lip strength]\n");
 		return 2;
 	}
 	TtsEngine::ModelSpec spec;
