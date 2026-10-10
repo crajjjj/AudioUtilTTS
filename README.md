@@ -4,7 +4,8 @@ Live text-to-speech for Skyrim SE. A mod hands it a line of text and the line is
 spoken in game a moment later, through [AudioUtil](https://github.com/crajjjj/AudioUtil).
 It also speaks game dialogue that has no recorded voice, in a voice you choose
 per voice type. The voice model runs inside the plugin, on the CPU, with no
-internet connection and no helper program.
+internet connection and no helper program. Speech is generated on background
+threads, not on the game's own, and no effect on frame rate was seen in game.
 
 ## Requirements
 
@@ -86,6 +87,14 @@ the speaking actor (none for narration). The full API is documented in
 
 ## What to expect
 
+- **Background threads, no effect on frame rate.** Models are loaded and lines
+  are generated on background threads. The game's own thread only hands over
+  the text and starts the finished audio, so rendering is not held up while a
+  line is made. In game no drop in frame rate was seen (i7-12700KF, default
+  model, two threads; `[model] threads` sets how many cores a line may use).
+  The one time the game itself waits is a dialogue line said right away, for
+  up to a quarter of a second, once per line (see
+  [Unvoiced dialogue](#unvoiced-dialogue)).
 - **Speech starts late.** A line is generated when it is asked for. With the
   default model a sentence takes about two seconds on two threads of an
   i7-12700KF, and longer while the game is busy.
@@ -212,8 +221,9 @@ The same lookup gives a character their voice for `SpeakActor` and
 ## Cost
 
 Measured outside the game on an i7-12700KF, for lines of about five seconds of
-speech. Nothing here uses the GPU. In a running game on that machine no drop in
-frame rate was noticed while lines were generated (observed, not benchmarked).
+speech. Nothing here uses the GPU, and all of it runs on background threads. In
+a running game on that machine no drop in frame rate was noticed while lines
+were generated (observed, not benchmarked).
 
 | | Kokoro (default) | Piper voice |
 |---|---|---|
