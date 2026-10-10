@@ -80,4 +80,15 @@ namespace TtsEngine
 
 	// Mono 16-bit PCM wav, written in one go.
 	bool WriteWav(const std::filesystem::path& a_path, const Audio& a_audio, std::string& a_error);
+
+	// The same file as bytes; empty when there is nothing to write.
+	std::vector<char> EncodeWav(const Audio& a_audio);
+
+	// Reads a wav this module wrote (mono 16-bit PCM, plain 44-byte header).
+	// false for anything else, a truncated file included.
+	bool ReadWav(const std::filesystem::path& a_path, Audio& a_out);
+
+	// Size and write time of the model files in a_dir, as one number: it changes
+	// when the model is replaced. 0 when the folder holds no model.
+	std::uint64_t ModelStamp(const std::string& a_dir);
 }

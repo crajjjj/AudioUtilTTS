@@ -262,11 +262,10 @@ namespace TtsEngine
 		a_audio.sampleRate = a_targetRate;
 	}
 
-	bool WriteWav(const std::filesystem::path& a_path, const Audio& a_audio, std::string& a_error)
+	std::vector<char> EncodeWav(const Audio& a_audio)
 	{
 		if (a_audio.samples.empty() || a_audio.sampleRate <= 0) {
-			a_error = "nothing to write";
-			return false;
+			return {};
 		}
 		const auto dataBytes = static_cast<std::uint32_t>(a_audio.samples.size() * 2);
 		const auto rate = static_cast<std::uint32_t>(a_audio.sampleRate);
@@ -293,7 +292,16 @@ namespace TtsEngine
 			const auto value = static_cast<std::int16_t>(std::lround(std::clamp(sample, -1.0f, 1.0f) * 32767.0f));
 			raw(reinterpret_cast<const char*>(&value), 2);
 		}
+		return file;
+	}
 
+	bool WriteWav(const std::filesystem::path& a_path, const Audio& a_audio, std::string& a_error)
+	{
+		const auto file = EncodeWav(a_audio);
+		if (file.empty()) {
+			a_error = "nothing to write";
+			return false;
+		}
 		std::ofstream out(a_path, std::ios::binary | std::ios::trunc);
 		if (!out) {
 			a_error = "cannot open for writing";
@@ -306,5 +314,79 @@ namespace TtsEngine
 			return false;
 		}
 		return true;
+	}
+
+	bool ReadWav(const std::filesystem::path& a_path, Audio& a_out)
+	{
+		a_out = {};
+		std::ifstream in(a_path, std::ios::binary);
+		if (!in) {
+			return false;
+		}
+		char header[44];
+		if (!in.read(header, sizeof(header)) || std::memcmp(header, "RIFF", 4) != 0 ||
+			std::memcmp(header + 8, "WAVEfmt ", 8) != 0 || std::memcmp(header + 36, "data", 4) != 0) {
+			return false;
+		}
+		const auto u16 = [&](std::size_t a_off) {
+			std::uint16_t v;
+			std::memcpy(&v, header + a_off, 2);
+			return v;
+		};
+		const auto u32 = [&](std::size_t a_off) {
+			std::uint32_t v;
+			std::memcpy(&v, header + a_off, 4);
+			return v;
+		};
+		const auto rate = u32(24);
+		const auto dataBytes = u32(40);
+		if (u32(16) != 16 || u16(20) != 1 || u16(22) != 1 || u16(34) != 16 || rate < 8000 || rate > 192000 ||
+			dataBytes < 2 || dataBytes > 64u * 1024u * 1024u) {
+			return false;
+		}
+		std::vector<std::int16_t> pcm(dataBytes / 2);
+		if (!in.read(reinterpret_cast<char*>(pcm.data()), static_cast<std::streamsize>(pcm.size() * 2))) {
+			return false;
+		}
+		a_out.samples.resize(pcm.size());
+		for (std::size_t i = 0; i < pcm.size(); ++i) {
+			a_out.samples[i] = static_cast<float>(pcm[i]) / 32767.0f;
+		}
+		a_out.sampleRate = static_cast<int>(rate);
+		return true;
+	}
+
+	std::uint64_t ModelStamp(const std::string& a_dir)
+	{
+		const auto      dir = U8(a_dir);
+		std::error_code ec;
+		if (!fs::is_directory(dir, ec)) {
+			return 0;
+		}
+		const auto modelName = FindModel(dir);
+		if (modelName.empty()) {
+			return 0;
+		}
+		std::uint64_t stamp = 0xCBF29CE484222325ull;
+		const auto    mix = [&](std::uint64_t a_v) {
+			stamp ^= a_v;
+			stamp *= 0x100000001B3ull;
+		};
+		// voices.bin too: a Kokoro voice is replaced there, not in the model file
+		for (const auto& name : { modelName, std::string("voices.bin") }) {
+			const auto file = dir / U8(name);
+			const auto size = fs::file_size(file, ec);
+			if (ec) {
+				ec.clear();
+				continue;
+			}
+			mix(size);
+			const auto written = fs::last_write_time(file, ec);
+			if (!ec) {
+				mix(static_cast<std::uint64_t>(written.time_since_epoch().count()));
+			}
+			ec.clear();
+		}
+		return stamp ? stamp : 1;
 	}
 }

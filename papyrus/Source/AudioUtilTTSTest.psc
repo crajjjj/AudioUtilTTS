@@ -48,7 +48,8 @@ EndFunction
 
 ; Make a character say a line: the reference selected in the console, or the
 ; player when nothing is selected (third person to see the mouth). The voice is
-; the preset "female" or "male" by the speaker's sex.
+; the one set up for the speaker's voice type, else the preset "female" or
+; "male" by their sex (autts voice tells which).
 ;   autts sayactor "Not so loud."
 string Function SayActor(string text) global
     return SayActorAs(text, "")
@@ -76,6 +77,35 @@ string Function SayEvent(string text) global
     endif
     speaker.SendModEvent("AudioUtilTTS_Say", text)
     return "event AudioUtilTTS_Say sent by " + speaker.GetDisplayName()
+EndFunction
+
+; Which voice the console-selected actor (or the player) speaks with, and why:
+; their voice type and the preset or model it leads to. The same voice their
+; unvoiced dialogue lines get.
+;   autts voice
+string Function Voice() global
+    Actor speaker = Game.GetCurrentConsoleRef() as Actor
+    if !speaker
+        speaker = Game.GetPlayer()
+    endif
+    return speaker.GetDisplayName() + " - " + AudioUtilTTS.GetActorVoice(speaker)
+EndFunction
+
+; Unvoiced game dialogue: show the status, or switch it for this session.
+;   autts dialogue        status
+;   autts dialogue 0      off
+;   autts dialogue 1      on
+string Function Dialogue(int on) global
+    if on >= 0
+        AudioUtilTTS.SetDialogueEnabled(on != 0)
+    endif
+    return AudioUtilTTS.GetDialogueStatus()
+EndFunction
+
+; Delete the cached dialogue lines, so each is generated afresh.
+;   autts clearcache
+string Function ClearCache() global
+    return "cached lines removed: " + AudioUtilTTS.ClearDialogueCache()
 EndFunction
 
 ;   autts status

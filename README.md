@@ -2,14 +2,16 @@
 
 Live text-to-speech for Skyrim SE. A mod hands it a line of text and the line is
 spoken in game a moment later, through [AudioUtil](https://github.com/crajjjj/AudioUtil).
-The voice model runs inside the plugin, on the CPU, with no internet connection
-and no helper program.
+It also speaks game dialogue that has no recorded voice, in a voice you choose
+per voice type. The voice model runs inside the plugin, on the CPU, with no
+internet connection and no helper program.
 
 ## Requirements
 
 - Skyrim SE / AE with SKSE64 and Address Library
-- AudioUtil 0.9.9 or newer (it does the actual playback); 0.9.26 or newer for
-  the mouth to move on character speech
+- AudioUtil 0.9.9 or newer (it plays narration and character speech); 0.9.26 or
+  newer for the mouth to move on character speech. Dialogue is played by the
+  game itself and does not need it.
 - ConsoleUtil Extended, only for the `autts` test commands
 
 ## Installing
@@ -57,8 +59,11 @@ akSpeaker.SendModEvent("AudioUtilTTS_Say", "Not so loud.")
 akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper", "Not so loud.")
 ```
 
-With no preset named, the speaker gets the preset `female` or `male` by their sex
-when the config defines those. See [Character speech](#character-speech).
+With no preset named, the speaker gets the voice set up for their voice type,
+else the preset `female` or `male` by their sex when the config defines those.
+See [Character speech](#character-speech) and [Voice types](#voice-types).
+
+Game dialogue needs no call at all, see [Unvoiced dialogue](#unvoiced-dialogue).
 
 To learn whether a line was accepted, or to pass a voice number, volume or speed
 directly, call the natives and guard them:
@@ -103,9 +108,98 @@ the speaking actor (none for narration). The full API is documented in
 - Character lines use their own channel and placeholder files (`[speech]` in the
   config), so a character and the narrator can talk at once. Two characters
   take turns.
-- A generated voice will not match an NPC's recorded voice.
+- A generated voice matches an NPC's recorded voice only as far as the model you
+  give that voice type does (see [Voice types](#voice-types)).
 - If the speaker is gone or unloaded by the time the line is ready, it is
   dropped.
+
+## Unvoiced dialogue
+
+New in 0.2.0. Plenty of mod dialogue ships without voice files. With
+`[dialogue] enable = true` (the default) the plugin speaks those lines: when
+the game builds a dialogue line and no voice file exists for it, the line is
+generated in the voice of the speaker's voice type and handed to the game as
+that line's voice file.
+
+- **Only lines with no recorded voice.** The plugin asks the game whether a
+  voice file exists (loose or in an archive, `.fuz`, `.wav` or `.xwm`). If one
+  does, nothing happens.
+- **The game plays the line itself**, like a recorded one. It lasts as long as
+  the speech, the subtitle follows the usual setting, the voice volume slider
+  applies, the sound comes from the speaker, and the conversation moves on when
+  the line ends.
+- **The mouth moves.** A mouth animation is written beside the audio in the
+  game's own `.lip` format. Its shapes are guessed from the loudness of the
+  line, so it reads as talking without forming the actual sounds.
+- **Each line is generated once.** Generated lines are kept in
+  `Data\SKSE\Plugins\AudioUtilTTS\cache` (256 MB by default) and come from
+  there at once every later time.
+- **Lines in the dialogue menu are prepared while you read it.** The game builds
+  the lines of every topic the menu shows when it fills the menu. The plugin
+  generates the unvoiced ones in the background, the first line of each topic
+  first, and the game never waits for them. A line picked before it is ready
+  stays unvoiced that once.
+- **A line said right away may pause the game briefly, once.** A scene line, a
+  greeting or a remark in passing cannot be prepared, so the game waits for it
+  up to `[dialogue] wait_ms` (250 ms). A Piper voice fits in that. A slow model
+  does not, and the plugin learns that after one line: from then on the game
+  does not wait, the line stays unvoiced that once and is voiced from the next
+  time on. Later lines of the same topic are generated while the earlier ones
+  play.
+- **Preparing a menu costs CPU.** Every unvoiced line the menu lists is
+  generated once, whether it is picked or not. With a fast model that is a few
+  seconds of work per menu; with the default model it is about two seconds per
+  line on `[model] threads` cores.
+- **Works beside Fuz Ro D'oh and Dynamic Dialogue Replacer.** Fuz Ro D'oh keeps
+  covering every line this plugin leaves unvoiced.
+
+`autts dialogue` shows whether it is running, how many lines were voiced and
+left unvoiced this session and the size of the cache. `AudioUtilTTS.log` has
+one entry per unvoiced line with what was done about it and why.
+
+### Voice types
+
+Every NPC has a voice type, and that is what an unvoiced line is spoken for.
+A voice type finds its voice in this order:
+
+1. its line in `[voicetype]`, naming a preset
+2. a preset named exactly like the voice type
+3. a model folder named exactly like the voice type (its first voice)
+4. the preset `female` or `male` by sex, unless `[dialogue] fallback = false`
+
+```toml
+[voicetype]
+MaleNord = "malenord"
+FemaleEvenToned = "eventoned"
+FemaleYoungEager = "eventoned"   # several voice types can share one voice
+CrDogVoice = ""                  # never spoken for
+
+[preset.malenord]
+model = "nord-male"        # a model folder with one voice
+
+[preset.eventoned]
+model = "my-voices"          # one model holding many voices
+voice = 4
+```
+
+The quickest setup is no config at all: a model folder called
+`models\MaleNord` speaks for the voice type `MaleNord`. The name is the voice
+type's editor ID, as xEdit shows it; case is ignored. Select an NPC in the
+console and run `autts voice` to see their voice type and the voice it leads to,
+and `autts sayactor "Some text"` to hear it.
+
+With `fallback = false` only the voice types you set up are spoken, and the
+rest stay as they were.
+
+A model per voice type costs memory per loaded model (see [Cost](#cost));
+`[model] max_loaded` caps how many are kept. One model holding many voices
+costs the memory once.
+
+After replacing a model's files, run `autts reload`. Lines are cached per model
+file, so the lines of the old model are not played again.
+
+The same lookup gives a character their voice for `SpeakActor` and
+`AudioUtilTTS_Say` when no preset is named.
 
 ## Cost
 
@@ -140,6 +234,10 @@ frame rate was noticed while lines were generated (observed, not benchmarked).
 | `autts sayactor "text"` | Make the console-selected actor (or the player) say a line |
 | `autts sayactoras "text" whisper` | The same through the preset `whisper` |
 | `autts sayevent "text"` | The same through the `AudioUtilTTS_Say` mod event |
+| `autts voice` | Show the voice type of the console-selected actor (or the player) and the voice it leads to |
+| `autts dialogue` | Show the status of unvoiced-dialogue speech |
+| `autts dialogue 0` | Switch unvoiced-dialogue speech off for this session (`1` = on) |
+| `autts clearcache` | Delete the cached dialogue lines |
 | `autts event "text"` | Speak a line through the mod event |
 | `autts eventas "text" whisper` | Speak a line through the mod event with a preset |
 | `autts status` | Show whether speech is ready, and why not |
@@ -150,8 +248,9 @@ frame rate was noticed while lines were generated (observed, not benchmarked).
 ## Configuration
 
 `Data\SKSE\Plugins\AudioUtilTTS\AudioUtilTTS.toml` holds the default model and
-voice, the presets, thread count and playback behaviour. Every key is commented
-in the file. Volume also follows AudioUtil's `narration` group.
+voice, the presets, the voice types, the dialogue settings, thread count and
+playback behaviour. Every key is commented in the file. Volume also follows
+AudioUtil's `narration` group.
 
 ### Voices
 
@@ -199,8 +298,8 @@ Anything a preset leaves out comes from the defaults. The shipped config defines
 
 A preset may name a different model. That model is loaded the first time a line
 asks for it, which delays that one line by about a second, and then stays in
-memory (see [Cost](#cost)). `[model] max_loaded` (default 3) caps how many are
-kept; the least recently used one is unloaded first, never the default.
+memory (see [Cost](#cost)). `[model] max_loaded` (default 3, up to 32) caps how
+many are kept; the least recently used one is unloaded first, never the default.
 
 ### Models
 
@@ -221,6 +320,15 @@ every time it plays one. The mod ships a few silent placeholder wavs
 (`Data\Sound\AudioUtilTTS\_tts_slotNN.wav`); the plugin writes each generated
 line into the next one and asks AudioUtil to play that file. AudioUtil needs no
 change for this.
+
+Dialogue uses the same trick one step earlier. When the game builds a dialogue
+response it works out the path of the response's voice file; the plugin patches
+that step, and for a response with no voice file it swaps the path for a
+placeholder under `Data\Sound\Voice\AudioUtilTTS` (a wav and a lip) that holds
+the generated line. From there the game does everything it does for a recorded
+line. The patch is two redirected calls in one function; if the game code at
+those two places is not what the plugin expects, it patches nothing and says so
+in the log.
 
 The speech runtime (sherpa-onnx with ONNX Runtime) is linked statically, so the
 mod is a single DLL. That is deliberate: a separate `onnxruntime.dll` would
@@ -251,6 +359,10 @@ core outside the game:
 ```
 xmake run probe dist\SKSE\Plugins\AudioUtilTTS\models\kokoro-en-v0_19 "Some text" 7 out.wav
 ```
+
+It prints how long the line took to generate (the number `wait_ms` is weighed
+against) and writes `out.lip` beside the wav: the mouth animation a dialogue
+line with that audio would get. AudioUtil's LipSim plays the pair.
 
 ## Licenses
 

@@ -7,7 +7,7 @@ namespace PapyrusAPI
 	namespace
 	{
 		constexpr auto         SCRIPT_NAME = "AudioUtilTTS"sv;
-		constexpr std::int32_t API_VERSION = 1;
+		constexpr std::int32_t API_VERSION = 2;  // 2 added the dialogue group and GetActorVoice
 
 		std::int32_t GetAPIVersion(RE::StaticFunctionTag*)
 		{
@@ -85,6 +85,31 @@ namespace PapyrusAPI
 		{
 			return Speaker::SpeechChannel();
 		}
+
+		void SetDialogueEnabled(RE::StaticFunctionTag*, bool a_enabled)
+		{
+			Speaker::SetDialogueEnabled(a_enabled);
+		}
+
+		bool IsDialogueEnabled(RE::StaticFunctionTag*)
+		{
+			return Speaker::IsDialogueEnabled();
+		}
+
+		RE::BSFixedString GetDialogueStatus(RE::StaticFunctionTag*)
+		{
+			return Speaker::DialogueStatus();
+		}
+
+		std::int32_t ClearDialogueCache(RE::StaticFunctionTag*)
+		{
+			return Speaker::ClearDialogueCache();
+		}
+
+		RE::BSFixedString GetActorVoice(RE::StaticFunctionTag*, RE::Actor* a_actor)
+		{
+			return Speaker::DescribeVoice(a_actor);
+		}
 	}
 
 	bool RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm)
@@ -104,6 +129,11 @@ namespace PapyrusAPI
 		REGISTERFUNC(GetStatus, SCRIPT_NAME);
 		REGISTERFUNC(GetChannel, SCRIPT_NAME);
 		REGISTERFUNC(GetSpeechChannel, SCRIPT_NAME);
+		REGISTERFUNC(SetDialogueEnabled, SCRIPT_NAME);
+		REGISTERFUNC(IsDialogueEnabled, SCRIPT_NAME);
+		REGISTERFUNC(GetDialogueStatus, SCRIPT_NAME);
+		REGISTERFUNC(ClearDialogueCache, SCRIPT_NAME);
+		REGISTERFUNC(GetActorVoice, SCRIPT_NAME);
 		return true;
 	}
 }

@@ -21,8 +21,14 @@ Scriptname AudioUtilTTS Hidden
 ;     akSpeaker.SendModEvent("AudioUtilTTS_Say", "Not so loud.")
 ;     akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper", "Not so loud.")
 ;
-; With no preset named, the speaker gets the preset "female" or "male" by their
-; sex when the config defines those.
+; With no preset named, the speaker gets the voice of their voice type when the
+; user has set one up (see [voicetype] in AudioUtilTTS.toml), else the preset
+; "female" or "male" by their sex when the config defines those.
+;
+; Game dialogue needs no call at all: a dialogue line that has no recorded
+; voice file is generated and spoken by the plugin on its own, in the voice of
+; the speaker's voice type. See [dialogue] in AudioUtilTTS.toml and the
+; dialogue functions at the end of this file.
 ;
 ; When AudioUtilTTS is not installed the events simply go nowhere. Use
 ; SendModEvent (the Form function), not the ModEvent.Create / Send pair.
@@ -41,7 +47,8 @@ Scriptname AudioUtilTTS Hidden
 ; sender = the speaking actor, or None for narration.
 ; ---------------------------------------------------------------------------
 
-; API version of the installed plugin. 1 = first release.
+; API version of the installed plugin. 1 = first release. 2 added the dialogue
+; functions and GetActorVoice.
 int Function GetAPIVersion() global native
 
 ; True when a line can be spoken right now: the default model is loaded,
@@ -66,10 +73,17 @@ bool Function SpeakAs(string asText, string asPreset) global native
 ; their mouth moving when abLipSync is true and [speech] lipsync is on. The
 ; mouth follows the loudness of the line, it does not form real phonemes, and
 ; AudioUtil's own guards still apply (a gag, a worn tongue, a dialogue with the
-; player and a mouth claim all keep it still). An empty asPreset picks "female"
-; or "male" by the speaker's sex when the config defines those. The line is
-; dropped if the speaker is gone or not loaded by the time it is ready.
+; player and a mouth claim all keep it still). An empty asPreset picks the voice
+; of the speaker's voice type when one is set up (GetActorVoice tells which),
+; else "female" or "male" by the speaker's sex when the config defines those.
+; The line is dropped if the speaker is gone or not loaded by the time it is
+; ready.
 bool Function SpeakActor(Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
+
+; Which voice akSpeaker speaks with when no preset is named, and why, as one
+; line of text: "MaleNord: preset 'malenord' (model my-voices, voice 12)".
+; (API 2)
+string Function GetActorVoice(Actor akSpeaker) global native
 
 ; True when AudioUtilTTS.toml defines [preset.<asPreset>].
 bool Function HasPreset(string asPreset) global native
@@ -102,8 +116,35 @@ string Function GetChannel() global native
 string Function GetSpeechChannel() global native
 
 ; Drop waiting lines and cut whatever is being spoken, narration and characters.
+; A dialogue line the game is already saying is the game's own and carries on.
 Function StopSpeaking() global
     CancelPending()
     AudioUtil.StopChannel(GetChannel())
     AudioUtil.StopChannel(GetSpeechChannel())
 EndFunction
+
+; ---------------------------------------------------------------------------
+; Dialogue (API 2). Nothing here has to be called for dialogue to be spoken:
+; the plugin does that by itself when [dialogue] enable is true. A dialogue
+; line the game is about to say that has no recorded voice file is generated in
+; the voice of the speaker's voice type and played by the game like a recorded
+; one, with its subtitles, volume and lipsync. Lines with a recorded voice are
+; never touched.
+; ---------------------------------------------------------------------------
+
+; Session switch on top of [dialogue] enable. It cannot switch the feature on
+; when the config had it off at game start: the game is only patched then.
+Function SetDialogueEnabled(bool abEnabled) global native
+
+; True when unvoiced dialogue is being spoken: enabled in the config, patched
+; into the game and not switched off.
+bool Function IsDialogueEnabled() global native
+
+; One line of status text: on or off and why, lines voiced and left unvoiced
+; this session, and the size of the cache of generated lines.
+string Function GetDialogueStatus() global native
+
+; Delete every cached dialogue line, so each is generated afresh the next time
+; it is said. Returns the number of files removed. Not needed after replacing a
+; model: lines are cached per model file, and ReloadConfig picks up the change.
+int Function ClearDialogueCache() global native

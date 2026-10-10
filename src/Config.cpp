@@ -10,13 +10,12 @@ namespace Config
 
 		std::shared_ptr<const Settings> g_settings = std::make_shared<Settings>();
 		std::mutex                      g_lock;
+	}
 
-		// a model name becomes part of a path: it must be one plain folder name
-		bool IsFolderName(const std::string& a_name)
-		{
-			return !a_name.empty() && a_name.find_first_of("\\/:") == std::string::npos &&
-				   a_name.find("..") == std::string::npos;
-		}
+	bool IsFolderName(const std::string& a_name)
+	{
+		return !a_name.empty() && a_name.find_first_of("\\/:") == std::string::npos &&
+			   a_name.find("..") == std::string::npos;
 	}
 
 	std::string Normalize(std::string_view a_text)
@@ -80,12 +79,40 @@ namespace Config
 			settings->speechLipSync = (*speech)["lipsync"].value_or(settings->speechLipSync);
 		}
 
+		if (const auto* dialogue = root["dialogue"].as_table()) {
+			settings->dialogue = (*dialogue)["enable"].value_or(settings->dialogue);
+			settings->dialogueWaitMs = (*dialogue)["wait_ms"].value_or(settings->dialogueWaitMs);
+			settings->dialogueSlots = (*dialogue)["slots"].value_or(settings->dialogueSlots);
+			settings->dialogueLip = (*dialogue)["lipsync"].value_or(settings->dialogueLip);
+			settings->dialogueLipStrength = (*dialogue)["lip_strength"].value_or(settings->dialogueLipStrength);
+			settings->dialogueFallback = (*dialogue)["fallback"].value_or(settings->dialogueFallback);
+			settings->dialogueSkipDirections =
+				(*dialogue)["skip_directions"].value_or(settings->dialogueSkipDirections);
+			settings->dialogueCacheMb = (*dialogue)["cache_max_mb"].value_or(settings->dialogueCacheMb);
+		}
+		settings->dialogueWaitMs = std::clamp(settings->dialogueWaitMs, 0, 2000);
+		settings->dialogueSlots = std::clamp(settings->dialogueSlots, 16, 256);
+		settings->dialogueLipStrength = std::clamp(settings->dialogueLipStrength, 0.0f, 1.5f);
+		settings->dialogueCacheMb = std::clamp(settings->dialogueCacheMb, 0, 16384);
+
+		if (const auto* voiceTypes = root["voicetype"].as_table()) {
+			for (auto&& [name, node] : *voiceTypes) {
+				const auto key = Normalize(name.str());
+				const auto preset = node.value<std::string>();
+				if (key.empty() || !preset) {
+					logger::warn("[voicetype] {} must be a preset name in quotes, ignored", name.str());
+					continue;
+				}
+				settings->voiceTypes[key] = Normalize(*preset);
+			}
+		}
+
 		if (!IsFolderName(settings->model)) {
 			logger::warn("[model] dir = '{}' is not a plain folder name, using the default", settings->model);
 			settings->model = Settings{}.model;
 		}
 		settings->threads = std::clamp(settings->threads, 1, 16);
-		settings->maxLoaded = std::clamp(settings->maxLoaded, 1, 8);
+		settings->maxLoaded = std::clamp(settings->maxLoaded, 1, 32);
 		settings->speed = std::clamp(settings->speed, 0.5f, 2.0f);
 		settings->volume = std::clamp(settings->volume, 0.0f, 1.0f);
 		settings->maxPending = std::clamp(settings->maxPending, 1, 16);
@@ -136,6 +163,11 @@ namespace Config
 			settings->maxPending, settings->slots, settings->outputRate, settings->presets.size(),
 			settings->speechGroup, settings->speechChannel, settings->speechSlots, settings->speechLipSync,
 			settings->enable ? "" : " [disabled]");
+		logger::info("Config: dialogue {}, wait {} ms, slots {}, lipsync {} (strength {:.2f}), fallback {}, "
+					 "skip_directions {}, cache {} MB, {} voice types mapped",
+			settings->dialogue, settings->dialogueWaitMs, settings->dialogueSlots, settings->dialogueLip,
+			settings->dialogueLipStrength, settings->dialogueFallback, settings->dialogueSkipDirections,
+			settings->dialogueCacheMb, settings->voiceTypes.size());
 
 		std::scoped_lock lock{ g_lock };
 		g_settings = std::move(settings);

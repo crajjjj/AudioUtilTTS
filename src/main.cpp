@@ -2,6 +2,7 @@
 #include <spdlog/sinks/msvc_sink.h>
 
 #include "Config.h"
+#include "DialogueHook.h"
 #include "PapyrusAPI.h"
 #include "Speaker.h"
 
@@ -49,6 +50,12 @@ namespace
 		case MessagingInterface::kDataLoaded:
 			Config::Load();
 			Speaker::Start();
+			// the game code is only patched when the feature is wanted at launch
+			if (Config::Get()->dialogue) {
+				Speaker::SetDialogueHooked(DialogueHook::Install());
+			} else {
+				log::info("Dialogue: off in the config, the game is left unpatched");
+			}
 			break;
 		case MessagingInterface::kPreLoadGame:
 		case MessagingInterface::kNewGame:
@@ -71,6 +78,7 @@ SKSEPluginLoad(const LoadInterface* skse)
 
 	Init(skse);
 	InitializePapyrus();
+	DialogueHook::Reserve();
 
 	if (const auto* messaging = GetMessagingInterface()) {
 		messaging->RegisterListener(OnMessage);

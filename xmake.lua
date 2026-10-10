@@ -2,7 +2,7 @@ set_xmakever("3.0.0")  -- the commonlibsse-ng submodule requires 3.0
 
 -- Globals
 PROJECT_NAME = "AudioUtilTTS"
-PROJECT_VERSION = "0.1.0"
+PROJECT_VERSION = "0.2.0"
 PROJECT_AUTHOR = "crajjjj"
 
 -- Project
@@ -68,7 +68,7 @@ target(PROJECT_NAME)
     add_rules("commonlibsse-ng.plugin", {
         name = PROJECT_NAME,
         author = PROJECT_AUTHOR,
-        description = "Live text-to-speech for AudioUtil: speaks any text a mod hands it."
+        description = "Live text-to-speech for AudioUtil: speaks any text a mod hands it, and dialogue that has no recorded voice."
     })
 
     -- Packages
@@ -112,6 +112,8 @@ target(PROJECT_NAME)
         import("scripts.slots")
         slots(path.join(os.projectdir(), "dist", "Sound", "AudioUtilTTS"), 4, "_tts_slot")
         slots(path.join(os.projectdir(), "dist", "Sound", "AudioUtilTTS"), 4, "_tts_speech")
+        -- dialogue lines are played by the game as voice files: wav + lip pairs
+        slots(path.join(os.projectdir(), "dist", "Sound", "Voice", "AudioUtilTTS"), 128, "_tts_dialog", true)
 
         local mod_folder = os.getenv("XSE_TES5_MODS_PATH")
         if mod_folder and has_config("copy_to_mod") then
@@ -125,7 +127,7 @@ target_end()
 target("probe")
     set_kind("binary")
     set_default(false)
-    add_files("tools/probe/main.cpp", "src/TtsEngine.cpp")
+    add_files("tools/probe/main.cpp", "src/TtsEngine.cpp", "src/Lip.cpp")
     add_includedirs("src")
     set_rundir("$(projectdir)")  -- `xmake run probe` takes paths relative to the repo
     use_sherpa()

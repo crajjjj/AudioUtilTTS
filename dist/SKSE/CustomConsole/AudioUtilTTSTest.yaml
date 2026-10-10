@@ -9,7 +9,7 @@ version: 1
 name: AudioUtilTTSTest
 alias: autts
 script: AudioUtilTTSTest
-help: AudioUtilTTS console test harness (say, sayv, sayas, sayactor, sayactoras, event, eventas, sayevent, status, stop, reload, enable)
+help: AudioUtilTTS console test harness (say, sayv, sayas, sayactor, sayactoras, event, eventas, sayevent, voice, dialogue, clearcache, status, stop, reload, enable)
 subs:
   - name: say
     func: Say
@@ -63,6 +63,20 @@ subs:
         type: String
         required: true
         help: Preset name, e.g. narrator, female, male, whisper
+  - name: voice
+    func: Voice
+    help: Show which voice the console-selected actor (or the player) speaks with, by voice type
+  - name: dialogue
+    func: Dialogue
+    help: Show the status of unvoiced-dialogue speech, or switch it for this session
+    args:
+      - name: on
+        type: int
+        default: -1
+        help: 1 = on, 0 = off, leave out to only show the status
+  - name: clearcache
+    func: ClearCache
+    help: Delete the cached dialogue lines so each is generated afresh
   - name: sayactor
     func: SayActor
     help: Make the console-selected actor (or the player) say a line, with lipsync
@@ -73,7 +87,7 @@ subs:
         help: The line to say, in quotes
   - name: sayactoras
     func: SayActorAs
-    help: The same with a named preset instead of female or male by the speaker's sex
+    help: The same with a named preset instead of the speaker's own voice
     args:
       - name: text
         type: String

@@ -21,11 +21,13 @@ threads = 2
 # Only for models that need them (multi-language Kokoro builds).
 lexicon = ""
 lang = ""
-# How many models may be in memory at once, the default one included. A preset
-# can name another model; it is loaded the first time a line asks for it and
-# kept. Past this limit the least recently used one is unloaded (never the
-# default). Measured memory per loaded model, settled after a few lines: about
-# 625 MB for kokoro-en-v0_19, about 350 MB for a Piper voice.
+# How many models may be in memory at once, the default one included (1 to 32).
+# A preset or a voice type can name another model; it is loaded the first time a
+# line asks for it and kept. Past this limit the least recently used one is
+# unloaded (never the default). Measured memory per loaded model, settled after
+# a few lines: about 625 MB for kokoro-en-v0_19, about 350 MB for a Piper voice.
+# With one model per voice type, raise this to the number of voices a busy
+# scene mixes, or loading and unloading will delay lines.
 max_loaded = 3
 
 [voice]
@@ -82,8 +84,85 @@ channel = "speech"
 lipsync = true
 # Placeholder wav files for character lines (Data\Sound\AudioUtilTTS).
 slots = 4
-# With no preset named, a character uses the preset "female" or "male" by their
-# sex when those exist above, else the default voice.
+# With no preset named, a character uses the voice of their voice type when one
+# is set up (see [voicetype] below), else the preset "female" or "male" by
+# their sex when those exist above, else the default voice.
+
+# Game dialogue that has no recorded voice. When the game is about to say a
+# dialogue line and no voice file exists for it, the line is generated in the
+# voice of the speaker's voice type and the game plays it like a recorded one:
+# its timing, subtitles, voice volume slider and lipsync all apply. A line with
+# a recorded voice is never touched. Works beside Fuz Ro D'oh, which keeps
+# covering every line left unvoiced here.
+[dialogue]
+# false = the game is not patched at all. A change here needs a game restart;
+# "autts dialogue 0" switches it off for the session.
+enable = true
+# A line said before comes from a cache on disk at once. A new one has to be
+# generated first:
+#  - Lines in the dialogue menu are generated in the background while the menu
+#    is up, the first line of each topic first. The game never waits for them;
+#    one picked before it is ready stays unvoiced that once.
+#  - A line said right away (a scene, a greeting, a remark in passing) cannot
+#    be prepared, so the game waits for it up to this many milliseconds: a
+#    short freeze, once per line ever. If the line would take longer (the
+#    plugin learns how fast each model is), the game does not wait: the line
+#    stays unvoiced this once and is voiced from the next time on.
+# A Piper voice needs roughly 100 to 300 ms a line, the default Kokoro model
+# about two seconds. 0 = never make the game wait.
+wait_ms = 250
+# A voice type with no voice of its own (see [voicetype]) is spoken with the
+# preset "female" or "male" by its sex. false = such lines stay unvoiced, so
+# only the voice types you set up are spoken.
+fallback = true
+# Move the speaker's mouth. The mouth shapes are guessed from the loudness of
+# the line, as the speech model gives no timing: it reads as talking, it does
+# not form the actual sounds.
+lipsync = true
+# How far the mouth opens, 0.0 to 1.5.
+lip_strength = 0.8
+# Leave out stage directions: text in (parentheses), [brackets] or *asterisks*.
+skip_directions = true
+# Placeholder voice files (Data\Sound\Voice\AudioUtilTTS), 16 to 256. Every
+# unvoiced line in the dialogue menu holds one until it is picked or the menu
+# moves on, so this is how many such lines can be pending within half a minute;
+# a line that finds none free stays unvoiced. A slot added by raising this
+# number starts working after the next restart.
+slots = 128
+# Size limit of the cache of generated lines (Data\SKSE\Plugins\AudioUtilTTS\
+# cache), in MB. The lines used longest ago are dropped first. 0 = no limit.
+# A line is cached per model file, so a retrained model starts afresh by itself
+# after "autts reload".
+cache_max_mb = 256
+
+# Voice types: which voice speaks for which of the game's voice types. This is
+# what makes an NPC's generated lines sound like that NPC. Used for unvoiced
+# dialogue, and for character speech that names no preset.
+#
+# A voice type finds its voice in this order:
+#   1. its line below:  <voice type ID> = "<preset name>"
+#   2. a preset named exactly like the voice type, e.g. [preset.MaleNord]
+#   3. a model folder named exactly like the voice type, models\MaleNord
+#      (its first voice), with no line here at all
+#   4. the preset "female" or "male" by sex, unless [dialogue] fallback is off
+# The ID is the voice type's editor ID as xEdit shows it; case is ignored.
+# "autts voice" in the console shows which voice the selected actor gets.
+# An empty preset name means that voice type is never spoken for.
+[voicetype]
+# MaleNord = "malenord"
+# FemaleEvenToned = "eventoned"
+# FemaleYoungEager = "eventoned"     # several voice types can share one voice
+# CrDogVoice = ""                    # never spoken for
+#
+# The presets those lines name, for a model with one voice per folder and for
+# one model that holds many voices:
+#
+# [preset.malenord]
+# model = "nord-male"
+#
+# [preset.eventoned]
+# model = "my-voices"
+# voice = 4
 
 # Narration: lines with no speaker (AudioUtilTTS.Speak, AudioUtilTTS_Speak).
 [playback]

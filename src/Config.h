@@ -47,8 +47,22 @@ namespace Config
 		int         speechSlots = 4;
 		bool        speechLipSync = true;
 
+		// [dialogue]: game dialogue that has no recorded voice file
+		bool  dialogue = true;
+		int   dialogueWaitMs = 250;
+		int   dialogueSlots = 128;
+		bool  dialogueLip = true;
+		float dialogueLipStrength = 0.8f;
+		bool  dialogueFallback = true;
+		bool  dialogueSkipDirections = true;
+		int   dialogueCacheMb = 256;
+
 		// [preset.<name>], keyed by Normalize(name)
 		std::unordered_map<std::string, Preset> presets;
+
+		// [voicetype]: Normalize(voice type editor ID) -> Normalize(preset name).
+		// An empty preset name means that voice type is never spoken for.
+		std::unordered_map<std::string, std::string> voiceTypes;
 	};
 
 	// false = the file did not parse and the previous settings were kept
@@ -56,7 +70,10 @@ namespace Config
 
 	std::shared_ptr<const Settings> Get();
 
-	// Lowercase with surrounding whitespace removed: how preset names and model
-	// folder names are compared.
+	// Lowercase with surrounding whitespace removed: how preset names, model
+	// folder names and voice type IDs are compared.
 	std::string Normalize(std::string_view a_text);
+
+	// A model name becomes part of a path: it must be one plain folder name.
+	bool IsFolderName(const std::string& a_name);
 }
