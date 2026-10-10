@@ -136,9 +136,11 @@ that line's voice file.
   there at once every later time.
 - **Lines in the dialogue menu are prepared while you read it.** The game builds
   the lines of every topic the menu shows when it fills the menu. The plugin
-  generates the unvoiced ones in the background, the first line of each topic
-  first, and the game never waits for them. A line picked before it is ready
-  stays unvoiced that once.
+  puts the unvoiced ones in place in the background, the first line of each
+  topic first, and the game never waits for them. A line generated before is
+  copied from the cache. A new one is voiced this time only if it should be
+  generated within about 2.5 seconds, the time it takes to pick a topic;
+  otherwise it is left unvoiced this once and voiced from the next time on.
 - **A line said right away may pause the game briefly, once.** A scene line, a
   greeting or a remark in passing cannot be prepared, so the game waits for it
   up to `[dialogue] wait_ms` (250 ms). A Piper voice fits in that. A slow model
@@ -151,11 +153,17 @@ that line's voice file.
   seconds of work per menu; with the default model it is about two seconds per
   line on `[model] threads` cores.
 - **Works beside Fuz Ro D'oh and Dynamic Dialogue Replacer.** Fuz Ro D'oh keeps
-  covering every line this plugin leaves unvoiced.
+  covering the lines this plugin leaves alone. One gap: a line the plugin
+  expected to have ready, picked before it is, plays as silence that once,
+  and Fuz Ro D'oh does not step in for it.
+- **Text is cleaned up first.** Markup in angle brackets is dropped, stage
+  directions such as `(sighs)` too (`[dialogue] skip_directions`), and text in
+  the Windows-1252 encoding that English game data uses is converted, so curly
+  apostrophes and accented letters are read correctly.
 
-`autts dialogue` shows whether it is running, how many lines were voiced and
-left unvoiced this session and the size of the cache. `AudioUtilTTS.log` has
-one entry per unvoiced line with what was done about it and why.
+`autts dialogue` shows whether it is running, how many lines were given a
+voice, left unvoiced and generated this session, and the size of the cache.
+`AudioUtilTTS.log` says what was done about a line that stays unvoiced and why.
 
 ### Voice types
 

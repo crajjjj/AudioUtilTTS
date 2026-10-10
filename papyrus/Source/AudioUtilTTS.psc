@@ -88,11 +88,12 @@ string Function GetActorVoice(Actor akSpeaker) global native
 ; True when AudioUtilTTS.toml defines [preset.<asPreset>].
 bool Function HasPreset(string asPreset) global native
 
-; Drop every line that is waiting or being generated. The line already playing
-; carries on; StopSpeaking silences that too.
+; Drop every narration and character line that is waiting or being generated.
+; The line already playing carries on; StopSpeaking silences that too. Dialogue
+; lines being prepared are the game's business and are not touched.
 Function CancelPending() global native
 
-; True while a line is waiting or being generated.
+; True while a narration or character line is waiting or being generated.
 bool Function IsBusy() global native
 
 ; Number of voices in the default model (0 while it is not loaded).

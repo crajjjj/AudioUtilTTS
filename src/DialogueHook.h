@@ -17,7 +17,7 @@
 // whatever was there, so this works with Dynamic Dialogue Replacer in either
 // load order. Fuz Ro D'oh patches a different instruction (+0xEC) and runs
 // after this: it sees the swapped path, finds a file there and leaves the line
-// alone, and it still covers every line this plugin leaves unvoiced.
+// alone, and it still covers every line whose path was not swapped.
 namespace DialogueHook
 {
 	// SKSEPluginLoad: reserves the trampoline space the patch needs.

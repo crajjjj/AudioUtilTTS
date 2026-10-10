@@ -93,16 +93,18 @@ slots = 4
 # voice of the speaker's voice type and the game plays it like a recorded one:
 # its timing, subtitles, voice volume slider and lipsync all apply. A line with
 # a recorded voice is never touched. Works beside Fuz Ro D'oh, which keeps
-# covering every line left unvoiced here.
+# covering the lines this plugin leaves alone.
 [dialogue]
 # false = the game is not patched at all. A change here needs a game restart;
 # "autts dialogue 0" switches it off for the session.
 enable = true
-# A line said before comes from a cache on disk at once. A new one has to be
-# generated first:
-#  - Lines in the dialogue menu are generated in the background while the menu
-#    is up, the first line of each topic first. The game never waits for them;
-#    one picked before it is ready stays unvoiced that once.
+# A line said before comes from a cache on disk. A new one has to be generated
+# first:
+#  - Lines in the dialogue menu are prepared in the background while the menu
+#    is up, the first line of each topic first, and the game never waits for
+#    them. A new line is voiced this time only if it should be generated within
+#    about 2.5 seconds, the time a player takes to pick a topic; otherwise it
+#    is left unvoiced this once and voiced from the next time on.
 #  - A line said right away (a scene, a greeting, a remark in passing) cannot
 #    be prepared, so the game waits for it up to this many milliseconds: a
 #    short freeze, once per line ever. If the line would take longer (the
@@ -123,11 +125,12 @@ lipsync = true
 lip_strength = 0.8
 # Leave out stage directions: text in (parentheses), [brackets] or *asterisks*.
 skip_directions = true
-# Placeholder voice files (Data\Sound\Voice\AudioUtilTTS), 16 to 256. Every
-# unvoiced line in the dialogue menu holds one until it is picked or the menu
-# moves on, so this is how many such lines can be pending within half a minute;
-# a line that finds none free stays unvoiced. A slot added by raising this
-# number starts working after the next restart.
+# Placeholder voice files (Data\Sound\Voice\AudioUtilTTS), 64 to 256. A line in
+# the dialogue menu holds one from the moment the menu lists it, and the plugin
+# cannot see when the game is done with it: a placeholder goes to the line used
+# longest ago, and never to one used in the last half minute. A line that finds
+# none free stays unvoiced. A slot added by raising this number starts working
+# after the next restart.
 slots = 128
 # Size limit of the cache of generated lines (Data\SKSE\Plugins\AudioUtilTTS\
 # cache), in MB. The lines used longest ago are dropped first. 0 = no limit.

@@ -16,6 +16,7 @@
 #include <optional>
 #include <thread>
 #include <tuple>
+#include <utility>
 
 namespace Speaker
 {
@@ -55,8 +56,14 @@ namespace Speaker
 		// A dialogue slot handed out this recently may belong to a line that waits
 		// in the dialogue menu to be picked: it is not given to another line.
 		constexpr auto MIN_SLOT_AGE = std::chrono::seconds(30);
-		// First responses closer together than this are a topic list being built.
+		// A line is written into its slot only while the slot cannot change hands
+		// for at least this long yet (see DialogueSlotWritable).
+		constexpr auto SLOT_WRITE_MARGIN = std::chrono::seconds(5);
+		// A topic arriving this close behind other responses is a topic list being built.
 		constexpr auto BURST_GAP = std::chrono::milliseconds(150);
+		// A listed line gets a slot only when it should be generated within this
+		// long: about how soon a player picks a topic after the menu shows it.
+		constexpr float LISTED_READY_MS = 2500.0f;
 
 		// One dialogue line on its way: shared by the game thread that asked for it
 		// and the worker that generates it.
@@ -66,6 +73,7 @@ namespace Speaker
 			int           slot = -1;        // -1 = generated for the cache only
 			std::uint64_t slotStamp = 0;    // the slot's stamp when it was handed out
 			fs::path      cacheFile;
+			std::string   cacheKey;         // its file name: what the line is known by
 			std::string   label;            // whose voice, for the log
 			const void*   info = nullptr;   // the topic info it belongs to: compared, never read
 			int           response = 1;     // its number inside that topic info
@@ -115,8 +123,19 @@ namespace Speaker
 			std::string       key;        // the line it holds or waits for, "" = none
 		};
 
+		// A cached line on its way into a slot (see Filler).
+		struct FillJob
+		{
+			int           slot = -1;
+			std::uint64_t slotStamp = 0;
+			fs::path      cacheFile;
+			float         volume = 1.0f;
+			std::string   text;  // seeds the mouth shapes
+		};
+
 		std::mutex                        g_lock;  // guards the block below
 		std::condition_variable           g_wake;
+		std::condition_variable           g_fillWake;
 		std::deque<Line>                  g_waiting;
 		bool                              g_reloadWanted = false;
 		bool                              g_started = false;
@@ -130,14 +149,18 @@ namespace Speaker
 		std::vector<DialogueSlot>            g_dialogueSlots;
 		std::uint64_t                        g_slotStampClock = 0;
 		std::unordered_map<std::string, int> g_slotOfKey;      // line -> the slot it has
-		std::unordered_set<std::string>      g_generating;     // cache files being generated
+		std::unordered_set<std::string>      g_generating;     // lines being generated, by cache key
+		std::unordered_set<std::string>      g_failedLines;    // lines that could not be generated, by cache key
+		std::unordered_set<std::string>      g_unusableModels;  // models that would not load
+		std::deque<FillJob>                  g_fills;          // cached lines on their way into slots
 		Clock::time_point                    g_lastDialogueEnd{};  // when the last dialogue response was handled
 		// per model (normalized folder name), all cleared by a reload:
 		std::unordered_map<std::string, float>         g_msPerChar;    // measured generation time per character
 		std::unordered_map<std::string, std::uint64_t> g_modelStamps;  // TtsEngine::ModelStamp, 0 = no such model
-		std::unordered_set<std::string>                g_voiceNotes;   // voice types already reported in the log
+		std::unordered_set<std::string>                g_loggedOnce;   // see LogOnce
 
 		std::atomic<std::uint64_t> g_epoch{ 1 };  // bumped by Cancel: lines from an older epoch are dropped
+		std::atomic<std::uint64_t> g_dialogueEpoch{ 1 };  // the same for dialogue lines, bumped by Reset
 		std::atomic<bool>          g_enabled{ true };
 		std::atomic<bool>          g_working{ false };
 		std::atomic<bool>          g_warnedNotReady{ false };
@@ -194,6 +217,42 @@ namespace Speaker
 			const auto found = reinterpret_cast<PlayFileFn>(GetProcAddress(module, "AudioUtil_PlayFile"));
 			g_playFile.store(found);
 			return found;
+		}
+
+		// ------------------------------------------------------------------ helpers
+
+		// The folder name of the model a line is generated with.
+		std::string ModelKeyOf(const Line& a_line, const Config::Settings& a_settings)
+		{
+			return a_line.model.empty() ? Config::Normalize(a_settings.model) : a_line.model;
+		}
+
+		// Voice, volume and speed a line left unset take the configured defaults.
+		void FillDefaults(Line& a_line, const Config::Settings& a_settings)
+		{
+			if (a_line.voice < 0) {
+				a_line.voice = a_settings.voice;
+			}
+			a_line.volume = a_line.volume >= 0.0f ? std::min(a_line.volume, 1.0f) : a_settings.volume;
+			if (a_line.speed <= 0.0f) {
+				a_line.speed = a_settings.speed;
+			}
+		}
+
+		// For a state that holds line after line: it goes into the log once.
+		void LogOnce(const std::string& a_message)
+		{
+			bool first = false;
+			{
+				std::scoped_lock lock{ g_lock };
+				if (g_loggedOnce.size() > 2048) {
+					g_loggedOnce.clear();
+				}
+				first = g_loggedOnce.insert(a_message).second;
+			}
+			if (first) {
+				logger::info("{}", a_message);
+			}
 		}
 
 		// -------------------------------------------------------------------- slots
@@ -305,9 +364,8 @@ namespace Speaker
 		}
 
 		// Gives a_key the slot used longest ago, or -1 when even that one was used
-		// within MIN_SLOT_AGE. a_stamp identifies this hand-out: DialogueSlotIsStill
-		// tells a late writer whether the slot has gone to another line since.
-		// g_lock held.
+		// within MIN_SLOT_AGE. a_stamp identifies this hand-out: a late writer asks
+		// DialogueSlotWritable whether the slot is still its own. g_lock held.
 		int TakeDialogueSlotLocked(const std::string& a_key, std::uint64_t& a_stamp)
 		{
 			const auto& usable = g_lanes[kDialogue].slotUsable;
@@ -335,11 +393,24 @@ namespace Speaker
 			return best;
 		}
 
-		bool DialogueSlotIsStill(int a_slot, std::uint64_t a_stamp)
+		int TakeDialogueSlot(const std::string& a_key, std::uint64_t& a_stamp)
 		{
 			std::scoped_lock lock{ g_lock };
-			return a_slot >= 0 && static_cast<std::size_t>(a_slot) < g_dialogueSlots.size() &&
-				   g_dialogueSlots[static_cast<std::size_t>(a_slot)].stamp == a_stamp;
+			return TakeDialogueSlotLocked(a_key, a_stamp);
+		}
+
+		// May a line still be written into the slot it was handed? Only while the
+		// slot is its own and cannot go to another line for a while yet. The check
+		// and the write are two steps, and the margin is what keeps a slow writer
+		// out of a slot that changed hands in between.
+		bool DialogueSlotWritable(int a_slot, std::uint64_t a_stamp)
+		{
+			std::scoped_lock lock{ g_lock };
+			if (a_slot < 0 || static_cast<std::size_t>(a_slot) >= g_dialogueSlots.size()) {
+				return false;
+			}
+			const auto& slot = g_dialogueSlots[static_cast<std::size_t>(a_slot)];
+			return slot.stamp == a_stamp && Clock::now() - slot.used < MIN_SLOT_AGE - SLOT_WRITE_MARGIN;
 		}
 
 		// The line this slot was handed to did not get into it: the next request
@@ -392,9 +463,18 @@ namespace Speaker
 			return ok;
 		}
 
-		// Puts a line into a dialogue slot: the audio, and the mouth animation
-		// beside it. The mouth file is rewritten every time, or the slot would
-		// keep the animation of the line it held before.
+		// The mouth animation beside a slot's audio. It is rewritten with every
+		// line, or the slot would keep the animation of the line it held before.
+		void WriteSlotLip(int a_slot, const std::vector<std::uint8_t>& a_lip)
+		{
+			const auto      lipDisk = SlotLipDisk(a_slot);
+			std::error_code ec;
+			if (fs::exists(lipDisk, ec) && !WriteExclusive(lipDisk, a_lip.data(), a_lip.size())) {
+				logger::warn("Could not write the mouth animation of {}", SlotDataRel(kDialogue, a_slot));
+			}
+		}
+
+		// Puts a line into a dialogue slot: the audio and the mouth animation.
 		bool FillDialogueSlot(int a_slot, const TtsEngine::Audio& a_audio, float a_volume,
 			const Config::Settings& a_settings, std::string_view a_text)
 		{
@@ -412,36 +492,24 @@ namespace Speaker
 			if (wav.empty() || !WriteExclusive(SlotDisk(kDialogue, a_slot), wav.data(), wav.size())) {
 				return false;
 			}
-			const auto      lipDisk = SlotLipDisk(a_slot);
-			std::error_code ec;
-			if (fs::exists(lipDisk, ec)) {
-				const auto lip = a_settings.dialogueLip ?
+			WriteSlotLip(a_slot, a_settings.dialogueLip ?
 									 Lip::FromAudio(a_audio, a_text, a_settings.dialogueLipStrength) :
-									 Lip::Rest();
-				if (!WriteExclusive(lipDisk, lip.data(), lip.size())) {
-					logger::warn("Could not write the mouth animation of {}", SlotDataRel(kDialogue, a_slot));
-				}
-			}
+									 Lip::Rest());
 			return true;
 		}
 
-		// What a slot holds while its line is still being generated: silence of
-		// about the line's length and a closed mouth, never the line before it.
+		// What a slot holds until its line is in: silence and a closed mouth, never
+		// the line it held before.
 		bool FillDialogueSilence(int a_slot, float a_seconds)
 		{
 			TtsEngine::Audio silence;
 			silence.sampleRate = 8000;  // silence needs no more, and the file stays small
-			silence.samples.assign(static_cast<std::size_t>(std::clamp(a_seconds, 0.5f, 30.0f) * 8000.0f), 0.0f);
+			silence.samples.assign(static_cast<std::size_t>(std::clamp(a_seconds, 0.25f, 30.0f) * 8000.0f), 0.0f);
 			const auto wav = TtsEngine::EncodeWav(silence);
 			if (!WriteExclusive(SlotDisk(kDialogue, a_slot), wav.data(), wav.size())) {
 				return false;
 			}
-			const auto      lipDisk = SlotLipDisk(a_slot);
-			std::error_code ec;
-			if (fs::exists(lipDisk, ec)) {
-				const auto lip = Lip::Rest();
-				WriteExclusive(lipDisk, lip.data(), lip.size());
-			}
+			WriteSlotLip(a_slot, Lip::Rest());
 			return true;
 		}
 
@@ -451,10 +519,11 @@ namespace Speaker
 		// single spaces, and anything past a_maxChars is cut at a sentence end.
 		std::string Clean(std::string_view a_text, int a_maxChars)
 		{
+			const auto  text = TtsEngine::ToSpeakable(a_text);
 			std::string out;
-			out.reserve(a_text.size());
+			out.reserve(text.size());
 			bool space = false;
-			for (const char c : a_text) {
+			for (const char c : text) {
 				const auto u = static_cast<unsigned char>(c);
 				if (u <= 0x20 || u == 0x7F) {
 					space = !out.empty();
@@ -581,16 +650,6 @@ namespace Speaker
 		// a retrained model starts with a clean slate by itself.
 		fs::path CacheDir() { return fs::current_path() / CACHE_DIR; }
 
-		std::uint64_t Fnv1a64(std::string_view a_text)
-		{
-			std::uint64_t hash = 0xCBF29CE484222325ull;
-			for (const char c : a_text) {
-				hash ^= static_cast<std::uint8_t>(c);
-				hash *= 0x100000001B3ull;
-			}
-			return hash;
-		}
-
 		// 0 = the folder holds no model. Read once per model, until a reload.
 		std::uint64_t ModelStampFor(const std::string& a_modelKey)
 		{
@@ -616,7 +675,7 @@ namespace Speaker
 			}
 			const auto key = std::format("{:016x}|{}|{:.3f}|{}|{}", stamp, a_line.voice, a_line.speed,
 				a_settings.outputRate, a_line.text);
-			return CacheDir() / std::format("{:016x}.wav", Fnv1a64(key));
+			return CacheDir() / std::format("{:016x}.wav", TtsEngine::Hash64(key));
 		}
 
 		bool LoadCached(const fs::path& a_file, TtsEngine::Audio& a_out)
@@ -670,8 +729,16 @@ namespace Speaker
 					fs::remove(item.path(), ec);  // a leftover .part
 					continue;
 				}
-				entries.push_back({ item.path(), item.file_size(ec), item.last_write_time(ec) });
-				total += entries.back().size;
+				// a file that went away or is locked this instant is not counted: its
+				// error value would read as an enormous size
+				const auto size = item.file_size(ec);
+				const auto used = ec ? fs::file_time_type{} : item.last_write_time(ec);
+				if (ec) {
+					ec.clear();
+					continue;
+				}
+				entries.push_back({ item.path(), size, used });
+				total += size;
 			}
 			const auto cap = static_cast<std::uintmax_t>(a_maxMb) * 1024 * 1024;
 			if (a_maxMb > 0 && total > cap) {
@@ -868,6 +935,17 @@ namespace Speaker
 			});
 		}
 
+		// Marks a dialogue job as over with no result and wakes a game thread that
+		// waits on it. Never with g_lock held: a job's lock is always taken first.
+		void AbandonJob(const std::shared_ptr<DialogueJob>& a_job)
+		{
+			{
+				std::scoped_lock lock{ a_job->lock };
+				a_job->done = true;
+			}
+			a_job->ready.notify_all();
+		}
+
 		// A dialogue line: generated, kept in the cache, and written into its slot
 		// when the game may still play that slot. A game thread may be waiting on
 		// the job, so every way out marks it done.
@@ -877,8 +955,11 @@ namespace Speaker
 			// after the job is marked done: wake a waiting game thread, tidy the books
 			const auto settle = [&](bool a_inSlot) {
 				job->ready.notify_all();
+				if (a_inSlot) {
+					g_dialogueGiven.fetch_add(1);
+				}
 				std::scoped_lock lock{ g_lock };
-				g_generating.erase(job->cacheFile.string());
+				g_generating.erase(job->cacheKey);
 				if (!a_inSlot) {
 					// whoever asks for this line next must not be told it has a slot
 					ForgetDialogueSlotLocked(job->slot, job->slotStamp);
@@ -893,12 +974,12 @@ namespace Speaker
 				}
 				settle(a_inSlot);
 			};
-			const auto current = [&] { return a_line.epoch == g_epoch.load(); };
+			const auto current = [&] { return a_line.epoch == g_dialogueEpoch.load(); };
 			if (!current()) {
 				return finish(false, 0.0f);
 			}
 			const auto settings = Config::Get();
-			const auto modelKey = a_line.model.empty() ? Config::Normalize(settings->model) : a_line.model;
+			const auto modelKey = ModelKeyOf(a_line, *settings);
 
 			TtsEngine::Audio audio;
 			long long        synthMs = -1;  // stays -1 when the line turned up in the cache
@@ -906,9 +987,17 @@ namespace Speaker
 			if (!LoadCached(job->cacheFile, audio)) {
 				bool        fellBack = false;
 				const auto* model = ModelFor(a_line.model, *settings, fellBack);
-				if (!model || fellBack || !current()) {
-					// the line was meant for one voice: the default one in its place
-					// would be the wrong speaker, so it stays unvoiced
+				if (!model || fellBack) {
+					// The line was meant for one voice; the default one in its place
+					// would be the wrong speaker, so it stays unvoiced. The game
+					// threads are told, so no more slots go to lines of this model.
+					{
+						std::scoped_lock lock{ g_lock };
+						g_unusableModels.insert(modelKey);
+					}
+					return finish(false, 0.0f);
+				}
+				if (!current()) {
 					return finish(false, 0.0f);
 				}
 				MarkBusy(a_line.estimateMs);
@@ -920,6 +1009,9 @@ namespace Speaker
 				if (result != TtsEngine::Result::Ok) {
 					if (result != TtsEngine::Result::Cancelled) {
 						logger::warn("Could not generate a {}-char dialogue line: {}", a_line.text.size(), error);
+						// not tried again each time the game builds the line
+						std::scoped_lock lock{ g_lock };
+						g_failedLines.insert(job->cacheKey);
 					}
 					return finish(false, 0.0f);
 				}
@@ -935,7 +1027,7 @@ namespace Speaker
 				// under the job's lock: a game thread gives up on the slot under the
 				// same lock, so it either gets the whole line or none of it
 				std::scoped_lock lock{ job->lock };
-				if (job->slotWanted && current() && DialogueSlotIsStill(job->slot, job->slotStamp)) {
+				if (job->slotWanted && current() && DialogueSlotWritable(job->slot, job->slotStamp)) {
 					inSlot = FillDialogueSlot(job->slot, audio, a_line.volume, *settings, a_line.text);
 				}
 				job->inSlot = inSlot;
@@ -967,20 +1059,22 @@ namespace Speaker
 			return topics && topics->menuOpen;
 		}
 
-		// The next dialogue line to generate: one a game thread is waiting for,
-		// then the lines of the topic being spoken, then first responses before
-		// later ones (a first response is what plays when a topic is picked), then
-		// the oldest. g_lock held, g_dialogueWaiting not empty.
+		// The order dialogue lines are generated in, smallest first: one a game
+		// thread is waiting for, then the lines of the topic being spoken, then
+		// first responses before later ones (a first response is what plays when a
+		// topic is picked), then the oldest.
+		auto RankOf(const DialogueJob& a_job, const void* a_saying)
+		{
+			return std::tuple(!a_job.urgent, !(a_saying && a_job.info == a_saying), a_job.response, a_job.order);
+		}
+
+		// g_lock held, g_dialogueWaiting not empty
 		Line TakeDialogueLocked()
 		{
 			const void* saying = TopicBeingSaid();
-			const auto  rank = [&](const Line& a_line) {
-				const auto& job = *a_line.job;
-				return std::tuple(!job.urgent, !(saying && job.info == saying), job.response, job.order);
-			};
-			auto best = g_dialogueWaiting.begin();
+			auto        best = g_dialogueWaiting.begin();
 			for (auto it = best + 1; it != g_dialogueWaiting.end(); ++it) {
-				if (rank(*it) < rank(*best)) {
+				if (RankOf(*it->job, saying) < RankOf(*best->job, saying)) {
 					best = it;
 				}
 			}
@@ -1005,6 +1099,56 @@ namespace Speaker
 				const auto& job = *a_line.job;
 				return job.urgent || job.response <= 1 || (saying && job.info == saying);
 			});
+		}
+
+		// The work that comes before a listed line with this response number: the
+		// rest of the line being generated and the waiting lines that rank ahead
+		// of it. g_lock held.
+		float AheadMsLocked(int a_response)
+		{
+			float      ahead = 0.0f;
+			const auto now = Clock::now();
+			if (g_busyUntil > now) {
+				ahead += std::chrono::duration<float, std::milli>(g_busyUntil - now).count();
+			}
+			for (const auto& waiting : g_dialogueWaiting) {
+				if (waiting.job->urgent || waiting.job->response <= a_response) {
+					ahead += waiting.estimateMs;
+				}
+			}
+			return ahead;
+		}
+
+		// Puts cached lines into their slots, off the game thread. The dialogue
+		// menu's whole list is built in one go; reading, converting and writing
+		// every cached line there and then would stall the game. Its own thread,
+		// so a cached line never waits behind one that is being generated.
+		void Filler()
+		{
+			for (;;) {
+				FillJob fill;
+				{
+					std::unique_lock lock{ g_lock };
+					g_fillWake.wait(lock, [] { return !g_fills.empty(); });
+					fill = std::move(g_fills.front());
+					g_fills.pop_front();
+				}
+				const auto       settings = Config::Get();
+				TtsEngine::Audio audio;
+				bool             inSlot = false;
+				if (!LoadCached(fill.cacheFile, audio)) {
+					// unreadable: removed, so the next request generates the line again
+					std::error_code ec;
+					fs::remove(fill.cacheFile, ec);
+				} else if (DialogueSlotWritable(fill.slot, fill.slotStamp)) {
+					inSlot = FillDialogueSlot(fill.slot, audio, fill.volume, *settings, fill.text);
+				}
+				if (inSlot) {
+					g_dialogueGiven.fetch_add(1);
+				} else {
+					ForgetDialogueSlot(fill.slot, fill.slotStamp);
+				}
+			}
 		}
 
 		void Process(Line a_line)
@@ -1044,8 +1188,7 @@ namespace Speaker
 				return;
 			}
 			const auto synthMs = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
-			NoteSpeed(a_line.model.empty() ? Config::Normalize(settings->model) : a_line.model, synthMs,
-				a_line.text.size());
+			NoteSpeed(ModelKeyOf(a_line, *settings), synthMs, a_line.text.size());
 			TtsEngine::Resample(audio, settings->outputRate);
 
 			const int slot = TakeSlot(lane);
@@ -1068,7 +1211,8 @@ namespace Speaker
 					// this pause: it is generated now, then the pause goes on
 					const auto until = g_lanes[lane].quietAt;
 					g_wake.wait_until(lock, until, [&] { return !current() || !g_dialogueWaiting.empty(); });
-					if (!current() || g_dialogueWaiting.empty()) {
+					// the pause is over once its time is up, whatever dialogue still waits
+					if (!current() || g_dialogueWaiting.empty() || Clock::now() >= until) {
 						break;
 					}
 					Line next = TakeDialogueLocked();
@@ -1108,8 +1252,8 @@ namespace Speaker
 					} else {
 						line = std::move(g_waiting.front());
 						g_waiting.pop_front();
+						g_working.store(true);  // IsBusy is about narration and character lines
 					}
-					g_working.store(true);
 				}
 				if (dialogue) {
 					ProcessDialogue(std::move(line));
@@ -1163,18 +1307,11 @@ namespace Speaker
 			if (a_line.text.empty()) {
 				return false;
 			}
-			if (a_line.voice < 0) {
-				a_line.voice = settings->voice;
-			}
-			a_line.volume = a_line.volume >= 0.0f ? std::min(a_line.volume, 1.0f) : settings->volume;
-			if (a_line.speed <= 0.0f) {
-				a_line.speed = settings->speed;
-			}
+			FillDefaults(a_line, *settings);
 			{
 				std::scoped_lock lock{ g_lock };
 				a_line.epoch = g_epoch.load();
-				a_line.estimateMs = EstimateMsLocked(
-					a_line.model.empty() ? Config::Normalize(settings->model) : a_line.model, a_line.text.size());
+				a_line.estimateMs = EstimateMsLocked(ModelKeyOf(a_line, *settings), a_line.text.size());
 				// newest wins inside a lane: speech must not fall far behind the scene
 				std::size_t same = 0;
 				for (const auto& waiting : g_waiting) {
@@ -1317,19 +1454,6 @@ namespace Speaker
 			return race ? race->defaultVoiceTypes[a_female ? RE::SEXES::kFemale : RE::SEXES::kMale] : nullptr;
 		}
 
-		// A voice type whose lines stay unvoiced is said so once, not per line.
-		void NoteVoiceOnce(const std::string& a_label, std::string_view a_what)
-		{
-			bool first = false;
-			{
-				std::scoped_lock lock{ g_lock };
-				first = g_voiceNotes.insert(a_label).second;
-			}
-			if (first) {
-				logger::info("Dialogue voice {}: {}", a_label, a_what);
-			}
-		}
-
 		// "Name" -> ""  and  "Name:preset" -> "preset"; nullopt when a_event is another event
 		std::optional<std::string_view> PresetOf(std::string_view a_event, std::string_view a_name)
 		{
@@ -1393,15 +1517,16 @@ namespace Speaker
 			if (auto* source = SKSE::GetModCallbackEventSource()) {
 				source->AddEventSink(&g_speakSink);
 			}
-			// never joined: it lives for the whole process, like AudioUtil's tickers
+			// never joined: they live for the whole process, like AudioUtil's tickers
 			std::thread(Worker).detach();
+			std::thread(Filler).detach();
 		}
 	}
 
 	bool Reload()
 	{
 		const bool parsed = Config::Load();
-		Cancel();
+		Reset();
 		const auto settings = Config::Get();
 		PrepareSlots(kNarration, settings->slots);
 		PrepareSlots(kSpeech, settings->speechSlots);
@@ -1413,7 +1538,9 @@ namespace Speaker
 			// models may have been swapped on disk: measure and stamp them afresh
 			g_msPerChar.clear();
 			g_modelStamps.clear();
-			g_voiceNotes.clear();
+			g_unusableModels.clear();
+			g_failedLines.clear();
+			g_loggedOnce.clear();
 		}
 		g_warnedNotReady.store(false);
 		g_wake.notify_all();
@@ -1429,16 +1556,34 @@ namespace Speaker
 			for (auto& lane : g_lanes) {
 				lane.quietAt = {};
 			}
-			// dialogue lines on their way will not come: no line has a slot any more,
-			// so each is asked for afresh
+		}
+		g_wake.notify_all();
+	}
+
+	void Reset()
+	{
+		Cancel();
+		std::vector<std::shared_ptr<DialogueJob>> dropped;
+		{
+			std::scoped_lock lock{ g_lock };
+			g_dialogueEpoch.fetch_add(1);
+			for (auto& waiting : g_dialogueWaiting) {
+				dropped.push_back(std::move(waiting.job));
+			}
 			g_dialogueWaiting.clear();
 			g_generating.clear();
+			g_fills.clear();
+			// the lines on their way will not come: no line has a slot any more,
+			// so each is asked for afresh
 			g_slotOfKey.clear();
 			for (auto& slot : g_dialogueSlots) {
 				slot.key.clear();
 			}
 		}
-		g_wake.notify_all();
+		// a game thread may be waiting on one of them
+		for (const auto& job : dropped) {
+			AbandonJob(job);
+		}
 	}
 
 	bool Speak(std::string_view a_text, int a_voice, float a_volume, float a_speed)
@@ -1508,14 +1653,14 @@ namespace Speaker
 			return true;
 		}
 		std::scoped_lock lock{ g_lock };
-		return !g_waiting.empty() || !g_dialogueWaiting.empty();
+		return !g_waiting.empty();
 	}
 
 	void SetEnabled(bool a_enabled)
 	{
 		g_enabled.store(a_enabled);
 		if (!a_enabled) {
-			Cancel();
+			Reset();
 		}
 	}
 
@@ -1572,31 +1717,29 @@ namespace Speaker
 		// the speech time of its earlier responses (how long a later one has
 		// before the game reaches it), how long the game has been kept waiting,
 		// and whether it is only listed (see below).
-		thread_local float t_leadMs = 0.0f;
-		thread_local float t_waitedMs = 0.0f;
-		thread_local bool  t_listed = false;
-		const bool         first = a_response <= 1;
-		if (first) {
-			t_leadMs = 0.0f;
-			t_waitedMs = 0.0f;
-			t_listed = false;
-		}
+		thread_local const void* t_info = nullptr;
+		thread_local int         t_response = 0;
+		thread_local float       t_leadMs = 0.0f;
+		thread_local float       t_waitedMs = 0.0f;
+		thread_local bool        t_listed = false;
+		// A new topic info, or the same one built again. Told by the info, not by
+		// "response number 1": a response with a recorded voice never gets here,
+		// so the first one that does may well be the second.
+		const bool start = a_info != t_info || a_response <= t_response;
+		t_info = a_info;
+		t_response = a_response;
 		if (!a_voiceType || !IsDialogueEnabled()) {
-			return {};
-		}
-		const auto settings = Config::Get();
-		auto       text = CleanDialogue(a_text, *settings);
-		if (text.empty()) {
 			return {};
 		}
 
 		// About to be said, or only listed? The game builds the responses of
 		// every topic in the dialogue menu when it fills the menu, and says one
-		// when the player picks it, seconds later or never. Listed lines are
-		// generated in the background and the game never waits for them. Two
-		// signs of a list: the dialogue menu is open, or a topic's first response
-		// arrives right behind other responses.
-		if (first) {
+		// when the player picks it, seconds later or never. The game is never
+		// made to wait for a listed line. Two signs of a list: the dialogue menu
+		// is open, or a topic arrives right behind other responses.
+		if (start) {
+			t_leadMs = 0.0f;
+			t_waitedMs = 0.0f;
 			std::scoped_lock lock{ g_lock };
 			t_listed = g_lastDialogueEnd != Clock::time_point{} && Clock::now() - g_lastDialogueEnd < BURST_GAP;
 		}
@@ -1610,112 +1753,167 @@ namespace Speaker
 			}
 		} noteEnd;
 
+		const auto settings = Config::Get();
+		auto       text = CleanDialogue(a_text, *settings);
+		if (text.empty()) {
+			return {};
+		}
+		const bool        first = a_response <= 1;  // the response said the moment its topic is
 		const std::size_t chars = text.size();
 		const float       speechMs = SpeechMs(chars);
-		// the line stays as the game built it: unvoiced
-		const auto leave = [&](std::string_view a_label, std::string_view a_why) {
+
+		// The response stays as the game built it: unvoiced, and Fuz Ro D'oh's to
+		// cover. A reason that holds line after line is logged once, a reason
+		// already logged for this very line not again.
+		enum class Log
+		{
+			kLine,
+			kOnce,
+			kNo
+		};
+		const auto leave = [&](std::string_view a_label, std::string_view a_why, Log a_log = Log::kLine) {
 			t_leadMs += speechMs;
 			g_dialogueUnvoiced.fetch_add(1);
-			logger::info("Dialogue line left unvoiced ({} chars, {}): {}", chars, a_label, a_why);
+			if (a_log == Log::kOnce) {
+				LogOnce(std::format("Dialogue lines stay unvoiced ({}): {}", a_label, a_why));
+			} else if (a_log == Log::kLine) {
+				logger::info("Dialogue line left unvoiced ({} chars, {}): {}", chars, a_label, a_why);
+			}
 			return std::string{};
 		};
 
 		const bool female = a_voiceType->data.flags.any(RE::VOICE_TYPE_DATA::Flag::kFemale);
 		auto       choice = VoiceForType(*settings, a_voiceType, female, settings->dialogueFallback);
 		const auto label = choice.label;
-		if (choice.source == VoiceChoice::kNone || choice.source == VoiceChoice::kSilent) {
-			NoteVoiceOnce(label, choice.source == VoiceChoice::kSilent ?
-									 "its lines stay unvoiced" :
-									 "no voice is set up for it and [dialogue] fallback is off, its lines stay unvoiced");
-			t_leadMs += speechMs;
-			return {};
+		if (choice.source == VoiceChoice::kSilent) {
+			return leave(label, "the config says so", Log::kOnce);
+		}
+		if (choice.source == VoiceChoice::kNone) {
+			return leave(label, "no voice is set up for it and [dialogue] fallback is off", Log::kOnce);
 		}
 		if (!g_defaultLoaded.load()) {
-			return leave(label, "the default model is not loaded");
+			return leave("every voice", "the default model is not loaded", Log::kOnce);
 		}
 		if (g_usableSlots[kDialogue].load() <= 0) {
-			return leave(label, "no playable dialogue slot yet (restart the game once)");
+			return leave("every voice", "no playable dialogue slot yet (restart the game once)", Log::kOnce);
 		}
 
 		Line line = std::move(choice.line);
 		line.text = std::move(text);
 		line.lane = kDialogue;
-		if (line.voice < 0) {
-			line.voice = settings->voice;
-		}
-		line.volume = line.volume >= 0.0f ? std::min(line.volume, 1.0f) : settings->volume;
-		if (line.speed <= 0.0f) {
-			line.speed = settings->speed;
-		}
-		const auto modelKey = line.model.empty() ? Config::Normalize(settings->model) : line.model;
+		FillDefaults(line, *settings);
+		const auto modelKey = ModelKeyOf(line, *settings);
 		const auto cacheFile = CacheFileFor(modelKey, line, *settings);
 		if (cacheFile.empty()) {
-			return leave(label, std::format("the model folder '{}' holds no model", modelKey));
+			return leave(label, std::format("the model folder '{}' holds no model", modelKey), Log::kOnce);
 		}
+		// The file name is plain hex. The folder it sits in is the game's own and
+		// may hold characters that do not convert to a narrow string at all.
+		const auto cacheKey = cacheFile.filename().string();
 		// what a slot holds: the cached line at this volume
-		const auto key = std::format("{}|{:.2f}", cacheFile.filename().string(), line.volume);
+		const auto key = std::format("{}|{:.2f}", cacheKey, line.volume);
 		const auto slotPath = [](int a_slot) { return "Data\\" + SlotDataRel(kDialogue, a_slot); };
 
 		// 1. the line has a slot already, filled or being filled
 		{
-			std::scoped_lock lock{ g_lock };
-			if (const int slot = ReuseDialogueSlotLocked(key); slot >= 0) {
+			bool unusable = false;
+			bool failed = false;
+			int  held = -1;
+			{
+				std::scoped_lock lock{ g_lock };
+				unusable = g_unusableModels.contains(modelKey);
+				failed = g_failedLines.contains(cacheKey);
+				if (!unusable && !failed) {
+					held = ReuseDialogueSlotLocked(key);
+				}
+			}
+			if (unusable) {
+				return leave(label, std::format("the model '{}' could not be loaded (see above)", modelKey), Log::kOnce);
+			}
+			if (failed) {
+				return leave(label, "it could not be generated", Log::kNo);
+			}
+			if (held >= 0) {
 				t_leadMs += speechMs;
-				return slotPath(slot);
+				return slotPath(held);
 			}
 		}
 
-		// 2. said before: from the cache
-		if (TtsEngine::Audio cached; LoadCached(cacheFile, cached)) {
-			int           slot = -1;
+		// 2. said before: it is in the cache
+		if (std::error_code ec; fs::exists(cacheFile, ec)) {
 			std::uint64_t stamp = 0;
-			{
-				std::scoped_lock lock{ g_lock };
-				slot = TakeDialogueSlotLocked(key, stamp);
-			}
+			const int     slot = TakeDialogueSlot(key, stamp);
 			if (slot < 0) {
 				return leave(label, "every placeholder file is held by a recent line");
 			}
-			if (!FillDialogueSlot(slot, cached, line.volume, *settings, line.text)) {
-				ForgetDialogueSlot(slot, stamp);
-				return leave(label, "its placeholder file could not be written");
+			if (listed) {
+				// Put in place off the game thread: a menu lists many lines at once.
+				// Until then the slot holds silence, never the line it held before.
+				if (!FillDialogueSilence(slot, 0.25f)) {
+					ForgetDialogueSlot(slot, stamp);
+					return leave(label, "its placeholder file could not be written");
+				}
+				{
+					std::scoped_lock lock{ g_lock };
+					g_fills.push_back(FillJob{ slot, stamp, cacheFile, line.volume, line.text });
+				}
+				g_fillWake.notify_one();
+				t_leadMs += speechMs;
+				return slotPath(slot);
 			}
-			t_leadMs += cached.Seconds() * 1000.0f;
-			g_dialogueGiven.fetch_add(1);
-			logger::info("Dialogue line from the cache: {} chars as {:.1f} s of speech ({}), in {}", chars,
-				cached.Seconds(), label, SlotName(kDialogue, slot));
-			return slotPath(slot);
+			// about to be said: it has to be in place before the game is told
+			if (TtsEngine::Audio cached; LoadCached(cacheFile, cached)) {
+				if (!FillDialogueSlot(slot, cached, line.volume, *settings, line.text)) {
+					ForgetDialogueSlot(slot, stamp);
+					return leave(label, "its placeholder file could not be written");
+				}
+				t_leadMs += cached.Seconds() * 1000.0f;
+				g_dialogueGiven.fetch_add(1);
+				return slotPath(slot);
+			}
+			// unreadable: generated again below
+			ForgetDialogueSlot(slot, stamp);
+			fs::remove(cacheFile, ec);
 		}
 
 		// 3. new: can the game have it this time?
 		float estimate = 0.0f;
 		float urgentAhead = 0.0f;
 		float allAhead = 0.0f;
+		float rankAhead = 0.0f;
 		{
 			std::scoped_lock lock{ g_lock };
 			estimate = EstimateMsLocked(modelKey, chars);
 			urgentAhead = BacklogMsLocked(true);
 			allAhead = BacklogMsLocked(false);
+			rankAhead = AheadMsLocked(a_response);
 		}
 		const float budget = static_cast<float>(settings->dialogueWaitMs) - t_waitedMs;
-		// time is on its side: it is only listed, or earlier responses of its topic
-		// are still to be said
-		const bool later = listed || (!first && allAhead + (estimate > 0.0f ? estimate : 1500.0f) + 250.0f <= t_leadMs);
-		// otherwise the game thread may wait a moment, unless this model is known
-		// to need longer than that
-		const bool wait = !later && budget >= 20.0f && (estimate <= 0.0f || urgentAhead + estimate <= budget);
+		bool        later = false;  // it gets a slot now and is put into it when ready
+		bool        wait = false;   // the game thread waits for it
+		if (listed) {
+			// Only when it should be in place by the time a player can pick it. A
+			// slot handed out too early plays as silence, and then nothing else
+			// covers the line; left alone, it is at least Fuz Ro D'oh's.
+			later = rankAhead + estimate <= LISTED_READY_MS + (first ? 0.0f : t_leadMs);
+		} else {
+			// earlier responses of its topic are still to be said: there is time
+			later = !first && allAhead + (estimate > 0.0f ? estimate : 1500.0f) + 250.0f <= t_leadMs;
+			// otherwise the game thread may wait a moment, unless this model is
+			// known to need longer than that
+			wait = !later && budget >= 20.0f && (estimate <= 0.0f || urgentAhead + estimate <= budget);
+		}
 
 		auto job = std::make_shared<DialogueJob>();
 		job->cacheFile = cacheFile;
+		job->cacheKey = cacheKey;
 		job->label = label;
 		job->info = a_info;
 		job->response = a_response;
 		if (later || wait) {
-			std::scoped_lock lock{ g_lock };
-			job->slot = TakeDialogueSlotLocked(key, job->slotStamp);
+			job->slot = TakeDialogueSlot(key, job->slotStamp);
 		}
 		if (job->slot >= 0 && later && !FillDialogueSilence(job->slot, speechMs / 1000.0f)) {
-			// until the line is in, the slot must not keep the line it held before
 			ForgetDialogueSlot(job->slot, job->slotStamp);
 			job->slot = -1;
 		}
@@ -1726,80 +1924,72 @@ namespace Speaker
 		line.job = job;
 		line.estimateMs = estimate;
 
-		bool              queued = false;
-		bool              onItsWay = false;
-		std::vector<Line> dropped;
+		bool                                      queued = false;
+		bool                                      onItsWay = false;
+		std::vector<std::shared_ptr<DialogueJob>> dropped;
 		{
 			std::scoped_lock lock{ g_lock };
-			const auto       file = cacheFile.string();
-			if (slot < 0 && g_generating.contains(file)) {
+			if (slot < 0 && g_generating.contains(cacheKey)) {
 				onItsWay = true;  // for the cache only, and already being generated for it
 			} else {
-				if (g_dialogueWaiting.size() >= MAX_DIALOGUE_WAITING) {
-					// the oldest line nobody waits for makes room: the topic list it
-					// was built for is most likely gone
-					auto oldest = g_dialogueWaiting.end();
+				job->order = ++g_dialogueOrder;
+				line.epoch = g_dialogueEpoch.load();
+				g_generating.insert(cacheKey);
+				g_dialogueWaiting.push_back(std::move(line));
+				queued = true;
+				if (g_dialogueWaiting.size() > MAX_DIALOGUE_WAITING) {
+					// the line that would be generated last makes room, this one included
+					const void* saying = TopicBeingSaid();
+					auto        worst = g_dialogueWaiting.end();
 					for (auto it = g_dialogueWaiting.begin(); it != g_dialogueWaiting.end(); ++it) {
-						if (!it->job->urgent &&
-							(oldest == g_dialogueWaiting.end() || it->job->order < oldest->job->order)) {
-							oldest = it;
+						if (!it->job->urgent && (worst == g_dialogueWaiting.end() ||
+													RankOf(*worst->job, saying) < RankOf(*it->job, saying))) {
+							worst = it;
 						}
 					}
-					if (oldest != g_dialogueWaiting.end()) {
-						ForgetDialogueSlotLocked(oldest->job->slot, oldest->job->slotStamp);
-						g_generating.erase(oldest->job->cacheFile.string());
-						dropped.push_back(std::move(*oldest));
-						g_dialogueWaiting.erase(oldest);
+					if (worst != g_dialogueWaiting.end()) {
+						queued = worst->job != job;
+						ForgetDialogueSlotLocked(worst->job->slot, worst->job->slotStamp);
+						g_generating.erase(worst->job->cacheKey);
+						dropped.push_back(worst->job);
+						g_dialogueWaiting.erase(worst);
 					}
-				}
-				if (g_dialogueWaiting.size() < MAX_DIALOGUE_WAITING) {
-					job->order = ++g_dialogueOrder;
-					line.epoch = g_epoch.load();
-					g_generating.insert(file);
-					g_dialogueWaiting.push_back(std::move(line));
-					queued = true;
 				}
 			}
 		}
 		for (const auto& gone : dropped) {
-			{
-				std::scoped_lock lock{ gone.job->lock };
-				gone.job->done = true;
-			}
-			gone.job->ready.notify_all();
+			AbandonJob(gone);
 		}
 		if (!queued && !onItsWay) {
-			ForgetDialogueSlot(slot, stamp);
 			return leave(label, "too many dialogue lines are waiting");
 		}
 		g_wake.notify_all();
 
 		if (slot < 0) {
-			return leave(label, "it cannot be played this time, it is being generated for the next time");
+			return leave(label, "it cannot be in place in time, it is being generated for the next time",
+				onItsWay ? Log::kNo : Log::kLine);
 		}
 		if (later) {
 			// the worker reports it when it is in
 			t_leadMs += speechMs;
-			g_dialogueGiven.fetch_add(1);
 			return slotPath(slot);
 		}
 
-		const auto       start = Clock::now();
+		const auto       waitStart = Clock::now();
 		std::unique_lock lock{ job->lock };
 		job->ready.wait_for(lock, std::chrono::milliseconds(static_cast<long long>(budget)), [&] { return job->done; });
-		t_waitedMs += std::chrono::duration<float, std::milli>(Clock::now() - start).count();
+		t_waitedMs += std::chrono::duration<float, std::milli>(Clock::now() - waitStart).count();
 		if (job->done && job->inSlot) {
 			t_leadMs += job->seconds * 1000.0f;
-			g_dialogueGiven.fetch_add(1);
 			return slotPath(slot);
 		}
 		// the game goes on without it; the worker still finishes it for the cache
 		job->slotWanted = false;
-		const bool failed = job->done;
+		const bool over = job->done;
 		lock.unlock();
 		ForgetDialogueSlot(slot, stamp);
-		return leave(label, failed ? "it could not be generated or put in place" :
-									 "it was not ready in time, it is being generated for the next time");
+		return leave(label, over ? "it could not be generated or put in place" :
+								   "it was not ready in time, it is being generated for the next time");
 	}
 
 	std::string DescribeVoice(RE::Actor* a_actor)
@@ -1841,8 +2031,11 @@ namespace Speaker
 		std::error_code ec;
 		for (const auto& item : fs::directory_iterator(CacheDir(), ec)) {
 			if (item.is_regular_file(ec) && item.path().extension() == ".wav") {
-				bytes += item.file_size(ec);
-				++lines;
+				if (const auto size = item.file_size(ec); !ec) {
+					bytes += size;
+					++lines;
+				}
+				ec.clear();
 			}
 		}
 		return std::format("dialogue {} | this session: {} responses given a voice, {} left unvoiced, {} lines "

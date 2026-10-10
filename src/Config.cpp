@@ -91,7 +91,7 @@ namespace Config
 			settings->dialogueCacheMb = (*dialogue)["cache_max_mb"].value_or(settings->dialogueCacheMb);
 		}
 		settings->dialogueWaitMs = std::clamp(settings->dialogueWaitMs, 0, 2000);
-		settings->dialogueSlots = std::clamp(settings->dialogueSlots, 16, 256);
+		settings->dialogueSlots = std::clamp(settings->dialogueSlots, 64, 256);
 		settings->dialogueLipStrength = std::clamp(settings->dialogueLipStrength, 0.0f, 1.5f);
 		settings->dialogueCacheMb = std::clamp(settings->dialogueCacheMb, 0, 16384);
 

@@ -5,6 +5,9 @@
 #include <cstring>
 #include <fstream>
 #include <system_error>
+#include <utility>
+
+#include <Windows.h>
 
 #include <sherpa-onnx/c-api/c-api.h>
 
@@ -79,6 +82,35 @@ namespace TtsEngine
 				start = end + 1;
 			}
 			return out;
+		}
+
+		bool IsUtf8(std::string_view a_text)
+		{
+			for (std::size_t i = 0; i < a_text.size();) {
+				const auto  c = static_cast<unsigned char>(a_text[i]);
+				std::size_t extra = 0;
+				if (c >= 0x80) {
+					if (c >= 0xC2 && c <= 0xDF) {
+						extra = 1;
+					} else if (c >= 0xE0 && c <= 0xEF) {
+						extra = 2;
+					} else if (c >= 0xF0 && c <= 0xF4) {
+						extra = 3;
+					} else {
+						return false;
+					}
+					if (i + extra >= a_text.size()) {
+						return false;
+					}
+					for (std::size_t k = 1; k <= extra; ++k) {
+						if ((static_cast<unsigned char>(a_text[i + k]) & 0xC0) != 0x80) {
+							return false;
+						}
+					}
+				}
+				i += extra + 1;
+			}
+			return true;
 		}
 
 		int32_t OnProgress(const float*, int32_t, float, void* a_arg)
@@ -295,6 +327,63 @@ namespace TtsEngine
 		return file;
 	}
 
+	std::string ToSpeakable(std::string_view a_text)
+	{
+		using namespace std::string_view_literals;
+		std::string text(a_text);
+		if (!IsUtf8(a_text) && a_text.size() < 0x10000) {
+			const auto size = static_cast<int>(a_text.size());
+			if (const int wide = ::MultiByteToWideChar(1252, 0, a_text.data(), size, nullptr, 0); wide > 0) {
+				std::wstring buffer(static_cast<std::size_t>(wide), L'\0');
+				::MultiByteToWideChar(1252, 0, a_text.data(), size, buffer.data(), wide);
+				if (const int narrow = ::WideCharToMultiByte(CP_UTF8, 0, buffer.data(), wide, nullptr, 0, nullptr, nullptr);
+					narrow > 0) {
+					text.assign(static_cast<std::size_t>(narrow), '\0');
+					::WideCharToMultiByte(CP_UTF8, 0, buffer.data(), wide, text.data(), narrow, nullptr, nullptr);
+				}
+			}
+		}
+		static constexpr std::pair<std::string_view, std::string_view> PLAIN[] = {
+			{ "\xE2\x80\x98"sv, "'"sv }, { "\xE2\x80\x99"sv, "'"sv },    // curly single quotes
+			{ "\xE2\x80\x9C"sv, "\""sv }, { "\xE2\x80\x9D"sv, "\""sv },  // curly double quotes
+			{ "\xE2\x80\xA6"sv, "..."sv },                               // ellipsis
+			{ "\xE2\x80\x93"sv, ", "sv }, { "\xE2\x80\x94"sv, ", "sv },  // long dashes: a pause
+			{ "\xC2\xA0"sv, " "sv },                                     // no-break space
+		};
+		for (const auto& [fancy, plain] : PLAIN) {
+			for (auto at = text.find(fancy); at != std::string::npos; at = text.find(fancy, at + plain.size())) {
+				text.replace(at, fancy.size(), plain);
+			}
+		}
+		return text;
+	}
+
+	std::uint64_t Hash64(std::string_view a_text)
+	{
+		std::uint64_t hash = 0xCBF29CE484222325ull;
+		for (const char c : a_text) {
+			hash ^= static_cast<std::uint8_t>(c);
+			hash *= 0x100000001B3ull;
+		}
+		return hash;
+	}
+
+	bool WriteBytes(const std::filesystem::path& a_path, const void* a_data, std::size_t a_size, std::string& a_error)
+	{
+		std::ofstream out(a_path, std::ios::binary | std::ios::trunc);
+		if (!out) {
+			a_error = "cannot open for writing";
+			return false;
+		}
+		out.write(static_cast<const char*>(a_data), static_cast<std::streamsize>(a_size));
+		out.close();
+		if (!out) {
+			a_error = "write failed";
+			return false;
+		}
+		return true;
+	}
+
 	bool WriteWav(const std::filesystem::path& a_path, const Audio& a_audio, std::string& a_error)
 	{
 		const auto file = EncodeWav(a_audio);
@@ -302,18 +391,7 @@ namespace TtsEngine
 			a_error = "nothing to write";
 			return false;
 		}
-		std::ofstream out(a_path, std::ios::binary | std::ios::trunc);
-		if (!out) {
-			a_error = "cannot open for writing";
-			return false;
-		}
-		out.write(file.data(), static_cast<std::streamsize>(file.size()));
-		out.close();
-		if (!out) {
-			a_error = "write failed";
-			return false;
-		}
-		return true;
+		return WriteBytes(a_path, file.data(), file.size(), a_error);
 	}
 
 	bool ReadWav(const std::filesystem::path& a_path, Audio& a_out)

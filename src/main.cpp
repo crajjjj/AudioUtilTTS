@@ -60,7 +60,7 @@ namespace
 		case MessagingInterface::kPreLoadGame:
 		case MessagingInterface::kNewGame:
 			// AudioUtil stops its own audio here; drop what is still on the way
-			Speaker::Cancel();
+			Speaker::Reset();
 			break;
 		default:
 			break;

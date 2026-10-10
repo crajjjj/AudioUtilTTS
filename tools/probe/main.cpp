@@ -6,11 +6,16 @@
 // (out.lip), built by the same Lip code; AudioUtil's LipSim plays the pair.
 //   probe --rest out.lip
 // Writes the closed-mouth placeholder alone.
+//   probe --text file
+// Reads the file's bytes as a line of game text and prints, in hex and as
+// text, what the speech runtime would be handed (TtsEngine::ToSpeakable).
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 
 #include "Lip.h"
@@ -27,9 +32,20 @@ int main(int argc, char** argv)
 		std::printf("wrote %s\n", argv[2]);
 		return 0;
 	}
+	if (argc == 3 && std::strcmp(argv[1], "--text") == 0) {
+		std::ifstream     in(argv[2], std::ios::binary);
+		const std::string raw((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+		const auto        speakable = TtsEngine::ToSpeakable(raw);
+		for (const char c : speakable) {
+			std::printf("%02X ", static_cast<unsigned char>(c));
+		}
+		std::printf("\n%s\n", speakable.c_str());
+		return 0;
+	}
 	if (argc < 3) {
 		std::printf("usage: probe <model dir> \"text\" [voice] [out.wav] [threads] [output rate]\n"
-					"       probe --rest out.lip\n");
+					"       probe --rest out.lip\n"
+					"       probe --text file\n");
 		return 2;
 	}
 	TtsEngine::ModelSpec spec;

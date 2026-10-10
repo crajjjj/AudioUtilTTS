@@ -41,7 +41,8 @@ namespace Speaker
 {
 	void Start();   // kDataLoaded: slots, AudioUtil lookup, worker (loads the default model)
 	bool Reload();  // re-read the config and reload the models; false = config kept
-	void Cancel();  // drop every line waiting or being generated
+	void Cancel();  // drop every narration and character line waiting or being generated
+	void Reset();   // Cancel, and drop every dialogue line on its way too: a save is being loaded
 
 	// Narration. false = nothing queued (disabled, not ready, or no speakable
 	// text). a_voice < 0, a_volume < 0, a_speed <= 0 take the configured defaults.
@@ -64,17 +65,20 @@ namespace Speaker
 	// response's number inside its topic info (1 = the one said first) and
 	// a_info that topic info, used only to tell lines of one topic from another.
 	//
-	// A line said before comes from the cache at once. A new one depends on
-	// whether the game is about to say it or is only listing it:
+	// What happens depends on whether the game is about to say the line or is
+	// only listing it:
 	//   - The game builds the responses of every topic in the dialogue menu up
-	//     front. Those are generated in the background, first responses first,
-	//     and the game never waits; by the time the player picks one it is
-	//     usually in place.
+	//     front. Those are put in place in the background, first responses
+	//     first, and the game never waits: a cached line is copied into its
+	//     placeholder, a new one is generated if that should take no longer
+	//     than a player takes to pick a topic.
 	//   - A line said right away (a scene, a greeting, a remark in passing) is
-	//     generated while the caller waits, up to [dialogue] wait_ms; later
-	//     responses of its topic are generated while the earlier ones play.
-	// A line that cannot be ready in time stays unvoiced this once and is
-	// generated for the next time.
+	//     copied or generated while the caller waits, up to [dialogue] wait_ms;
+	//     later responses of its topic are generated while the earlier ones play.
+	// A line that cannot be in place in time is left as the game built it this
+	// once (unvoiced, for Fuz Ro D'oh to cover) and generated for the next time.
+	// The one gap: a listed line that was expected in time and is picked before
+	// it is in plays as silence, since its placeholder was already handed over.
 	std::string VoiceDialogue(std::string_view a_text, const RE::BGSVoiceType* a_voiceType, int a_response,
 		const void* a_info);
 

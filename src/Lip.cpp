@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 
 namespace Lip
 {
@@ -27,16 +26,6 @@ namespace Lip
 		constexpr float         CLOSURE = 0.85f;
 		constexpr float         ATTACK_TAU = 0.03f;
 		constexpr float         RELEASE_TAU = 0.09f;
-
-		std::uint64_t Fnv1a64(std::string_view a_text)
-		{
-			std::uint64_t hash = 0xCBF29CE484222325ull;
-			for (const char c : a_text) {
-				hash ^= static_cast<std::uint8_t>(c);
-				hash *= 0x100000001B3ull;
-			}
-			return hash;
-		}
 
 		// splitmix64 finalizer: a stateless pick per syllable
 		std::uint64_t Mix64(std::uint64_t a_x)
@@ -211,7 +200,7 @@ namespace Lip
 		}
 
 		std::vector<std::vector<float>> curve(PHONEMES, std::vector<float>(voicedFrames, 0.0f));
-		const std::uint64_t             seed = Fnv1a64(a_seed);
+		const std::uint64_t             seed = TtsEngine::Hash64(a_seed);
 		std::size_t                     prevPick = N;
 		std::uint32_t                   prevEnd = 0;
 		for (std::size_t s = 0; s < syllables.size(); ++s) {
@@ -294,17 +283,6 @@ namespace Lip
 
 	bool Write(const std::filesystem::path& a_path, const std::vector<std::uint8_t>& a_bytes, std::string& a_error)
 	{
-		std::ofstream out(a_path, std::ios::binary | std::ios::trunc);
-		if (!out) {
-			a_error = "cannot open for writing";
-			return false;
-		}
-		out.write(reinterpret_cast<const char*>(a_bytes.data()), static_cast<std::streamsize>(a_bytes.size()));
-		out.close();
-		if (!out) {
-			a_error = "write failed";
-			return false;
-		}
-		return true;
+		return TtsEngine::WriteBytes(a_path, a_bytes.data(), a_bytes.size(), a_error);
 	}
 }

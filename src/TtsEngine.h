@@ -5,6 +5,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 struct SherpaOnnxOfflineTts;
@@ -77,6 +78,20 @@ namespace TtsEngine
 	// Cubic resample in place, meant for raising the rate (there is no low-pass
 	// for lowering it). A no-op when a_targetRate <= 0 or already matches.
 	void Resample(Audio& a_audio, int a_targetRate);
+
+	// Text as the speech runtime wants it. The runtime takes UTF-8, and game
+	// text is not always that: English and other Western-language data is
+	// Windows-1252, where a curly apostrophe or an accented letter is one byte.
+	// Text that is not valid UTF-8 is read as 1252. Typographic punctuation then
+	// becomes the plain kind, which every model's pronunciation rules know.
+	std::string ToSpeakable(std::string_view a_text);
+
+	// FNV-1a over the bytes of a_text. Names cache files and seeds mouth shapes,
+	// so it must not change between versions.
+	std::uint64_t Hash64(std::string_view a_text);
+
+	// A whole file, written in one go.
+	bool WriteBytes(const std::filesystem::path& a_path, const void* a_data, std::size_t a_size, std::string& a_error);
 
 	// Mono 16-bit PCM wav, written in one go.
 	bool WriteWav(const std::filesystem::path& a_path, const Audio& a_audio, std::string& a_error);
