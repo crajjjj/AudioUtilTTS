@@ -28,15 +28,26 @@ A new line has to be generated first, and the game is never made to wait for tha
 | The line is... | First time | Every later time |
 |---|---|---|
 | **Listed in the dialogue menu** | Voiced if it can be generated within about 2.5 seconds, the time it takes to pick a topic. Otherwise unvoiced this once | Voiced, from the cache |
-| **Said right away** (a scene, a greeting, a remark in passing) | Unvoiced this once, and generated for next time | Voiced, from the cache |
+| **A greeting** | Spoken a moment late, as soon as it is generated; see [Greetings spoken late](#greetings-spoken-late) | Voiced, from the cache |
+| **Said right away** otherwise (a scene, a remark in passing) | Unvoiced this once, and generated for next time | Voiced, from the cache |
 | **A later line of the same topic** | Generated while the earlier lines play | Voiced, from the cache |
 
 - **Lines in the dialogue menu are prepared while you read it.** The game builds the lines of every topic the menu shows when it fills the menu. The plugin puts the unvoiced ones in place in the background, the first line of each topic first.
 - **Preparing a menu costs CPU.** Every unvoiced line the menu lists is generated once, whether it is picked or not. With a fast model that is a few seconds of work per menu; with the default model it is about two seconds per line on `[model] threads` cores.
 
+## Greetings spoken late
+
+Added in 0.2.1. A greeting is the plainest case of a line said right away. With `[dialogue] late_greetings = true` (the default) a new one is generated the moment the NPC says it and spoken as soon as it is ready, about as late as a line takes to generate. From the second time on it comes from the cache and the game says it on time itself.
+
+- **It plays as character speech**, not through the game's dialogue: at the NPC, with their mouth moving, on the `[speech]` group and channel. The subtitle has been shown already, when the game said the line.
+- **Only greetings of one line.**
+- **Not at any price.** It is not spoken when it would be more than about 10 seconds late, when the speaker is gone, when a conversation has started meanwhile, or when another character line is being spoken. The line is in the cache for the next time either way.
+
+The setting can be switched with `autts reload`, and `autts dialogue` counts the greetings spoken late.
+
 ## Greetings made ahead
 
-Added in 0.2.1. A greeting is the plainest case of a line said right away: with a slow model it is silent the first time and spoken from the second. `[dialogue] prepare_greetings = true` (off by default) closes that gap.
+Added in 0.2.1. `[dialogue] prepare_greetings = true` (off by default) gets a new greeting spoken on time instead of late.
 
 While you walk around, the plugin looks at the NPCs within about 20 m, one every two seconds, works out which greetings each would say right now, and generates the unvoiced ones in the background, behind every line the game actually asked for. When the NPC then greets you, the line is in the cache and is spoken at once.
 

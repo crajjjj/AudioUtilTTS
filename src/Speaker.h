@@ -87,12 +87,17 @@ namespace Speaker
 	//     ones play. Greetings can be made ahead instead (Greetings.cpp).
 	// A line that cannot be in place in time is left as the game built it this
 	// once (unvoiced, for Fuz Ro D'oh to cover) and generated for the next time.
+	// The exception is a greeting ([dialogue] late_greetings): a_greeting, when
+	// not 0, is the form ID of the topic info of a one-line greeting. Such a
+	// line is still left unvoiced for the game, but it is spoken as a character
+	// line, a moment late, as soon as it is generated and the game has reported
+	// who speaks it.
 	// A line with nothing to say (a stage direction, markup, a placeholder such
 	// as "...") is left alone altogether.
 	// The one gap: a listed line that was expected in time and is picked before
 	// it is in plays as silence, since its placeholder was already handed over.
 	std::string VoiceDialogue(std::string_view a_text, const RE::BGSVoiceType* a_voiceType, int a_response,
-		const void* a_info);
+		const void* a_info, RE::FormID a_greeting = 0);
 
 	// Greetings made ahead (Greetings.cpp, [dialogue] prepare_greetings).
 	//

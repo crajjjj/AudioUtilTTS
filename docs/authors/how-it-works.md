@@ -41,6 +41,10 @@ A generated dialogue line is kept in `Data\SKSE\Plugins\AudioUtilTTS\cache`. Lin
 
 The speech model returns audio and no timing, so there are no real phonemes to animate. For a dialogue line the plugin writes a `.lip` file in the game's own format beside the wav, with mouth shapes guessed from the loudness of the line. For character speech AudioUtil's lipsync drives the mouth from the loudness directly.
 
+### Greetings spoken late
+
+A new greeting cannot be handed to the game in time, and the patch above is not told who speaks. With `[dialogue] late_greetings` on, the plugin remembers such a line by its topic info, waits for the game's own report of that topic info being said (which names the speaker), and plays the generated audio as a character line at that actor.
+
 ### Greetings made ahead
 
 With `[dialogue] prepare_greetings` on, the plugin looks at nearby NPCs, picks the greetings each would say the way the game picks them, and builds those lines early so the patch above sees them. They are generated behind every line the game actually asked for, and only into the cache.

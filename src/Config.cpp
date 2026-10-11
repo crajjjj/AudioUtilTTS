@@ -166,6 +166,8 @@ namespace Config
 			settings->dialogueLipStrength = (*dialogue)["lip_strength"].value_or(settings->dialogueLipStrength);
 			settings->dialogueFallback = (*dialogue)["fallback"].value_or(settings->dialogueFallback);
 			settings->dialoguePrepare = (*dialogue)["prepare_greetings"].value_or(settings->dialoguePrepare);
+			settings->dialogueLateGreetings =
+				(*dialogue)["late_greetings"].value_or(settings->dialogueLateGreetings);
 			settings->dialogueSkipDirections =
 				(*dialogue)["skip_directions"].value_or(settings->dialogueSkipDirections);
 			settings->dialogueCacheMb = (*dialogue)["cache_max_mb"].value_or(settings->dialogueCacheMb);
@@ -245,9 +247,11 @@ namespace Config
 			settings->speechGroup, settings->speechChannel, settings->speechSlots, settings->speechLipSync,
 			settings->enable ? "" : " [disabled]");
 		logger::info("Config: dialogue {}, slots {}, lipsync {} (strength {:.2f}), fallback {}, "
-					 "prepare_greetings {}, skip_directions {}, cache {} MB, {} voice types mapped, {} listed by models",
+					 "late_greetings {}, prepare_greetings {}, skip_directions {}, cache {} MB, {} voice types mapped, "
+					 "{} listed by models",
 			settings->dialogue, settings->dialogueSlots, settings->dialogueLip, settings->dialogueLipStrength,
-			settings->dialogueFallback, settings->dialoguePrepare, settings->dialogueSkipDirections,
+			settings->dialogueFallback, settings->dialogueLateGreetings, settings->dialoguePrepare,
+			settings->dialogueSkipDirections,
 			settings->dialogueCacheMb, settings->voiceTypes.size(), settings->modelVoiceTypes.size());
 
 		std::scoped_lock lock{ g_lock };

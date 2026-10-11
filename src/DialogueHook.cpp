@@ -115,7 +115,11 @@ namespace DialogueHook
 					}
 					return built;
 				}
-				const auto voiced = Speaker::VoiceDialogue(text, a_voiceType, a_response->responseNumber, a_info);
+				// a greeting of one line may still be spoken late when it has no voice yet
+				const bool greeting = a_topic && a_info && a_response->responseNumber <= 1 && !a_response->next &&
+									  a_topic->data.subtype.get() == RE::DIALOGUE_DATA::Subtype::kHello;
+				const auto voiced = Speaker::VoiceDialogue(text, a_voiceType, a_response->responseNumber, a_info,
+					greeting ? a_info->GetFormID() : 0);
 				if (!voiced.empty() && voiced.size() < PATH_BUFFER) {
 					std::memcpy(a_path, voiced.c_str(), voiced.size() + 1);
 				}

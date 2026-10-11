@@ -117,7 +117,7 @@ enable = true
 #  - A line said right away (a scene, a greeting, a remark in passing) cannot
 #    be prepared: a new one stays unvoiced this once and is voiced from the
 #    next time on. Later lines of the same topic are generated while the
-#    earlier ones play. For greetings see prepare_greetings below.
+#    earlier ones play. Greetings are the exception, see late_greetings below.
 # A line with nothing to say (a stage direction, or a placeholder such as "...")
 # is left alone.
 # false = a voice type with no voice of its own (see [voicetype]) stays
@@ -125,8 +125,20 @@ enable = true
 # true  = such a voice type is spoken with the preset "female" or "male" by
 #         its sex.
 fallback = false
-# Make greetings ahead of time. A greeting is said the moment the game decides
-# on it, so a new one cannot be generated in time and stays unvoiced the first
+# Speak a new greeting late instead of not at all. A greeting is said the moment
+# the game decides on it, so a new one cannot be generated in time. With this
+# on, it is generated right then and spoken as soon as it is ready: about as
+# late as a line takes to generate. It then plays as character speech (the
+# [speech] group and channel, at the NPC, mouth moving), not through the game's
+# dialogue, so its subtitle has been shown already. From the second time on the
+# line comes from the cache and the game says it on time itself.
+# Only greetings of one line. Not spoken when it would be more than about 10
+# seconds late, when the speaker is gone, when a conversation has started
+# meanwhile, or when another character line is being spoken.
+# Can be switched with "autts reload".
+late_greetings = true
+# Make greetings ahead of time, so that a new one is on time. A greeting is
+# said the moment the game decides on it, so a new one cannot be generated in
 # time. With this on, the plugin looks at the NPCs near you (about 20 m, one
 # every 2 seconds), works out which greetings each would say right now, and
 # generates the unvoiced ones in the background, behind every line the game

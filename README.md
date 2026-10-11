@@ -178,7 +178,8 @@ extends it to every other voice type with a generic voice.
   greeting or a remark in passing cannot be prepared, and the game is never
   made to wait for one: a new line stays unvoiced that once and is generated
   for the next time. Later lines of the same topic are generated while the
-  earlier ones play. Greetings can be made ahead instead (see below).
+  earlier ones play. A greeting is the exception: it is spoken late, the first
+  time too (see below).
 - **Preparing a menu costs CPU.** Every unvoiced line the menu lists is
   generated once, whether it is picked or not. With a fast model that is a few
   seconds of work per menu; with the default model it is about two seconds per
@@ -195,11 +196,27 @@ extends it to every other voice type with a generic voice.
   `...`, `(...)`, `[...]` or a lone dash, stays silent: it holds no letter and
   no digit once markup and directions are gone. `autts dialogue` counts them.
 
+### Greetings spoken late
+
+A greeting is the plainest case of a line said right away. With `[dialogue]
+late_greetings = true` (the default) a new one is generated the moment the NPC
+says it and spoken as soon as it is ready, about as late as a line takes to
+generate. From the second time on it comes from the cache and the game says it
+on time itself.
+
+- **It plays as character speech**, not through the game's dialogue: at the
+  NPC, with their mouth moving, on the `[speech]` group and channel. The
+  subtitle has been shown already, when the game said the line.
+- **Only greetings of one line.**
+- **Not at any price.** It is not spoken when it would be more than about 10
+  seconds late, when the speaker is gone, when a conversation has started
+  meanwhile, or when another character line is being spoken. The line is in the
+  cache for the next time either way.
+
 ### Greetings made ahead
 
-A greeting is the plainest case of a line said right away: with a slow model it
-is silent the first time and spoken from the second. `[dialogue]
-prepare_greetings = true` (off by default) closes that gap. While you walk
+`[dialogue] prepare_greetings = true` (off by default) gets a new greeting
+spoken on time instead of late. While you walk
 around, the plugin looks at the NPCs within about 20 m, one every two seconds,
 works out which greetings each would say right now, and generates the unvoiced
 ones in the background, behind every line the game actually asked for. When the
