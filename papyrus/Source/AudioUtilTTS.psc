@@ -56,11 +56,13 @@ int Function GetAPIVersion() global native
 bool Function IsReady() global native
 
 ; Queue a line on the default model. Returns false when nothing was queued (not
-; ready, switched off, or no speakable text). Arguments below zero take the
-; configured defaults. The line is generated in the background, so it starts a
-; moment later: about two seconds for a sentence with the default model. A line
-; that arrives while others wait replaces the oldest waiting one (see
-; [playback] max_pending).
+; ready, switched off, no speakable text, or another line is in the way).
+; Arguments below zero take the configured defaults. The line is generated in
+; the background, so it starts a moment later: about two seconds for a sentence
+; with the default model. A line that arrives while another narration line is
+; being generated or spoken is dropped and noted in AudioUtilTTS.log; character
+; lines are counted on their own in the same way. [playback] max_pending lets
+; lines wait instead.
 bool Function Speak(string asText, int aiVoice = -1, float afVolume = -1.0, float afSpeed = -1.0) global native
 
 ; Queue a line through a named preset from AudioUtilTTS.toml. A preset can name

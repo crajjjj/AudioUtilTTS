@@ -98,8 +98,12 @@ the speaking actor (none for narration). The full API is documented in
 - **Speech starts late.** A line is generated when it is asked for. With the
   default model a sentence takes about two seconds on two threads of an
   i7-12700KF, and longer while the game is busy.
-- **Lines do not pile up.** A new line waits for the one being spoken; if more
-  arrive meanwhile, only the newest is kept (`[playback] max_pending`).
+- **One line at a time, nothing piles up.** A line that arrives while another
+  is being generated or spoken is dropped, so a mod that sends lines faster
+  than they can be spoken is not read out back to back. Each dropped line is
+  noted in `AudioUtilTTS.log` with the reason. Narration and character speech
+  are counted separately. To let lines wait instead, raise
+  `[playback] max_pending`.
 - **Narration and character speech are separate.** Narration plays flat and moves
   no mouth. A character line plays at the actor and moves their mouth. Neither
   goes through the game's dialogue system, so there are no dialogue subtitles.
@@ -116,7 +120,8 @@ the speaking actor (none for narration). The full API is documented in
   player or another mod's claim on the mouth all keep it still.
 - Character lines use their own channel and placeholder files (`[speech]` in the
   config), so a character and the narrator can talk at once. Two characters
-  take turns.
+  cannot: a line for one that arrives while another is speaking is dropped
+  (or waits its turn, with `[playback] max_pending` raised).
 - A generated voice matches an NPC's recorded voice only as far as the model you
   give that voice type does (see [Voice types](#voice-types)).
 - If the speaker is gone or unloaded by the time the line is ready, it is

@@ -105,6 +105,7 @@ namespace Speaker
 			std::unordered_set<int> slotsCreated;  // made this session: not indexed until a restart
 			int                     nextSlot = 0;
 			Clock::time_point       quietAt{};  // when the line now playing on this lane ends
+			std::uint64_t           inWork = 0;  // epoch of the line the worker holds for this lane, 0 = none
 		};
 
 		// What a dialogue slot holds. A dialogue line keeps its slot for as long as
@@ -913,18 +914,28 @@ namespace Speaker
 
 		// ------------------------------------------------------------------- worker
 
-		void PostPlay(std::string a_slotRel, Line a_line, float a_seconds, long long a_synthMs)
+		// a_quietAt = what the lane's quietAt was set to for this line
+		void PostPlay(std::string a_slotRel, Line a_line, float a_seconds, long long a_synthMs,
+			Clock::time_point a_quietAt)
 		{
 			auto* task = SKSE::GetTaskInterface();
 			if (!task) {
 				return;
 			}
-			task->AddTask([slotRel = std::move(a_slotRel), line = std::move(a_line), a_seconds, a_synthMs]() {
+			task->AddTask([slotRel = std::move(a_slotRel), line = std::move(a_line), a_seconds, a_synthMs, a_quietAt]() {
 				if (line.epoch != g_epoch.load()) {
 					return;
 				}
+				// the line is not heard after all: its lane is not busy with it
+				const auto notSpoken = [&] {
+					std::scoped_lock lock{ g_lock };
+					if (auto& quietAt = g_lanes[line.lane].quietAt; quietAt == a_quietAt) {
+						quietAt = {};
+					}
+				};
 				const auto play = ResolvePlayFile();
 				if (!play) {
+					notSpoken();
 					return;
 				}
 				const auto settings = Config::Get();
@@ -936,6 +947,7 @@ namespace Speaker
 					speaker = line.speaker.get();
 					if (!speaker || !speaker->Is3DLoaded()) {
 						logger::info("Speaker is gone or not loaded, a {}-char line was dropped", line.text.size());
+						notSpoken();
 						return;
 					}
 				}
@@ -957,6 +969,7 @@ namespace Speaker
 				const auto  handle = call(slotRel.c_str(), speaker.get(), line.volume, group.c_str(), channel.c_str());
 				if (handle <= 0) {
 					logger::warn("AudioUtil did not play {} (see AudioUtil.log)", slotRel);
+					notSpoken();
 					return;
 				}
 				logger::info("Spoke {} chars as {:.1f} s of speech, generated in {} ms ({}{}, model {}, voice {}, {}, "
@@ -1214,7 +1227,8 @@ namespace Speaker
 				return;
 			}
 
-			const auto length = std::chrono::milliseconds(static_cast<long long>(audio.Seconds() * 1000.0f));
+			const auto        length = std::chrono::milliseconds(static_cast<long long>(audio.Seconds() * 1000.0f));
+			Clock::time_point quietAt;
 			{
 				std::unique_lock lock{ g_lock };
 				while (!settings->interrupt) {
@@ -1235,9 +1249,10 @@ namespace Speaker
 				if (!current()) {
 					return;
 				}
-				g_lanes[lane].quietAt = Clock::now() + length;
+				quietAt = Clock::now() + length;
+				g_lanes[lane].quietAt = quietAt;
 			}
-			PostPlay(SlotDataRel(lane, slot), std::move(a_line), audio.Seconds(), synthMs);
+			PostPlay(SlotDataRel(lane, slot), std::move(a_line), audio.Seconds(), synthMs, quietAt);
 		}
 
 		void Worker()
@@ -1265,12 +1280,16 @@ namespace Speaker
 						line = std::move(g_waiting.front());
 						g_waiting.pop_front();
 						g_working.store(true);  // IsBusy is about narration and character lines
+						g_lanes[line.lane].inWork = line.epoch;
 					}
 				}
 				if (dialogue) {
 					ProcessDialogue(std::move(line));
 				} else {
+					const Lane lane = line.lane;
 					Process(std::move(line));
+					std::scoped_lock lock{ g_lock };
+					g_lanes[lane].inWork = 0;
 				}
 				g_working.store(false);
 			}
@@ -1320,25 +1339,53 @@ namespace Speaker
 				return false;
 			}
 			FillDefaults(a_line, *settings);
+			const Lane               lane = a_line.lane;
+			const std::size_t        chars = a_line.text.size();
+			std::string              busy;       // why the lane does not take this line
+			std::vector<std::size_t> pushedOut;  // sizes of the waiting lines it replaced
 			{
 				std::scoped_lock lock{ g_lock };
 				a_line.epoch = g_epoch.load();
-				a_line.estimateMs = EstimateMsLocked(ModelKeyOf(a_line, *settings), a_line.text.size());
-				// newest wins inside a lane: speech must not fall far behind the scene
 				std::size_t same = 0;
 				for (const auto& waiting : g_waiting) {
-					same += waiting.lane == a_line.lane;
+					same += waiting.lane == lane;
 				}
-				for (auto it = g_waiting.begin();
-					 same >= static_cast<std::size_t>(settings->maxPending) && it != g_waiting.end();) {
-					if (it->lane == a_line.lane) {
-						it = g_waiting.erase(it);
-						--same;
-					} else {
-						++it;
+				if (settings->maxPending == 0) {
+					// one line at a time: a sender faster than speech is not read out
+					// back to back. A line that may be cut into does not hold the lane.
+					const auto& state = g_lanes[lane];
+					const auto  now = Clock::now();
+					if (same > 0 || state.inWork == a_line.epoch) {
+						busy = "another one is waiting or being generated";
+					} else if (!settings->interrupt && state.quietAt > now) {
+						busy = std::format("another one is being spoken, {:.1f} s to go",
+							std::chrono::duration<float>(state.quietAt - now).count());
+					}
+				} else {
+					// newest wins inside a lane: speech must not fall far behind the scene
+					for (auto it = g_waiting.begin();
+						 same >= static_cast<std::size_t>(settings->maxPending) && it != g_waiting.end();) {
+						if (it->lane == lane) {
+							pushedOut.push_back(it->text.size());
+							it = g_waiting.erase(it);
+							--same;
+						} else {
+							++it;
+						}
 					}
 				}
-				g_waiting.push_back(std::move(a_line));
+				if (busy.empty()) {
+					a_line.estimateMs = EstimateMsLocked(ModelKeyOf(a_line, *settings), chars);
+					g_waiting.push_back(std::move(a_line));
+				}
+			}
+			if (!busy.empty()) {
+				logger::info("A {}-char {} line was dropped: {}", chars, LANE_NAME[lane], busy);
+				return false;
+			}
+			for (const auto size : pushedOut) {
+				logger::info("A waiting {}-char {} line was dropped for a newer one ([playback] max_pending = {})", size,
+					LANE_NAME[lane], settings->maxPending);
 			}
 			g_wake.notify_all();
 			return true;

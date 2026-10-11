@@ -36,7 +36,7 @@ namespace Config
 		std::string group = "narration";
 		std::string channel = "narration";
 		bool        interrupt = false;
-		int         maxPending = 1;
+		int         maxPending = 0;  // 0 = a line that finds its lane busy is dropped
 		int         maxChars = 400;
 		int         slots = 4;
 		int         outputRate = 0;

@@ -80,7 +80,8 @@ voice = 2    # af_nicole
 # Character speech: a line spoken by an actor, positioned at them, with their
 # mouth moving (AudioUtilTTS.SpeakActor, or the actor sending AudioUtilTTS_Say).
 # It has its own channel and its own placeholder files, so a character and the
-# narrator can talk at the same time; two characters take turns.
+# narrator can talk at the same time. Two characters do not: a line for one
+# that arrives while another speaks is dropped (see [playback] max_pending).
 [speech]
 # AudioUtil volume group and exclusivity channel. The channel must differ from
 # the [playback] one.
@@ -192,9 +193,16 @@ channel = "narration"
 # false = a new line waits for the one being spoken to finish.
 # true  = a new line cuts in as soon as it is ready.
 interrupt = false
-# Lines allowed to wait behind the one being generated. When more arrive, the
-# oldest waiting line is dropped, so speech never falls far behind the scene.
-max_pending = 1
+# Lines allowed to wait behind the one being generated.
+# 0 = none, one line at a time: a line that arrives while another is waiting,
+#     being generated or being spoken is dropped. A mod that sends lines faster
+#     than they can be spoken is then not read out back to back. With interrupt
+#     on, a line being spoken does not count, the new one cuts into it.
+# 1 or more = that many wait and follow each other without a pause. When more
+#     arrive, the oldest waiting line is dropped.
+# Applies to narration and to character speech, each counted on its own. Every
+# dropped line is noted in AudioUtilTTS.log with the reason.
+max_pending = 0
 # Longer text is cut at the last sentence that fits.
 max_chars = 400
 # Placeholder wav files the speech is written into (Data\Sound\AudioUtilTTS).

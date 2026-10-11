@@ -1,13 +1,23 @@
 Scriptname AudioUtilTTSTest Hidden
 {Console harness for AudioUtilTTS. Exposed as real console commands through ConsoleUtil Extended, see SKSE\CustomConsole\AudioUtilTTSTest.yaml. In game: autts say "Some text"}
 
+; Why a line was not taken. With the plugin ready, the usual reason is a line
+; still being generated or spoken: a second one is dropped, not queued (see
+; [playback] max_pending), and the log says so.
+string Function NotQueued() global
+    if AudioUtilTTS.IsReady()
+        return "not queued - another line is probably still being generated or spoken (see AudioUtilTTS.log)"
+    endif
+    return "not queued - " + AudioUtilTTS.GetStatus()
+EndFunction
+
 ; Speak a line with the configured voice.
 ;   autts say "The road to Whiterun lay open."
 string Function Say(string text) global
     if AudioUtilTTS.Speak(text)
         return "queued"
     endif
-    return "not queued - " + AudioUtilTTS.GetStatus()
+    return NotQueued()
 EndFunction
 
 ; The same through an explicit voice number of the default model.
@@ -16,7 +26,7 @@ string Function SayVoice(string text, int voice) global
     if AudioUtilTTS.Speak(text, voice)
         return "queued with voice " + voice + " of " + AudioUtilTTS.GetVoiceCount()
     endif
-    return "not queued - " + AudioUtilTTS.GetStatus()
+    return NotQueued()
 EndFunction
 
 ; The same through a named preset from AudioUtilTTS.toml.
@@ -29,7 +39,7 @@ string Function SayAs(string text, string preset) global
     if AudioUtilTTS.SpeakAs(text, preset)
         return "queued" + note
     endif
-    return "not queued - " + AudioUtilTTS.GetStatus()
+    return NotQueued()
 EndFunction
 
 ; A line through the mod event other mods use.
@@ -65,7 +75,7 @@ string Function SayActorAs(string text, string preset) global
     if AudioUtilTTS.SpeakActor(speaker, text, preset)
         return "queued for " + speaker.GetDisplayName()
     endif
-    return "not queued - " + AudioUtilTTS.GetStatus()
+    return NotQueued()
 EndFunction
 
 ; The same through the mod event, sent by that character.

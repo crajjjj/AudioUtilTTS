@@ -114,7 +114,7 @@ namespace Config
 		settings->maxLoaded = std::clamp(settings->maxLoaded, 1, 32);
 		settings->speed = std::clamp(settings->speed, 0.5f, 2.0f);
 		settings->volume = std::clamp(settings->volume, 0.0f, 1.0f);
-		settings->maxPending = std::clamp(settings->maxPending, 1, 16);
+		settings->maxPending = std::clamp(settings->maxPending, 0, 16);
 		settings->maxChars = std::clamp(settings->maxChars, 16, 4000);
 		settings->slots = std::clamp(settings->slots, 1, 16);
 		settings->speechSlots = std::clamp(settings->speechSlots, 1, 16);
