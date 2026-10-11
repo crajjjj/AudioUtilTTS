@@ -61,23 +61,39 @@ namespace Greetings
 			const auto      origin = a_player->GetPosition();
 			RE::ActorHandle best;
 			float           bestDistance = RANGE * RANGE;
+			int             inRange = 0;
+			int             withVoice = 0;
 			for (const auto& handle : lists->highActorHandles) {
 				const auto actor = handle.get();
 				if (!Usable(actor.get(), a_player)) {
 					continue;
 				}
 				const float distance = origin.GetSquaredDistance(actor->GetPosition());
+				if (distance >= RANGE * RANGE) {
+					continue;
+				}
+				++inRange;
+				if (!Speaker::DialogueVoiceType(actor.get())) {
+					continue;  // their lines stay unvoiced whatever is made ahead
+				}
+				++withVoice;
 				if (distance >= bestDistance) {
 					continue;
 				}
 				if (const auto it = g_seen.find(actor->GetFormID()); it != g_seen.end() && now - it->second < AGAIN_AFTER) {
 					continue;
 				}
-				if (!Speaker::DialogueVoiceType(actor.get())) {
-					continue;  // their lines stay unvoiced whatever is made ahead
-				}
 				best = handle;
 				bestDistance = distance;
+			}
+			// The first looks go into the log, and the first one that finds a voice:
+			// they show that the check runs and what it sees.
+			static int  looksShown = 0;
+			static bool voiceShown = false;
+			if (looksShown < 3 || (withVoice > 0 && !voiceShown)) {
+				++looksShown;
+				voiceShown = voiceShown || withVoice > 0;
+				logger::info("Greetings: {} NPCs within range, {} of them with a voice of their own", inRange, withVoice);
 			}
 			const auto actor = best.get();
 			if (!actor) {
