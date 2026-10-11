@@ -53,7 +53,7 @@ namespace Config
 		int   dialogueSlots = 128;
 		bool  dialogueLip = true;
 		float dialogueLipStrength = 0.8f;
-		bool  dialogueFallback = true;
+		bool  dialogueFallback = false;
 		bool  dialogueSkipDirections = true;
 		int   dialogueCacheMb = 256;
 

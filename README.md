@@ -128,7 +128,9 @@ New in 0.2.0. Plenty of mod dialogue ships without voice files. With
 `[dialogue] enable = true` (the default) the plugin speaks those lines: when
 the game builds a dialogue line and no voice file exists for it, the line is
 generated in the voice of the speaker's voice type and handed to the game as
-that line's voice file.
+that line's voice file. Out of the box that covers the voice types you have set
+a voice up for (see [Voice types](#voice-types)); `[dialogue] fallback = true`
+extends it to every other voice type with a generic voice.
 
 - **Only lines with no recorded voice.** The plugin asks the game whether a
   voice file exists (loose or in an archive, `.fuz`, `.wav` or `.xwm`). If one
@@ -182,7 +184,7 @@ A voice type finds its voice in this order:
 1. its line in `[voicetype]`, naming a preset
 2. a preset named exactly like the voice type
 3. a model folder named exactly like the voice type (its first voice)
-4. the preset `female` or `male` by sex, unless `[dialogue] fallback = false`
+4. the preset `female` or `male` by sex, only with `[dialogue] fallback = true`
 
 ```toml
 [voicetype]
@@ -205,8 +207,9 @@ type's editor ID, as xEdit shows it; case is ignored. Select an NPC in the
 console and run `autts voice` to see their voice type and the voice it leads to,
 and `autts sayactor "Some text"` to hear it.
 
-With `fallback = false` only the voice types you set up are spoken, and the
-rest stay as they were.
+By default (`fallback = false`) only the voice types you set up are spoken, and
+the rest stay as they were. With `fallback = true` every other voice type is
+spoken with the preset `female` or `male` by its sex.
 
 A model per voice type costs memory per loaded model (see [Cost](#cost));
 `[model] max_loaded` caps how many are kept. One model holding many voices

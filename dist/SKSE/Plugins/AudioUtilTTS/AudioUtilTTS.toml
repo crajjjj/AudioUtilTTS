@@ -120,10 +120,11 @@ enable = true
 # A Piper voice needs roughly 100 to 300 ms a line, the default Kokoro model
 # about two seconds. 0 = never make the game wait.
 wait_ms = 250
-# A voice type with no voice of its own (see [voicetype]) is spoken with the
-# preset "female" or "male" by its sex. false = such lines stay unvoiced, so
-# only the voice types you set up are spoken.
-fallback = true
+# false = a voice type with no voice of its own (see [voicetype]) stays
+#         unvoiced, so only the voice types you set up are spoken.
+# true  = such a voice type is spoken with the preset "female" or "male" by
+#         its sex.
+fallback = false
 # Move the speaker's mouth. The mouth shapes are guessed from the loudness of
 # the line, as the speech model gives no timing: it reads as talking, it does
 # not form the actual sounds.
@@ -154,7 +155,7 @@ cache_max_mb = 256
 #   2. a preset named exactly like the voice type, e.g. [preset.MaleNord]
 #   3. a model folder named exactly like the voice type, models\MaleNord
 #      (its first voice), with no line here at all
-#   4. the preset "female" or "male" by sex, unless [dialogue] fallback is off
+#   4. the preset "female" or "male" by sex, only when [dialogue] fallback is on
 # The ID is the voice type's editor ID as xEdit shows it; case is ignored.
 # "autts voice" in the console shows which voice the selected actor gets.
 # An empty preset name means that voice type is never spoken for.
