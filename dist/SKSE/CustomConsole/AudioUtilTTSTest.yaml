@@ -9,7 +9,7 @@ version: 1
 name: AudioUtilTTSTest
 alias: autts
 script: AudioUtilTTSTest
-help: AudioUtilTTS console test harness (say, sayv, sayas, sayactor, sayactoras, event, eventas, sayevent, voice, dialogue, clearcache, status, stop, reload, enable)
+help: AudioUtilTTS console test harness (say, sayv, sayas, sayfrom, sayactor, sayactoras, event, eventas, sayevent, free, voice, dialogue, clearcache, status, stop, reload, enable)
 subs:
   - name: say
     func: Say
@@ -43,6 +43,21 @@ subs:
         type: String
         required: true
         help: Preset name, e.g. narrator, female, male, whisper
+  - name: sayfrom
+    func: SayFrom
+    help: Speak a line naming the sender, which shows up in AudioUtilTTS.log
+    args:
+      - name: text
+        type: String
+        required: true
+        help: The line to speak, in quotes
+      - name: sender
+        type: String
+        default: console
+        help: The sending mod's own short name
+  - name: free
+    func: Free
+    help: Show whether a narration line and a character line would be taken right now
   - name: event
     func: ViaEvent
     help: Speak a line through the AudioUtilTTS_Speak mod event, the way other mods do

@@ -46,6 +46,18 @@ akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper", "Not so loud.")
 
 With no preset named, the speaker gets the voice set up for their voice type, else the preset `female` or `male` by their sex when the config defines those. See [Voice Types](../players/voices.md#voice-types).
 
+### Saying who you are
+
+A second colon adds your mod's own short name. It is written into `AudioUtilTTS.log` with the line, so a user can see which mod a spoken or dropped line came from. The preset may be left empty:
+
+```papyrus
+SendModEvent("AudioUtilTTS_Speak:whisper:MyMod", "Not so loud.")
+SendModEvent("AudioUtilTTS_Speak::MyMod", "The road to Whiterun lay open.")
+akSpeaker.SendModEvent("AudioUtilTTS_Say::MyMod", "Not so loud.")
+```
+
+The full form of both event names is `<event>:<preset>:<sender>`. The name is for the log only. A plugin older than 0.2.1 reads `:MyMod` as part of the preset name, finds no such preset and speaks the line with the default voice.
+
 ### What an event cannot tell you
 
 An event gives no answer. A line that finds its lane busy is dropped (see [What to design around](overview.md#what-to-design-around)), and the sender does not learn of it. When you need to know, call the [natives](papyrus-api.md) instead: they return `false` for a line that was not taken.

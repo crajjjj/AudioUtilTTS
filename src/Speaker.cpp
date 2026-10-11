@@ -93,6 +93,7 @@ namespace Speaker
 			float           speed = -1.0f;
 			Lane            lane = kNarration;
 			RE::ActorHandle speaker;  // speech lane only
+			std::string     sender;   // the calling mod's own name, "" = not given: for the log
 			bool            lipSync = false;
 			std::uint64_t   epoch = 0;
 			float           estimateMs = 0.0f;         // expected generation time, 0 = unknown
@@ -257,6 +258,27 @@ namespace Speaker
 			if (a_line.speed <= 0.0f) {
 				a_line.speed = a_settings.speed;
 			}
+		}
+
+		// A caller's name for itself as it goes into the log: trimmed, one line,
+		// not too long.
+		std::string SenderTag(std::string_view a_sender)
+		{
+			const auto first = a_sender.find_first_not_of(" \t");
+			if (first == std::string_view::npos) {
+				return {};
+			}
+			const auto  last = a_sender.find_last_not_of(" \t");
+			std::string tag(a_sender.substr(first, std::min<std::size_t>(last - first + 1, 48)));
+			std::replace_if(
+				tag.begin(), tag.end(), [](unsigned char a_c) { return a_c < 0x20; }, ' ');
+			return tag;
+		}
+
+		// " from 'MyMod'" for a log line, "" when the caller gave no name.
+		std::string From(const std::string& a_sender)
+		{
+			return a_sender.empty() ? std::string{} : std::format(" from '{}'", a_sender);
 		}
 
 		// For a state that holds line after line: it goes into the log once.
@@ -968,7 +990,8 @@ namespace Speaker
 				if (speech) {
 					speaker = line.speaker.get();
 					if (!speaker || !speaker->Is3DLoaded()) {
-						logger::info("Speaker is gone or not loaded, a {}-char line was dropped", line.text.size());
+						logger::info("Speaker is gone or not loaded, a {}-char line{} was dropped", line.text.size(),
+							From(line.sender));
 						notSpoken();
 						return;
 					}
@@ -1001,9 +1024,9 @@ namespace Speaker
 						g_laneHandle[line.lane].store(handle);
 					}
 				}
-				logger::info("Spoke {} chars as {:.1f} s of speech, generated in {} ms ({}{}, model {}, voice {}, {}, "
+				logger::info("Spoke {} chars as {:.1f} s of speech, generated in {} ms ({}{}{}, model {}, voice {}, {}, "
 							 "handle {})",
-					line.text.size(), a_seconds, a_synthMs, LANE_NAME[line.lane],
+					line.text.size(), a_seconds, a_synthMs, LANE_NAME[line.lane], From(line.sender),
 					speech ? std::format(" by {:08X}{}", speaker->GetFormID(), lipSync ? " with lipsync" : "") : ""s,
 					line.model.empty() ? "default"s : line.model, line.voice, slotRel, handle);
 				if (auto* source = SKSE::GetModCallbackEventSource()) {
@@ -1238,7 +1261,7 @@ namespace Speaker
 				return;
 			}
 			if (result != TtsEngine::Result::Ok) {
-				logger::warn("Could not speak a {}-char line: {}", a_line.text.size(), error);
+				logger::warn("Could not speak a {}-char line{}: {}", a_line.text.size(), From(a_line.sender), error);
 				return;
 			}
 			const auto synthMs = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
@@ -1350,6 +1373,45 @@ namespace Speaker
 			return {};
 		}
 
+		// Why a_lane would not take a line right now, "" = it would. Only in
+		// one-at-a-time mode ([playback] max_pending = 0): a line being generated
+		// holds its lane, and so does one being spoken unless it may be cut into.
+		// A line that only waits for the worker holds nothing, a newer one takes
+		// its place (see Queue). g_lock held; a_started and a_cutShort were read
+		// before it was taken (see WasCutShort).
+		std::string LaneBusyLocked(Lane a_lane, const Config::Settings& a_settings, std::int32_t a_started,
+			bool a_cutShort)
+		{
+			if (a_settings.maxPending != 0) {
+				return {};
+			}
+			const auto& state = g_lanes[a_lane];
+			if (state.inWork == g_epoch.load()) {
+				return "another one is being generated";
+			}
+			// by the clock a line still plays, and nobody cut that same line
+			const auto now = Clock::now();
+			if (!a_settings.interrupt && state.quietAt > now &&
+				!(a_cutShort && g_laneHandle[a_lane].load() == a_started)) {
+				return std::format("another one is being spoken, {:.1f} s to go",
+					std::chrono::duration<float>(state.quietAt - now).count());
+			}
+			return {};
+		}
+
+		// Would a line sent to a_lane right now be taken?
+		bool LaneFree(Lane a_lane)
+		{
+			const auto settings = Config::Get();
+			if (!g_enabled.load() || !settings->enable || !NotReadyReason(a_lane).empty()) {
+				return false;
+			}
+			const auto started = g_laneHandle[a_lane].load();
+			const bool cutShort = WasCutShort(started);
+			std::scoped_lock lock{ g_lock };
+			return LaneBusyLocked(a_lane, *settings, started, cutShort).empty();
+		}
+
 		// Takes a line whose voice fields may still be "not set" and fills them in.
 		bool Queue(std::string_view a_text, Line a_line)
 		{
@@ -1369,58 +1431,47 @@ namespace Speaker
 				return false;
 			}
 			FillDefaults(a_line, *settings);
-			const Lane               lane = a_line.lane;
-			const std::size_t        chars = a_line.text.size();
-			std::string              busy;       // why the lane does not take this line
-			std::vector<std::size_t> pushedOut;  // sizes of the waiting lines it replaced
+			const Lane        lane = a_line.lane;
+			const std::size_t chars = a_line.text.size();
+			const auto        from = From(a_line.sender);
+			std::string       busy;  // why the lane does not take this line
+			std::vector<std::pair<std::size_t, std::string>> pushedOut;  // the waiting lines it replaced: size, sender
 			// asked before g_lock is taken, see WasCutShort
 			const auto started = g_laneHandle[lane].load();
 			const bool cutShort = WasCutShort(started);
 			{
 				std::scoped_lock lock{ g_lock };
 				a_line.epoch = g_epoch.load();
-				std::size_t same = 0;
-				for (const auto& waiting : g_waiting) {
-					same += waiting.lane == lane;
-				}
-				if (settings->maxPending == 0) {
-					// one line at a time: a sender faster than speech is not read out
-					// back to back. A line that may be cut into does not hold the lane.
-					const auto& state = g_lanes[lane];
-					const auto  now = Clock::now();
-					if (same > 0 || state.inWork == a_line.epoch) {
-						busy = "another one is waiting or being generated";
-					} else if (!settings->interrupt && state.quietAt > now &&
-							   !(cutShort && g_laneHandle[lane].load() == started)) {
-						// by the clock a line still plays, and nobody cut that same line
-						busy = std::format("another one is being spoken, {:.1f} s to go",
-							std::chrono::duration<float>(state.quietAt - now).count());
+				busy = LaneBusyLocked(lane, *settings, started, cutShort);
+				if (busy.empty()) {
+					// Newest wins among the lines of a lane that wait: speech must not
+					// fall far behind the scene. One-at-a-time mode lets one wait too,
+					// for a worker that is busy with another lane or with dialogue.
+					const auto  room = static_cast<std::size_t>(std::max(settings->maxPending, 1));
+					std::size_t same = 0;
+					for (const auto& waiting : g_waiting) {
+						same += waiting.lane == lane;
 					}
-				} else {
-					// newest wins inside a lane: speech must not fall far behind the scene
-					for (auto it = g_waiting.begin();
-						 same >= static_cast<std::size_t>(settings->maxPending) && it != g_waiting.end();) {
+					for (auto it = g_waiting.begin(); same >= room && it != g_waiting.end();) {
 						if (it->lane == lane) {
-							pushedOut.push_back(it->text.size());
+							pushedOut.emplace_back(it->text.size(), it->sender);
 							it = g_waiting.erase(it);
 							--same;
 						} else {
 							++it;
 						}
 					}
-				}
-				if (busy.empty()) {
 					a_line.estimateMs = EstimateMsLocked(ModelKeyOf(a_line, *settings), chars);
 					g_waiting.push_back(std::move(a_line));
 				}
 			}
 			if (!busy.empty()) {
-				logger::info("A {}-char {} line was dropped: {}", chars, LANE_NAME[lane], busy);
+				logger::info("A {}-char {} line{} was dropped: {}", chars, LANE_NAME[lane], from, busy);
 				return false;
 			}
-			for (const auto size : pushedOut) {
-				logger::info("A waiting {}-char {} line was dropped for a newer one ([playback] max_pending = {})", size,
-					LANE_NAME[lane], settings->maxPending);
+			for (const auto& [size, sender] : pushedOut) {
+				logger::info("A waiting {}-char {} line{} was dropped for a newer one{}", size, LANE_NAME[lane],
+					From(sender), from);
 			}
 			g_wake.notify_all();
 			return true;
@@ -1588,11 +1639,20 @@ namespace Speaker
 			{
 				if (a_event) {
 					const std::string_view name = a_event->eventName.c_str();
-					if (const auto preset = PresetOf(name, SPEAK_EVENT)) {
-						Speaker::SpeakAs(a_event->strArg.c_str(), *preset);
-					} else if (const auto sayPreset = PresetOf(name, SAY_EVENT)) {
+					// what follows the event name is "<preset>:<sender>", both optional
+					const auto split = [](std::string_view a_rest) {
+						const auto colon = a_rest.find(':');
+						return colon == std::string_view::npos ?
+								   std::pair{ a_rest, std::string_view{} } :
+								   std::pair{ a_rest.substr(0, colon), a_rest.substr(colon + 1) };
+					};
+					if (const auto rest = PresetOf(name, SPEAK_EVENT)) {
+						const auto [preset, sender] = split(*rest);
+						Speaker::SpeakAs(a_event->strArg.c_str(), preset, sender);
+					} else if (const auto sayRest = PresetOf(name, SAY_EVENT)) {
 						if (auto* actor = a_event->sender ? a_event->sender->As<RE::Actor>() : nullptr) {
-							Speaker::SpeakActor(actor, a_event->strArg.c_str(), *sayPreset, true);
+							const auto [preset, sender] = split(*sayRest);
+							Speaker::SpeakActor(actor, a_event->strArg.c_str(), preset, true, sender);
 						} else {
 							logger::warn("{} ignored: it must be sent by the actor who speaks", SAY_EVENT);
 						}
@@ -1692,7 +1752,7 @@ namespace Speaker
 		return Queue(a_text, std::move(line));
 	}
 
-	bool SpeakAs(std::string_view a_text, std::string_view a_preset)
+	bool SpeakAs(std::string_view a_text, std::string_view a_preset, std::string_view a_sender)
 	{
 		const auto key = Config::Normalize(a_preset);
 		Line       line;
@@ -1703,6 +1763,7 @@ namespace Speaker
 				WarnUnknownPreset(key);
 			}
 		}
+		line.sender = SenderTag(a_sender);
 		return Queue(a_text, std::move(line));
 	}
 
@@ -1711,7 +1772,8 @@ namespace Speaker
 		return Config::Get()->presets.contains(Config::Normalize(a_preset));
 	}
 
-	bool SpeakActor(RE::Actor* a_actor, std::string_view a_text, std::string_view a_preset, bool a_lipSync)
+	bool SpeakActor(RE::Actor* a_actor, std::string_view a_text, std::string_view a_preset, bool a_lipSync,
+		std::string_view a_sender)
 	{
 		if (!a_actor) {
 			return false;
@@ -1735,6 +1797,7 @@ namespace Speaker
 		}
 		line.lane = kSpeech;
 		line.speaker = a_actor->GetHandle();
+		line.sender = SenderTag(a_sender);
 		line.lipSync = a_lipSync && settings->speechLipSync;
 		return Queue(a_text, std::move(line));
 	}
@@ -1751,6 +1814,16 @@ namespace Speaker
 		}
 		std::scoped_lock lock{ g_lock };
 		return !g_waiting.empty();
+	}
+
+	bool IsNarrationFree()
+	{
+		return LaneFree(kNarration);
+	}
+
+	bool IsSpeechFree()
+	{
+		return LaneFree(kSpeech);
 	}
 
 	void SetEnabled(bool a_enabled)

@@ -25,6 +25,17 @@ Scriptname AudioUtilTTS Hidden
 ; user has set one up (see [voicetype] in AudioUtilTTS.toml), else the preset
 ; "female" or "male" by their sex when the config defines those.
 ;
+; Say who you are: a second colon adds your mod's own short name, which goes
+; into AudioUtilTTS.log with the line, so a user can see which mod a spoken or
+; dropped line came from. The preset may be left empty:
+;
+;     SendModEvent("AudioUtilTTS_Speak:whisper:MyMod", "Not so loud.")
+;     SendModEvent("AudioUtilTTS_Speak::MyMod", "The road lay open.")
+;     akSpeaker.SendModEvent("AudioUtilTTS_Say::MyMod", "Not so loud.")
+;
+; (A plugin older than API 3 reads ":MyMod" as part of the preset name, finds
+; no such preset and speaks the line with the default voice.)
+;
 ; Game dialogue needs no call at all: a dialogue line that has no recorded
 ; voice file is generated and spoken by the plugin on its own, in the voice of
 ; the speaker's voice type. See [dialogue] in AudioUtilTTS.toml and the
@@ -48,7 +59,8 @@ Scriptname AudioUtilTTS Hidden
 ; ---------------------------------------------------------------------------
 
 ; API version of the installed plugin. 1 = first release. 2 added the dialogue
-; functions and GetActorVoice.
+; functions and GetActorVoice. 3 added SpeakFrom, SpeakActorFrom,
+; IsNarrationFree, IsSpeechFree and the sender name in the event names.
 int Function GetAPIVersion() global native
 
 ; True when a line can be spoken right now: the default model is loaded,
@@ -62,7 +74,7 @@ bool Function IsReady() global native
 ; with the default model. A line that arrives while another narration line is
 ; being generated or spoken is dropped and noted in AudioUtilTTS.log; character
 ; lines are counted on their own in the same way. [playback] max_pending lets
-; lines wait instead.
+; lines wait instead. IsNarrationFree tells beforehand.
 bool Function Speak(string asText, int aiVoice = -1, float afVolume = -1.0, float afSpeed = -1.0) global native
 
 ; Queue a line through a named preset from AudioUtilTTS.toml. A preset can name
@@ -82,6 +94,16 @@ bool Function SpeakAs(string asText, string asPreset) global native
 ; ready.
 bool Function SpeakActor(Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
 
+; SpeakAs and SpeakActor with the sender's name. asSender is your mod's own
+; short name ("MyMod"); it is written into AudioUtilTTS.log with the line, so a
+; user can see which mod a spoken or dropped line came from. Nothing else
+; depends on it. An empty asPreset means the default voice for SpeakFrom and
+; the speaker's own voice for SpeakActorFrom. (API 3. They are functions of
+; their own, not a new argument on the two above, because a script compiled
+; before the change would fail every call to a function that gained one.)
+bool Function SpeakFrom(string asSender, string asText, string asPreset = "") global native
+bool Function SpeakActorFrom(string asSender, Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
+
 ; Which voice akSpeaker speaks with when no preset is named, and why, as one
 ; line of text: "MaleNord: preset 'malenord' (model my-voices, voice 12)".
 ; (API 2)
@@ -96,7 +118,19 @@ bool Function HasPreset(string asPreset) global native
 Function CancelPending() global native
 
 ; True while a narration or character line is waiting or being generated.
+; It turns false once the line starts playing: to ask whether a new line would
+; be taken, use the two below.
 bool Function IsBusy() global native
+
+; Would a narration line (Speak, SpeakAs, SpeakFrom, AudioUtilTTS_Speak) or a
+; character line (SpeakActor, SpeakActorFrom, AudioUtilTTS_Say) sent right now
+; be taken? False while the plugin is not ready, and, with the default
+; [playback] max_pending = 0, while another line of that kind is being
+; generated or spoken. A script that paces its own lines waits for this, not
+; for IsBusy. True is no promise: another mod can take the lane a moment
+; later, so still check what the Speak call returns. (API 3)
+bool Function IsNarrationFree() global native
+bool Function IsSpeechFree() global native
 
 ; Number of voices in the default model (0 while it is not loaded).
 int Function GetVoiceCount() global native

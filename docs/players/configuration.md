@@ -108,7 +108,7 @@ Narration: lines with no speaker. `max_pending` and `max_chars` also apply to ch
 
 ### max_pending
 
-- **`0`: one line at a time.** A line that arrives while another is waiting, being generated or being spoken is dropped. A mod that sends lines faster than they can be spoken is then not read out back to back. With `interrupt = true`, a line being spoken does not count: the new one cuts into it.
+- **`0`: one line at a time.** A line that arrives while another is being generated or spoken is dropped. A mod that sends lines faster than they can be spoken is then not read out back to back. With `interrupt = true`, a line being spoken does not count: the new one cuts into it. A line that has not been started on yet, because the plugin is busy with a character line or with dialogue, is replaced by a newer one, so the freshest line is the one spoken.
 - **`1` or more: that many wait** and follow each other without a pause. When more arrive, the oldest waiting line is dropped.
 
 Narration and character speech are each counted on their own. Every dropped line is noted in `AudioUtilTTS.log` with the reason.

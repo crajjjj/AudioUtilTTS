@@ -44,12 +44,15 @@ namespace Speaker
 	void Cancel();  // drop every narration and character line waiting or being generated
 	void Reset();   // Cancel, and drop every dialogue line on its way too: a save is being loaded
 
-	// Narration. false = nothing queued (disabled, not ready, or no speakable
-	// text). a_voice < 0, a_volume < 0, a_speed <= 0 take the configured defaults.
+	// Narration. false = nothing queued (disabled, not ready, no speakable text,
+	// or the lane is busy). a_voice < 0, a_volume < 0, a_speed <= 0 take the
+	// configured defaults.
 	bool Speak(std::string_view a_text, int a_voice, float a_volume, float a_speed);
 
 	// Narration through a named preset. An empty or unknown name uses the defaults.
-	bool SpeakAs(std::string_view a_text, std::string_view a_preset);
+	// a_sender is the calling mod's own name, written into the log with the line
+	// so that a spoken or dropped line can be traced to its mod; "" = not given.
+	bool SpeakAs(std::string_view a_text, std::string_view a_preset, std::string_view a_sender = {});
 	bool HasPreset(std::string_view a_preset);
 
 	// a_actor says the line: positioned at them, mouth moving when a_lipSync and
@@ -57,7 +60,8 @@ namespace Speaker
 	// voice type ([voicetype], a preset named like it, a model that lists it in
 	// its model.toml or a model folder named like it), else "female" / "male" by
 	// their sex when the config defines those.
-	bool SpeakActor(RE::Actor* a_actor, std::string_view a_text, std::string_view a_preset, bool a_lipSync);
+	bool SpeakActor(RE::Actor* a_actor, std::string_view a_text, std::string_view a_preset, bool a_lipSync,
+		std::string_view a_sender = {});
 
 	// Dialogue. Called by DialogueHook, on the thread building the response,
 	// for a response whose voice file does not exist. Returns the voice file the
@@ -111,7 +115,12 @@ namespace Speaker
 	int         ClearDialogueCache();         // files removed
 
 	bool IsReady();  // narration can be spoken right now
-	bool IsBusy();
+	bool IsBusy();   // a narration or character line is waiting or being generated
+	// Would a narration / character line sent right now be taken? false while
+	// the plugin is not ready, and in one-at-a-time mode while another line of
+	// that kind is being generated or spoken.
+	bool IsNarrationFree();
+	bool IsSpeechFree();
 	void SetEnabled(bool a_enabled);
 	bool IsEnabled();
 	int  VoiceCount();  // voices in the default model, 0 while it is not loaded

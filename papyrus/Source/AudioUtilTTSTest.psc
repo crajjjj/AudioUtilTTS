@@ -42,6 +42,21 @@ string Function SayAs(string text, string preset) global
     return NotQueued()
 EndFunction
 
+; The same, naming the sender: the name shows up in AudioUtilTTS.log.
+;   autts sayfrom "Not so loud." MyMod
+string Function SayFrom(string text, string sender) global
+    if AudioUtilTTS.SpeakFrom(sender, text)
+        return "queued from " + sender
+    endif
+    return NotQueued()
+EndFunction
+
+; Would a narration line and a character line be taken right now?
+;   autts free
+string Function Free() global
+    return "narration free: " + AudioUtilTTS.IsNarrationFree() + " | character speech free: " + AudioUtilTTS.IsSpeechFree()
+EndFunction
+
 ; A line through the mod event other mods use.
 ;   autts event "Hello there."
 string Function ViaEvent(string text) global

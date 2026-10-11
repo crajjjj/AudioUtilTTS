@@ -94,6 +94,19 @@ EndIf
 `Speak` and `SpeakAs` are narration and take no actor. `SpeakActor` is the
 character form: the actor comes first, then the text, then an optional preset.
 
+A mod can say who it is, and its name then goes into `AudioUtilTTS.log` with
+each of its lines, spoken or dropped. In an event the name follows a second
+colon (the preset may be empty); from script it is `SpeakFrom` and
+`SpeakActorFrom`:
+
+```papyrus
+SendModEvent("AudioUtilTTS_Speak::MyMod", "The road to Whiterun lay open.")
+AudioUtilTTS.SpeakFrom("MyMod", "Not so loud.", "whisper")
+```
+
+`AudioUtilTTS.IsNarrationFree()` and `IsSpeechFree()` tell whether a line sent
+right now would be taken.
+
 When a line starts playing, the mod event `AudioUtilTTS_Spoken` fires with
 `strArg` = the text, `numArg` = the AudioUtil instance handle and the sender =
 the speaking actor (none for narration). The full API is documented in
@@ -330,6 +343,8 @@ were generated (observed, not benchmarked).
 | `autts say "text"` | Speak a line with the configured voice |
 | `autts sayv "text" 9` | Speak a line with voice number 9 of the default model |
 | `autts sayas "text" whisper` | Speak a line through the preset `whisper` |
+| `autts sayfrom "text" MyMod` | Speak a line naming the sender, which shows up in the log |
+| `autts free` | Show whether a narration line and a character line would be taken right now |
 | `autts sayactor "text"` | Make the console-selected actor (or the player) say a line |
 | `autts sayactoras "text" whisper` | The same through the preset `whisper` |
 | `autts sayevent "text"` | The same through the `AudioUtilTTS_Say` mod event |

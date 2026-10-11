@@ -207,10 +207,12 @@ channel = "narration"
 # true  = a new line cuts in as soon as it is ready.
 interrupt = false
 # Lines allowed to wait behind the one being generated.
-# 0 = none, one line at a time: a line that arrives while another is waiting,
-#     being generated or being spoken is dropped. A mod that sends lines faster
-#     than they can be spoken is then not read out back to back. With interrupt
-#     on, a line being spoken does not count, the new one cuts into it.
+# 0 = none, one line at a time: a line that arrives while another is being
+#     generated or spoken is dropped. A mod that sends lines faster than they
+#     can be spoken is then not read out back to back. With interrupt on, a
+#     line being spoken does not count, the new one cuts into it. A line not
+#     started on yet (the plugin is busy with a character line or dialogue) is
+#     replaced by a newer one.
 #     A line that was cut short (AudioUtil's StopHandle, StopChannel, StopGroup)
 #     frees its lane at once with AudioUtil 0.9.28 or newer; with an older one
 #     the lane stays busy until that line would have ended.

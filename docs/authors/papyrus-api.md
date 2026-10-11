@@ -14,7 +14,7 @@ If SKSE.GetPluginVersion("AudioUtilTTS") >= 0
 EndIf
 ```
 
-`GetAPIVersion()` tells what the installed plugin offers: `1` is the first release, `2` (0.2.0) added the dialogue functions and `GetActorVoice`.
+`GetAPIVersion()` tells what the installed plugin offers: `1` is the first release, `2` (0.2.0) added the dialogue functions and `GetActorVoice`, `3` (0.2.1) added `SpeakFrom`, `SpeakActorFrom`, `IsNarrationFree` and `IsSpeechFree`.
 
 ## Speaking
 
@@ -42,8 +42,17 @@ Makes an actor say a line: positioned at them, on the character channel, with th
 - An empty `asPreset` picks the voice of the speaker's voice type when one is set up, else `female` or `male` by the speaker's sex when the config defines those. `GetActorVoice` tells which.
 - The line is dropped if the speaker is gone or not loaded by the time it is ready.
 
+```papyrus
+bool Function SpeakFrom(string asSender, string asText, string asPreset = "") global native
+bool Function SpeakActorFrom(string asSender, Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
+```
+
+`SpeakAs` and `SpeakActor` with the sender's name. `asSender` is your mod's own short name (`"MyMod"`). It is written into `AudioUtilTTS.log` with the line, so a user can see which mod a spoken or dropped line came from; nothing else depends on it. API 3.
+
+They are functions of their own, not a new argument on the two above: a script compiled before such a change would fail every call to a function that gained an argument.
+
 !!! note "One line at a time"
-    By default a line that arrives while another line of its kind is waiting, being generated or being spoken is dropped and noted in `AudioUtilTTS.log`. Narration and character lines are counted separately. The user can let lines wait with `[playback] max_pending`; see the [Configuration Reference](../players/configuration.md#max_pending).
+    By default a line that arrives while another line of its kind is being generated or spoken is dropped and noted in `AudioUtilTTS.log`. Narration and character lines are counted separately. `IsNarrationFree()` and `IsSpeechFree()` tell beforehand. The user can let lines wait with `[playback] max_pending`; see the [Configuration Reference](../players/configuration.md#max_pending).
 
 ## Stopping
 
@@ -67,7 +76,9 @@ Neither touches dialogue: a dialogue line the game is already saying is the game
 |---|---|
 | `int GetAPIVersion()` | API version of the installed plugin |
 | `bool IsReady()` | True when a line can be spoken right now: the default model is loaded, AudioUtil is present, a playable slot exists and speech is switched on |
-| `bool IsBusy()` | True while a narration or character line is waiting or being generated |
+| `bool IsBusy()` | True while a narration or character line is waiting or being generated. It turns false once the line starts playing, so it does not say whether a new line would be taken |
+| `bool IsNarrationFree()` | Would a narration line sent right now be taken? False while the plugin is not ready and, with the default `max_pending = 0`, while another narration line is being generated or spoken. API 3 |
+| `bool IsSpeechFree()` | The same for a character line. True is no promise: another mod can take the lane a moment later, so still check what the speak call returns. API 3 |
 | `string GetStatus()` | One line of status text: `ready` followed by the details, or `not ready: <why>` |
 | `bool HasPreset(string asPreset)` | True when `AudioUtilTTS.toml` defines `[preset.<asPreset>]` |
 | `int GetVoiceCount()` | Number of voices in the default model (0 while it is not loaded) |

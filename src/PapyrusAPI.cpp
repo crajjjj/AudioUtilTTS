@@ -7,7 +7,9 @@ namespace PapyrusAPI
 	namespace
 	{
 		constexpr auto         SCRIPT_NAME = "AudioUtilTTS"sv;
-		constexpr std::int32_t API_VERSION = 2;  // 2 added the dialogue group and GetActorVoice
+		// 2 added the dialogue group and GetActorVoice; 3 SpeakFrom, SpeakActorFrom,
+		// IsNarrationFree and IsSpeechFree
+		constexpr std::int32_t API_VERSION = 3;
 
 		std::int32_t GetAPIVersion(RE::StaticFunctionTag*)
 		{
@@ -36,6 +38,22 @@ namespace PapyrusAPI
 			return Speaker::SpeakActor(a_speaker, a_text.c_str(), a_preset.c_str(), a_lipSync);
 		}
 
+		// The two below are SpeakAs and SpeakActor with the sender's name. They are
+		// natives of their own because a parameter added to an existing one would
+		// fail every call from a script compiled before it ("incorrect number of
+		// arguments").
+		bool SpeakFrom(RE::StaticFunctionTag*, RE::BSFixedString a_sender, RE::BSFixedString a_text,
+			RE::BSFixedString a_preset)
+		{
+			return Speaker::SpeakAs(a_text.c_str(), a_preset.c_str(), a_sender.c_str());
+		}
+
+		bool SpeakActorFrom(RE::StaticFunctionTag*, RE::BSFixedString a_sender, RE::Actor* a_speaker,
+			RE::BSFixedString a_text, RE::BSFixedString a_preset, bool a_lipSync)
+		{
+			return Speaker::SpeakActor(a_speaker, a_text.c_str(), a_preset.c_str(), a_lipSync, a_sender.c_str());
+		}
+
 		bool HasPreset(RE::StaticFunctionTag*, RE::BSFixedString a_preset)
 		{
 			return Speaker::HasPreset(a_preset.c_str());
@@ -49,6 +67,16 @@ namespace PapyrusAPI
 		bool IsBusy(RE::StaticFunctionTag*)
 		{
 			return Speaker::IsBusy();
+		}
+
+		bool IsNarrationFree(RE::StaticFunctionTag*)
+		{
+			return Speaker::IsNarrationFree();
+		}
+
+		bool IsSpeechFree(RE::StaticFunctionTag*)
+		{
+			return Speaker::IsSpeechFree();
 		}
 
 		std::int32_t GetVoiceCount(RE::StaticFunctionTag*)
@@ -134,6 +162,10 @@ namespace PapyrusAPI
 		REGISTERFUNC(GetDialogueStatus, SCRIPT_NAME);
 		REGISTERFUNC(ClearDialogueCache, SCRIPT_NAME);
 		REGISTERFUNC(GetActorVoice, SCRIPT_NAME);
+		REGISTERFUNC(SpeakFrom, SCRIPT_NAME);
+		REGISTERFUNC(SpeakActorFrom, SCRIPT_NAME);
+		REGISTERFUNC(IsNarrationFree, SCRIPT_NAME);
+		REGISTERFUNC(IsSpeechFree, SCRIPT_NAME);
 		return true;
 	}
 }
