@@ -244,7 +244,7 @@ progress() {
     awk '
         /^Epoch \[/ {
             s = $0; sub(/^.*Step \[/, "", s); sub(/\/.*$/, "", s)
-            if (s % 100 == 0 || s == 10) { line = $0; sub(/, Gen Loss.*$/, "", line); print "    " line; fflush() }
+            if (s % 100 == 0 || s == 10) { line = $0; sub(/, (Gen|Disc) Loss.*$/, "", line); print "    " line; fflush() }
             next
         }
         /Validation loss|Saving|Traceback|Error|out of memory|GPU memory cap/ { print "    " $0; fflush() }
@@ -426,7 +426,7 @@ cmd_status() {
             local log
             for log in "$v/stage2.log" "$v/stage1.log"; do
                 if [ -f "$log" ]; then
-                    say "  last step in $(basename "$log"): $(grep -a '^Epoch \[' "$log" | tail -n 1 | sed 's/, Gen Loss.*$//')"
+                    say "  last step in $(basename "$log"): $(grep -a '^Epoch \[' "$log" | tail -n 1 | sed -E 's/, (Gen|Disc) Loss.*$//')"
                     break
                 fi
             done
