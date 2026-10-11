@@ -45,33 +45,33 @@ why.
 ## Using it from a mod
 
 The simplest way needs no dependency on this mod at all. Send a mod event from
-any Form:
+any Form. The event name is `AudioUtilTTS_Speak:<preset>:<sender>`:
 
 ```papyrus
-SendModEvent("AudioUtilTTS_Speak", "The road to Whiterun lay open.")
+SendModEvent("AudioUtilTTS_Speak::MyMod", "The road to Whiterun lay open.")
+SendModEvent("AudioUtilTTS_Speak:whisper:MyMod", "Not so loud.")
 ```
 
-It is spoken with the configured default voice. Without AudioUtilTTS installed
-the event goes nowhere. Use `SendModEvent` (the Form function), not
-`ModEvent.Create`.
+`<sender>` is your mod's own short name. It goes into `AudioUtilTTS.log` with
+each of your lines, spoken or dropped, so a user can see which mod a line came
+from; nothing else depends on it.
 
-To choose who speaks, name a preset after a colon:
+`<preset>` chooses who speaks. A preset is a voice the user defines in the
+config under one name (see [Presets](#presets)). Left empty, as in the first
+line, it means the configured default voice. An unknown name falls back to the
+default voice too, so a mod can ask for a role without knowing what the user
+has installed.
 
-```papyrus
-SendModEvent("AudioUtilTTS_Speak:whisper", "Not so loud.")
-```
-
-A preset is a voice the user defines in the config under one name (see
-[Presets](#presets)). An unknown name falls back to the default voice, so a mod
-can ask for a role without knowing what the user has installed.
+Without AudioUtilTTS installed the event goes nowhere. Use `SendModEvent` (the
+Form function), not `ModEvent.Create`.
 
 Those are narration: flat, with no speaker. To make a character say a line, let
-that actor send `AudioUtilTTS_Say`. The line is positioned at them and their
-mouth moves:
+that actor send `AudioUtilTTS_Say:<preset>:<sender>`. The line is positioned at
+them and their mouth moves:
 
 ```papyrus
-akSpeaker.SendModEvent("AudioUtilTTS_Say", "Not so loud.")
-akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper", "Not so loud.")
+akSpeaker.SendModEvent("AudioUtilTTS_Say::MyMod", "Not so loud.")
+akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper:MyMod", "Not so loud.")
 ```
 
 With no preset named, the speaker gets the voice set up for their voice type,
@@ -80,32 +80,20 @@ See [Character speech](#character-speech) and [Voice types](#voice-types).
 
 Game dialogue needs no call at all, see [Unvoiced dialogue](#unvoiced-dialogue).
 
-To learn whether a line was accepted, or to pass a voice number, volume or speed
-directly, call the natives and guard them:
+To learn whether a line was accepted, call the natives and guard them:
 
 ```papyrus
 If SKSE.GetPluginVersion("AudioUtilTTS") >= 0
-    AudioUtilTTS.SpeakAs("Not so loud.", "whisper")
-    AudioUtilTTS.Speak("The road to Whiterun lay open.", 9)
-    AudioUtilTTS.SpeakActor(akSpeaker, "Not so loud.")
+    AudioUtilTTS.SpeakFrom("MyMod", "Not so loud.", "whisper")
+    AudioUtilTTS.SpeakActorFrom("MyMod", akSpeaker, "Not so loud.")
 EndIf
 ```
 
-`Speak` and `SpeakAs` are narration and take no actor. `SpeakActor` is the
-character form: the actor comes first, then the text, then an optional preset.
-
-A mod can say who it is, and its name then goes into `AudioUtilTTS.log` with
-each of its lines, spoken or dropped. In an event the name follows a second
-colon (the preset may be empty); from script it is `SpeakFrom` and
-`SpeakActorFrom`:
-
-```papyrus
-SendModEvent("AudioUtilTTS_Speak::MyMod", "The road to Whiterun lay open.")
-AudioUtilTTS.SpeakFrom("MyMod", "Not so loud.", "whisper")
-```
-
-`AudioUtilTTS.IsNarrationFree()` and `IsSpeechFree()` tell whether a line sent
-right now would be taken.
+`SpeakFrom` is narration and takes no actor. `SpeakActorFrom` is the character
+form: the sender's name, the actor, the text, then an optional preset. Both
+return `false` for a line that was not taken, and
+`AudioUtilTTS.IsNarrationFree()` and `IsSpeechFree()` tell beforehand whether
+one would be.
 
 When a line starts playing, the mod event `AudioUtilTTS_Spoken` fires with
 `strArg` = the text, `numArg` = the AudioUtil instance handle and the sender =
@@ -139,8 +127,8 @@ the speaking actor (none for narration). The full API is documented in
 
 ## Character speech
 
-`AudioUtilTTS.SpeakActor(akSpeaker, "text")`, or the actor sending
-`AudioUtilTTS_Say`, makes that actor say the line.
+`AudioUtilTTS.SpeakActorFrom("MyMod", akSpeaker, "text")`, or the actor sending
+`AudioUtilTTS_Say::MyMod`, makes that actor say the line.
 
 - The mouth follows the loudness of the line (AudioUtil's lipsync). It opens and
   closes with the speech; it does not form real phonemes. Needs AudioUtil
@@ -274,7 +262,7 @@ costs the memory once.
 After replacing a model's files, run `autts reload`. Lines are cached per model
 file, so the lines of the old model are not played again.
 
-The same lookup gives a character their voice for `SpeakActor` and
+The same lookup gives a character their voice for `SpeakActorFrom` and
 `AudioUtilTTS_Say` when no preset is named.
 
 ### A model's own voice types

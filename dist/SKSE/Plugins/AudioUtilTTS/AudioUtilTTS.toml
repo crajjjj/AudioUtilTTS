@@ -50,8 +50,8 @@ speed = 1.0
 volume = 1.0
 
 # Presets: named voices a mod asks for by name.
-#   SendModEvent("AudioUtilTTS_Speak:whisper", "Not so loud.")
-#   AudioUtilTTS.SpeakAs("Not so loud.", "whisper")
+#   SendModEvent("AudioUtilTTS_Speak:whisper:MyMod", "Not so loud.")
+#   AudioUtilTTS.SpeakFrom("MyMod", "Not so loud.", "whisper")
 # Each [preset.<name>] may set model, voice, speed and volume; anything left out
 # comes from [model] and [voice] above. A name nobody defined falls back to the
 # default voice, so rename, change or add presets freely. Names ignore case.
@@ -78,7 +78,8 @@ voice = 2    # af_nicole
 # speed = 1.1
 
 # Character speech: a line spoken by an actor, positioned at them, with their
-# mouth moving (AudioUtilTTS.SpeakActor, or the actor sending AudioUtilTTS_Say).
+# mouth moving (AudioUtilTTS.SpeakActorFrom, or the actor sending
+# AudioUtilTTS_Say).
 # It has its own channel and its own placeholder files, so a character and the
 # narrator can talk at the same time. Two characters do not: a line for one
 # that arrives while another speaks is dropped (see [playback] max_pending).
@@ -198,7 +199,7 @@ cache_max_mb = 256
 # model = "my-voices"
 # voice = 4
 
-# Narration: lines with no speaker (AudioUtilTTS.Speak, AudioUtilTTS_Speak).
+# Narration: lines with no speaker (AudioUtilTTS.SpeakFrom, AudioUtilTTS_Speak).
 [playback]
 # AudioUtil volume group and exclusivity channel the narration plays on.
 group = "narration"

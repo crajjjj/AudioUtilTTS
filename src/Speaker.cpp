@@ -1639,7 +1639,8 @@ namespace Speaker
 			{
 				if (a_event) {
 					const std::string_view name = a_event->eventName.c_str();
-					// what follows the event name is "<preset>:<sender>", both optional
+					// what follows the event name is "<preset>:<sender>"; the forms
+					// without a sender are deprecated (API 3) and still taken
 					const auto split = [](std::string_view a_rest) {
 						const auto colon = a_rest.find(':');
 						return colon == std::string_view::npos ?

@@ -9,54 +9,47 @@ The simplest way to make AudioUtilTTS speak needs no dependency on it at all: se
 
 ### AudioUtilTTS_Speak
 
-Narration: a line with no speaker, played flat.
+Narration: a line with no speaker, played flat. The event name is `AudioUtilTTS_Speak:<preset>:<sender>`.
 
 | | |
 |---|---|
-| Sender | Any Form |
+| Sent by | Any Form |
+| `<preset>` | Who speaks; empty = the configured default voice |
+| `<sender>` | Your mod's own short name, for the log |
 | `strArg` | The text to speak |
 | `numArg` | Not used |
 
 ```papyrus
-SendModEvent("AudioUtilTTS_Speak", "The road to Whiterun lay open.")
+SendModEvent("AudioUtilTTS_Speak::MyMod", "The road to Whiterun lay open.")
+SendModEvent("AudioUtilTTS_Speak:whisper:MyMod", "Not so loud.")
 ```
 
-It is spoken with the configured default voice. To choose who speaks, name a preset after a colon:
+The first is spoken with the configured default voice, the second with the preset `whisper`. A preset is a voice the user defines in the config under one name; see [Presets](../players/voices.md#presets). An unknown name falls back to the default voice, so a mod can ask for a role without knowing what the user has installed.
 
-```papyrus
-SendModEvent("AudioUtilTTS_Speak:whisper", "Not so loud.")
-```
-
-A preset is a voice the user defines in the config under one name; see [Presets](../players/voices.md#presets). An unknown name falls back to the default voice, so a mod can ask for a role without knowing what the user has installed.
+The sender name is written into `AudioUtilTTS.log` with the line, so a user can see which mod a spoken or dropped line came from. Nothing else depends on it.
 
 ### AudioUtilTTS_Say
 
-Character speech: the sending actor says the line. It is positioned at them and their mouth moves.
+Character speech: the sending actor says the line. It is positioned at them and their mouth moves. The event name is `AudioUtilTTS_Say:<preset>:<sender>`.
 
 | | |
 |---|---|
-| Sender | **The actor who speaks.** An event from anything else is ignored, with a note in the log |
+| Sent by | **The actor who speaks.** An event from anything else is ignored, with a note in the log |
+| `<preset>` | Whose voice; empty = the speaker's own |
+| `<sender>` | Your mod's own short name, for the log |
 | `strArg` | The text to say |
 | `numArg` | Not used |
 
 ```papyrus
-akSpeaker.SendModEvent("AudioUtilTTS_Say", "Not so loud.")
-akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper", "Not so loud.")
+akSpeaker.SendModEvent("AudioUtilTTS_Say::MyMod", "Not so loud.")
+akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper:MyMod", "Not so loud.")
 ```
 
 With no preset named, the speaker gets the voice set up for their voice type, else the preset `female` or `male` by their sex when the config defines those. See [Voice Types](../players/voices.md#voice-types).
 
-### Saying who you are
+### Older plugin versions
 
-A second colon adds your mod's own short name. It is written into `AudioUtilTTS.log` with the line, so a user can see which mod a spoken or dropped line came from. The preset may be left empty:
-
-```papyrus
-SendModEvent("AudioUtilTTS_Speak:whisper:MyMod", "Not so loud.")
-SendModEvent("AudioUtilTTS_Speak::MyMod", "The road to Whiterun lay open.")
-akSpeaker.SendModEvent("AudioUtilTTS_Say::MyMod", "Not so loud.")
-```
-
-The full form of both event names is `<event>:<preset>:<sender>`. The name is for the log only. A plugin older than 0.2.1 reads `:MyMod` as part of the preset name, finds no such preset and speaks the line with the default voice.
+The sender name arrived with 0.2.1. An older plugin reads `:MyMod` as part of the preset name, finds no such preset and speaks the line with the default voice. The line is still spoken; only a preset named in the same event is lost.
 
 ### What an event cannot tell you
 
@@ -84,11 +77,11 @@ Speaking, with no dependency:
 
 ```papyrus
 ; narration
-SendModEvent("AudioUtilTTS_Speak", "The road to Whiterun lay open.")
-SendModEvent("AudioUtilTTS_Speak:narrator", "Night fell over the hold.")
+SendModEvent("AudioUtilTTS_Speak::MyMod", "The road to Whiterun lay open.")
+SendModEvent("AudioUtilTTS_Speak:narrator:MyMod", "Night fell over the hold.")
 
 ; a character
-akSpeaker.SendModEvent("AudioUtilTTS_Say", "Not so loud.")
+akSpeaker.SendModEvent("AudioUtilTTS_Say::MyMod", "Not so loud.")
 ```
 
 Listening for the moment a line starts:

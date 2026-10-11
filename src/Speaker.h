@@ -28,8 +28,10 @@
 //
 // Lines arrive through the AudioUtilTTS natives or through mod events, which
 // need no dependency on this mod:
-//   AudioUtilTTS_Speak[:preset]  narration, strArg = text
-//   AudioUtilTTS_Say[:preset]    the SENDING actor says strArg
+//   AudioUtilTTS_Speak:<preset>:<sender>  narration, strArg = text
+//   AudioUtilTTS_Say:<preset>:<sender>    the SENDING actor says strArg
+// <sender> is the sending mod's own name, for the log; the forms without it
+// are deprecated and still taken.
 // When a line starts playing, AudioUtilTTS_Spoken is sent back (strArg = text,
 // numArg = the AudioUtil handle, sender = the speaker or none).
 //
@@ -46,7 +48,8 @@ namespace Speaker
 
 	// Narration. false = nothing queued (disabled, not ready, no speakable text,
 	// or the lane is busy). a_voice < 0, a_volume < 0, a_speed <= 0 take the
-	// configured defaults.
+	// configured defaults. Behind the deprecated Speak native only: it has no
+	// sender name.
 	bool Speak(std::string_view a_text, int a_voice, float a_volume, float a_speed);
 
 	// Narration through a named preset. An empty or unknown name uses the defaults.

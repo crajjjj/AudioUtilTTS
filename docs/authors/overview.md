@@ -7,16 +7,18 @@ AudioUtilTTS turns a line of text into speech in the running game. This page is 
 | You want | Use | Dependency on this mod |
 |---|---|---|
 | A line spoken, as simply as possible | A [mod event](modevents.md): `AudioUtilTTS_Speak` or `AudioUtilTTS_Say` | None. Without the plugin the event goes nowhere |
-| To know whether the line was taken, or to set voice number, volume or speed per line | The [Papyrus natives](papyrus-api.md), behind a plugin check | Soft: `AudioUtilTTS.psc` at compile time, a guard at run time |
+| To know whether the line was taken, or whether one would be | The [Papyrus natives](papyrus-api.md), behind a plugin check | Soft: `AudioUtilTTS.psc` at compile time, a guard at run time |
 | Your mod's dialogue spoken | Nothing. Ship the dialogue without voice files | None. See [Unvoiced Dialogue](../players/unvoiced-dialogue.md) |
 
 ```papyrus
 ; narration: flat, no speaker
-SendModEvent("AudioUtilTTS_Speak", "The road to Whiterun lay open.")
+SendModEvent("AudioUtilTTS_Speak::MyMod", "The road to Whiterun lay open.")
 
 ; a character says it: positioned at them, mouth moving
-akSpeaker.SendModEvent("AudioUtilTTS_Say", "Not so loud.")
+akSpeaker.SendModEvent("AudioUtilTTS_Say::MyMod", "Not so loud.")
 ```
+
+`MyMod` is your mod's own short name. It goes into `AudioUtilTTS.log` with each of your lines, so a user can see which mod a spoken or dropped line came from.
 
 ## Narration or character speech
 
@@ -39,7 +41,7 @@ The two run on separate lanes with their own channel and files, so a character a
 - **Ask for a role, not a voice.** Name a [preset](../players/voices.md#presets) such as `narrator` or `whisper`. The user decides what that name sounds like, and an unknown name falls back to the default voice, so you never need to know what is installed.
 - **Long text is cut.** Text longer than `[playback] max_chars` (400 by default) is cut at the last sentence that fits.
 - **The user owns the volume.** Narration follows AudioUtil's `narration` group and character speech the `speech` group, on top of the per-line volume.
-- **The mouth is shared.** Character speech moves the mouth through AudioUtil's lipsync, and AudioUtil's guards apply: a gag, a worn tongue item, a dialogue with the player or another mod's claim on the mouth all keep it still. If your mod owns the actor's face, pass `abLipSync = false` to `SpeakActor`.
+- **The mouth is shared.** Character speech moves the mouth through AudioUtil's lipsync, and AudioUtil's guards apply: a gag, a worn tongue item, a dialogue with the player or another mod's claim on the mouth all keep it still. If your mod owns the actor's face, pass `abLipSync = false` to `SpeakActorFrom`.
 - **The speaker has to be there.** A character line is dropped if the speaker is gone or unloaded by the time it is ready.
 
 ## Releasing a voice

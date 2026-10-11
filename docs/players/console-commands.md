@@ -26,7 +26,7 @@ These send the same mod events a mod would, so you can check that path.
 | Command | Does |
 |---|---|
 | `autts event "text"` | Speak a line through the `AudioUtilTTS_Speak` mod event |
-| `autts eventas "text" whisper` | The same with a preset (`AudioUtilTTS_Speak:whisper`) |
+| `autts eventas "text" whisper` | The same with the preset `whisper` |
 | `autts sayevent "text"` | Make the selected actor say a line through the `AudioUtilTTS_Say` mod event |
 
 ## Voices and dialogue

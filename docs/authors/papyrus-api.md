@@ -1,6 +1,6 @@
 # Papyrus API
 
-Everything is in one script, `AudioUtilTTS.psc` (`Hidden`, all functions `global`). Call the natives when you need a voice number, volume or speed per line, or want to know whether a line was accepted. For the plain case a [mod event](modevents.md) is enough and needs no dependency.
+Everything is in one script, `AudioUtilTTS.psc` (`Hidden`, all functions `global`). Call the natives when you want to know whether a line was accepted, or whether one would be. For the plain case a [mod event](modevents.md) is enough and needs no dependency.
 
 ## Guarding the calls
 
@@ -8,9 +8,9 @@ Guard the calls so they never run without the plugin:
 
 ```papyrus
 If SKSE.GetPluginVersion("AudioUtilTTS") >= 0
-    AudioUtilTTS.SpeakAs("Not so loud.", "whisper")
-    AudioUtilTTS.Speak("The road to Whiterun lay open.", 9)
-    AudioUtilTTS.SpeakActor(akSpeaker, "Not so loud.")
+    AudioUtilTTS.SpeakFrom("MyMod", "The road to Whiterun lay open.")
+    AudioUtilTTS.SpeakFrom("MyMod", "Not so loud.", "whisper")
+    AudioUtilTTS.SpeakActorFrom("MyMod", akSpeaker, "Not so loud.")
 EndIf
 ```
 
@@ -20,36 +20,23 @@ EndIf
 
 Every function here returns `true` when the line was queued and `false` when it was not: the plugin is not ready or switched off, the text holds nothing speakable, or another line is in the way. The line is generated in the background, so it starts a moment later.
 
-```papyrus
-bool Function Speak(string asText, int aiVoice = -1, float afVolume = -1.0, float afSpeed = -1.0) global native
-```
-
-Narration on the default model. Arguments below zero take the configured defaults. `aiVoice` is a voice number inside the default model; `GetVoiceCount()` says how many it has.
+In both, `asSender` is your mod's own short name (`"MyMod"`). It is written into `AudioUtilTTS.log` with the line, so a user can see which mod a spoken or dropped line came from; nothing else depends on it.
 
 ```papyrus
-bool Function SpeakAs(string asText, string asPreset) global native
+bool Function SpeakFrom(string asSender, string asText, string asPreset = "") global native
 ```
 
-Narration through a named preset. A preset can name a different model; that model is loaded the first time a line asks for it (the line is about a second later that once) and then stays in memory. An empty or unknown preset name uses the default voice.
+Narration. `asPreset` names a preset from the config; empty or unknown means the default voice. A preset can name a different model; that model is loaded the first time a line asks for it (the line is about a second later that once) and then stays in memory. API 3.
 
 ```papyrus
-bool Function SpeakActor(Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
+bool Function SpeakActorFrom(string asSender, Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
 ```
 
-Makes an actor say a line: positioned at them, on the character channel, with their mouth moving when `abLipSync` is true and `[speech] lipsync` is on.
+Makes an actor say a line: positioned at them, on the character channel, with their mouth moving when `abLipSync` is true and `[speech] lipsync` is on. API 3.
 
 - The mouth follows the loudness of the line; it does not form real phonemes. AudioUtil's own guards still apply (a gag, a worn tongue, a dialogue with the player and a mouth claim all keep it still).
 - An empty `asPreset` picks the voice of the speaker's voice type when one is set up, else `female` or `male` by the speaker's sex when the config defines those. `GetActorVoice` tells which.
 - The line is dropped if the speaker is gone or not loaded by the time it is ready.
-
-```papyrus
-bool Function SpeakFrom(string asSender, string asText, string asPreset = "") global native
-bool Function SpeakActorFrom(string asSender, Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
-```
-
-`SpeakAs` and `SpeakActor` with the sender's name. `asSender` is your mod's own short name (`"MyMod"`). It is written into `AudioUtilTTS.log` with the line, so a user can see which mod a spoken or dropped line came from; nothing else depends on it. API 3.
-
-They are functions of their own, not a new argument on the two above: a script compiled before such a change would fail every call to a function that gained an argument.
 
 !!! note "One line at a time"
     By default a line that arrives while another line of its kind is being generated or spoken is dropped and noted in `AudioUtilTTS.log`. Narration and character lines are counted separately. `IsNarrationFree()` and `IsSpeechFree()` tell beforehand. The user can let lines wait with `[playback] max_pending`; see the [Configuration Reference](../players/configuration.md#max_pending).

@@ -21,6 +21,8 @@ namespace PapyrusAPI
 			return Speaker::IsReady();
 		}
 
+		// Speak, SpeakAs and SpeakActor are deprecated since API 3: they carry no
+		// sender name. Kept, unchanged, for scripts compiled against them.
 		bool Speak(RE::StaticFunctionTag*, RE::BSFixedString a_text, std::int32_t a_voice, float a_volume,
 			float a_speed)
 		{
@@ -38,10 +40,10 @@ namespace PapyrusAPI
 			return Speaker::SpeakActor(a_speaker, a_text.c_str(), a_preset.c_str(), a_lipSync);
 		}
 
-		// The two below are SpeakAs and SpeakActor with the sender's name. They are
-		// natives of their own because a parameter added to an existing one would
-		// fail every call from a script compiled before it ("incorrect number of
-		// arguments").
+		// The two below replace them: the same lines with the sender's name. They
+		// are natives of their own because a parameter added to an existing one
+		// would fail every call from a script compiled before it ("incorrect
+		// number of arguments").
 		bool SpeakFrom(RE::StaticFunctionTag*, RE::BSFixedString a_sender, RE::BSFixedString a_text,
 			RE::BSFixedString a_preset)
 		{

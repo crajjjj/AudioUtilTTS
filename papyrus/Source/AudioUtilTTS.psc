@@ -3,38 +3,37 @@ Scriptname AudioUtilTTS Hidden
 
 ; ---------------------------------------------------------------------------
 ; The simplest way to use this from another mod needs none of the functions
-; below and no compile-time dependency: send a mod event from any Form.
+; below and no compile-time dependency: send a mod event from any Form. The
+; event name is AudioUtilTTS_Speak:<preset>:<sender>.
 ;
-;     SendModEvent("AudioUtilTTS_Speak", "The road to Whiterun lay open.")
-;     SendModEvent("AudioUtilTTS_Speak:whisper", "Not so loud.")
+;     SendModEvent("AudioUtilTTS_Speak::MyMod", "The road to Whiterun lay open.")
+;     SendModEvent("AudioUtilTTS_Speak:whisper:MyMod", "Not so loud.")
 ;
-; The first is spoken with the configured default voice. The second names a
-; preset after the colon: a voice the user defines in AudioUtilTTS.toml as
-; [preset.whisper] (a model, a voice number, a speed and a volume under one
-; name). An unknown preset name falls back to the default voice, so a mod can
-; ask for a role without knowing what the user has installed.
+; <sender> is your mod's own short name. It goes into AudioUtilTTS.log with the
+; line, so a user can see which mod a spoken or dropped line came from; nothing
+; else depends on it. <preset> names a voice the user defines in
+; AudioUtilTTS.toml as [preset.whisper] (a model, a voice number, a speed and a
+; volume under one name). Left empty, as in the first line, it means the
+; configured default voice. An unknown preset name falls back to the default
+; voice too, so a mod can ask for a role without knowing what the user has
+; installed.
 ;
 ; Those two are narration: flat, with no speaker. To make a CHARACTER say a
-; line, let that actor send AudioUtilTTS_Say instead. The line is positioned at
-; them and their mouth moves:
+; line, let that actor send AudioUtilTTS_Say:<preset>:<sender> instead. The
+; line is positioned at them and their mouth moves:
 ;
-;     akSpeaker.SendModEvent("AudioUtilTTS_Say", "Not so loud.")
-;     akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper", "Not so loud.")
+;     akSpeaker.SendModEvent("AudioUtilTTS_Say::MyMod", "Not so loud.")
+;     akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper:MyMod", "Not so loud.")
 ;
 ; With no preset named, the speaker gets the voice of their voice type when the
 ; user has set one up (see [voicetype] in AudioUtilTTS.toml), else the preset
 ; "female" or "male" by their sex when the config defines those.
 ;
-; Say who you are: a second colon adds your mod's own short name, which goes
-; into AudioUtilTTS.log with the line, so a user can see which mod a spoken or
-; dropped line came from. The preset may be left empty:
-;
-;     SendModEvent("AudioUtilTTS_Speak:whisper:MyMod", "Not so loud.")
-;     SendModEvent("AudioUtilTTS_Speak::MyMod", "The road lay open.")
-;     akSpeaker.SendModEvent("AudioUtilTTS_Say::MyMod", "Not so loud.")
-;
-; (A plugin older than API 3 reads ":MyMod" as part of the preset name, finds
-; no such preset and speaks the line with the default voice.)
+; DEPRECATED since API 3: the event names without a sender, AudioUtilTTS_Speak
+; and AudioUtilTTS_Speak:<preset> (the same for AudioUtilTTS_Say). They still
+; work, but their lines carry no name in the log. A plugin older than API 3
+; reads ":MyMod" as part of the preset name, finds no such preset and speaks
+; the line with the default voice.
 ;
 ; Game dialogue needs no call at all: a dialogue line that has no recorded
 ; voice file is generated and spoken by the plugin on its own, in the voice of
@@ -44,12 +43,11 @@ Scriptname AudioUtilTTS Hidden
 ; When AudioUtilTTS is not installed the events simply go nowhere. Use
 ; SendModEvent (the Form function), not the ModEvent.Create / Send pair.
 ;
-; Call the natives directly when you need a voice number, volume or speed per
-; line, or want to know whether a line was accepted. Guard the calls so they
-; never run without the plugin:
+; Call the natives directly when you want to know whether a line was accepted.
+; Guard the calls so they never run without the plugin:
 ;
 ;     If SKSE.GetPluginVersion("AudioUtilTTS") >= 0
-;         AudioUtilTTS.SpeakAs("Not so loud.", "whisper")
+;         AudioUtilTTS.SpeakFrom("MyMod", "Not so loud.", "whisper")
 ;     EndIf
 ;
 ; When a line starts playing, the mod event AudioUtilTTS_Spoken fires:
@@ -67,42 +65,47 @@ int Function GetAPIVersion() global native
 ; AudioUtil is present, a playable slot exists and speech is switched on.
 bool Function IsReady() global native
 
-; Queue a line on the default model. Returns false when nothing was queued (not
-; ready, switched off, no speakable text, or another line is in the way).
-; Arguments below zero take the configured defaults. The line is generated in
-; the background, so it starts a moment later: about two seconds for a sentence
-; with the default model. A line that arrives while another narration line is
-; being generated or spoken is dropped and noted in AudioUtilTTS.log; character
-; lines are counted on their own in the same way. [playback] max_pending lets
-; lines wait instead. IsNarrationFree tells beforehand.
-bool Function Speak(string asText, int aiVoice = -1, float afVolume = -1.0, float afSpeed = -1.0) global native
-
-; Queue a line through a named preset from AudioUtilTTS.toml. A preset can name
-; a different model; that model is loaded the first time a line asks for it
-; (the line is about a second later that once) and then stays in memory. An
-; empty or unknown preset name uses the default voice.
-bool Function SpeakAs(string asText, string asPreset) global native
+; Queue a narration line. asSender is your mod's own short name ("MyMod"); it
+; is written into AudioUtilTTS.log with the line, so a user can see which mod a
+; spoken or dropped line came from. Nothing else depends on it. asPreset names
+; a preset from AudioUtilTTS.toml; empty or unknown means the default voice. A
+; preset can name a different model: that model is loaded the first time a line
+; asks for it (the line is about a second later that once) and then stays in
+; memory.
+; Returns false when nothing was queued: not ready, switched off, no speakable
+; text, or another line is in the way. The line is generated in the background,
+; so it starts a moment later: about two seconds for a sentence with the
+; default model. A line that arrives while another narration line is being
+; generated or spoken is dropped and noted in AudioUtilTTS.log; character lines
+; are counted on their own in the same way. [playback] max_pending lets lines
+; wait instead. IsNarrationFree tells beforehand. (API 3)
+bool Function SpeakFrom(string asSender, string asText, string asPreset = "") global native
 
 ; Make an actor say a line: positioned at them, on the character channel, with
 ; their mouth moving when abLipSync is true and [speech] lipsync is on. The
 ; mouth follows the loudness of the line, it does not form real phonemes, and
 ; AudioUtil's own guards still apply (a gag, a worn tongue, a dialogue with the
-; player and a mouth claim all keep it still). An empty asPreset picks the voice
-; of the speaker's voice type when one is set up (GetActorVoice tells which),
-; else "female" or "male" by the speaker's sex when the config defines those.
-; The line is dropped if the speaker is gone or not loaded by the time it is
-; ready.
-bool Function SpeakActor(Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
-
-; SpeakAs and SpeakActor with the sender's name. asSender is your mod's own
-; short name ("MyMod"); it is written into AudioUtilTTS.log with the line, so a
-; user can see which mod a spoken or dropped line came from. Nothing else
-; depends on it. An empty asPreset means the default voice for SpeakFrom and
-; the speaker's own voice for SpeakActorFrom. (API 3. They are functions of
-; their own, not a new argument on the two above, because a script compiled
-; before the change would fail every call to a function that gained one.)
-bool Function SpeakFrom(string asSender, string asText, string asPreset = "") global native
+; player and a mouth claim all keep it still). asSender is as for SpeakFrom. An
+; empty asPreset picks the voice of the speaker's voice type when one is set up
+; (GetActorVoice tells which), else "female" or "male" by the speaker's sex
+; when the config defines those. The line is dropped if the speaker is gone or
+; not loaded by the time it is ready. IsSpeechFree tells whether a character
+; line would be taken. (API 3)
 bool Function SpeakActorFrom(string asSender, Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
+
+; DEPRECATED since API 3: use SpeakFrom. Narration with no sender name, by a
+; voice number of the default model; arguments below zero take the configured
+; defaults. A voice, volume or speed of your own is what a preset is for.
+; Kept, and working as before, for scripts compiled against it.
+bool Function Speak(string asText, int aiVoice = -1, float afVolume = -1.0, float afSpeed = -1.0) global native
+
+; DEPRECATED since API 3: use SpeakFrom. The same line with no sender name.
+; Kept, and working as before, for scripts compiled against it.
+bool Function SpeakAs(string asText, string asPreset) global native
+
+; DEPRECATED since API 3: use SpeakActorFrom. The same line with no sender
+; name. Kept, and working as before, for scripts compiled against it.
+bool Function SpeakActor(Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
 
 ; Which voice akSpeaker speaks with when no preset is named, and why, as one
 ; line of text: "MaleNord: preset 'malenord' (model my-voices, voice 12)".
@@ -122,9 +125,9 @@ Function CancelPending() global native
 ; be taken, use the two below.
 bool Function IsBusy() global native
 
-; Would a narration line (Speak, SpeakAs, SpeakFrom, AudioUtilTTS_Speak) or a
-; character line (SpeakActor, SpeakActorFrom, AudioUtilTTS_Say) sent right now
-; be taken? False while the plugin is not ready, and, with the default
+; Would a narration line (SpeakFrom, AudioUtilTTS_Speak) or a character line
+; (SpeakActorFrom, AudioUtilTTS_Say) sent right now be taken? False while the
+; plugin is not ready, and, with the default
 ; [playback] max_pending = 0, while another line of that kind is being
 ; generated or spoken. A script that paces its own lines waits for this, not
 ; for IsBusy. True is no promise: another mod can take the lane a moment
