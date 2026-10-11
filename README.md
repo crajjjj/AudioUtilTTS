@@ -18,7 +18,7 @@ For players:
 - [Configuration Reference](https://crajjjj.github.io/AudioUtilTTS/players/configuration/), [Console Commands](https://crajjjj.github.io/AudioUtilTTS/players/console-commands/), [Troubleshooting & Logs](https://crajjjj.github.io/AudioUtilTTS/players/troubleshooting/)
 
 For mod authors:
-- [Overview](https://crajjjj.github.io/AudioUtilTTS/authors/overview/), [Mod Events](https://crajjjj.github.io/AudioUtilTTS/authors/modevents/), [Papyrus API](https://crajjjj.github.io/AudioUtilTTS/authors/papyrus-api/)
+- [Overview](https://crajjjj.github.io/AudioUtilTTS/authors/overview/), [Mod Events](https://crajjjj.github.io/AudioUtilTTS/authors/modevents/), [Papyrus API](https://crajjjj.github.io/AudioUtilTTS/authors/papyrus-api/), [C++ API](https://crajjjj.github.io/AudioUtilTTS/authors/cpp-api/)
 - [Training a Voice](https://crajjjj.github.io/AudioUtilTTS/authors/training-voices/), [Shipping a Voice Model](https://crajjjj.github.io/AudioUtilTTS/authors/voice-models/), [How It Works](https://crajjjj.github.io/AudioUtilTTS/authors/how-it-works/), [Tools](https://crajjjj.github.io/AudioUtilTTS/authors/tools/), [Building from Source](https://crajjjj.github.io/AudioUtilTTS/authors/building/)
 
 ## Requirements
@@ -99,6 +99,11 @@ When a line starts playing, the mod event `AudioUtilTTS_Spoken` fires with
 `strArg` = the text, `numArg` = the AudioUtil instance handle and the sender =
 the speaking actor (none for narration). The full API is documented in
 `papyrus\Source\AudioUtilTTS.psc`.
+
+An SKSE plugin can make the same calls from C++: the DLL exports
+`AudioUtilTTS_SpeakFrom`, `AudioUtilTTS_SpeakActorFrom` and the queries beside
+them, resolved at run time with `GetProcAddress`, so there is nothing to link
+against. The reference header is `include\API\AudioUtilTTSAPI.h`.
 
 ## What to expect
 

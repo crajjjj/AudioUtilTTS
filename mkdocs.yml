@@ -50,6 +50,7 @@ nav:
     - Overview: authors/overview.md
     - Mod Events: authors/modevents.md
     - Papyrus API: authors/papyrus-api.md
+    - C++ API: authors/cpp-api.md
     - Training a Voice: authors/training-voices.md
     - Shipping a Voice Model: authors/voice-models.md
     - How It Works: authors/how-it-works.md

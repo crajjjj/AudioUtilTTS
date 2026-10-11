@@ -2,12 +2,13 @@
 
 AudioUtilTTS turns a line of text into speech in the running game. This page is the map: the ways in, and what to design around.
 
-## Three ways in
+## Four ways in
 
 | You want | Use | Dependency on this mod |
 |---|---|---|
 | A line spoken, as simply as possible | A [mod event](modevents.md): `AudioUtilTTS_Speak` or `AudioUtilTTS_Say` | None. Without the plugin the event goes nowhere |
 | To know whether the line was taken, or whether one would be | The [Papyrus natives](papyrus-api.md), behind a plugin check | Soft: `AudioUtilTTS.psc` at compile time, a guard at run time |
+| The same from an SKSE plugin | The [C++ API](cpp-api.md): exports resolved at run time | None. A copied header, no link dependency |
 | Your mod's dialogue spoken | Nothing. Ship the dialogue without voice files | None. See [Unvoiced Dialogue](../players/unvoiced-dialogue.md) |
 
 ```papyrus
@@ -62,6 +63,8 @@ src/
   Greetings.*         greetings made ahead
   Lip.*               writes the mouth animation of a dialogue line
   PapyrusAPI.*        the natives of AudioUtilTTS.psc
+  AudioUtilTTSAPI.cpp the C++ exports for other SKSE plugins
+include/API/          AudioUtilTTSAPI.h, the reference header for those exports
 papyrus/Source/       AudioUtilTTS.psc (the API), AudioUtilTTSTest.psc (the console harness)
 tools/probe/          the offline probe
 tools/voicetrain/     the voice training kit
