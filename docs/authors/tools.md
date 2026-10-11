@@ -1,6 +1,12 @@
 # Tools
 
-Two tools live in the repo beside the plugin. Both work outside the game.
+Three tools live in the repo beside the plugin. All work outside the game.
+
+| Tool | Folder | For |
+|---|---|---|
+| [The probe](#the-probe) | `tools/probe` | Checking a model and hearing a voice without starting the game |
+| [The voice training kit](#the-voice-training-kit) | `tools/voicetrain` | Making a voice of your own from recordings |
+| [The voice pack gap filler](#the-voice-pack-gap-filler) | `tools/dbvo` | Generating the player lines a recorded voice pack lacks |
 
 ## The probe
 
@@ -43,6 +49,17 @@ Speaks a list with the model loaded once. The list is UTF-8, one line each: a fi
 
 !!! tip "Why check a model here first"
     The speech runtime exits on some malformed model files. In the probe that closes a console window; in the game it closes the game.
+
+## The voice training kit
+
+Scripts in [`tools/voicetrain`](https://github.com/crajjjj/AudioUtilTTS/tree/main/tools/voicetrain). They fine-tune Kokoro on recordings of one speaker and export a model folder the plugin loads, in four commands: `setup` once, then `prepare`, `train` and `export` for each voice.
+
+```powershell
+.\voice.ps1 setup
+.\voice.ps1 make -Name MyVoice -Clips D:\clips\myvoice -Out D:\voices
+```
+
+The training runs under Linux with an NVIDIA card; on Windows the kit drives WSL 2 for you. [Training a Voice](training-voices.md) is the guide.
 
 ## The voice pack gap filler
 

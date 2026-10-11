@@ -1,0 +1,4 @@
+# The voice training scripts run under Linux (WSL): a CRLF line ending breaks them.
+tools/voicetrain/*.sh text eol=lf
+tools/voicetrain/*.py text eol=lf
+tools/voicetrain/*.txt text eol=lf

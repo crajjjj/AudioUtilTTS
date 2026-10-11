@@ -146,6 +146,18 @@ target("package")
     end)
 target_end()
 
+-- Voice training kit: xmake build voicetrain
+-- Zips tools\voicetrain into Release\AudioUtilTTS-VoiceTraining-<version>.zip,
+-- a download of its own for people who make voices (see scripts\package.lua).
+target("voicetrain")
+    set_kind("phony")
+    set_default(false)
+    on_build(function (target)
+        import("scripts.package")
+        package.voicetrain()
+    end)
+target_end()
+
 -- Papyrus compile: xmake build papyrus
 -- Runs Pyro on AudioUtilTTS.ppj (see scripts\pyro.lua; overrides: PYRO_EXE,
 -- SKYRIM_GAME_PATH)

@@ -34,10 +34,10 @@ Make your mod talk, or release a voice of your own.
 - [Overview](authors/overview.md): the ways in, and what to design around
 - [Mod Events](authors/modevents.md): speak a line with no dependency on this mod
 - [Papyrus API](authors/papyrus-api.md): every function of `AudioUtilTTS.psc`
-- [Training a Voice](authors/training-voices.md): fine-tuning a voice of your own and exporting it to the format the plugin loads
+- [Training a Voice](authors/training-voices.md): making a voice of your own from recordings, with the training kit
 - [Shipping a Voice Model](authors/voice-models.md): what a model folder holds and how it names the voice types it speaks for
 - [How It Works](authors/how-it-works.md): placeholder files, the dialogue patch, and the statically linked speech runtime
-- [Tools](authors/tools.md): the offline probe and the voice pack gap filler
+- [Tools](authors/tools.md): the offline probe, the voice training kit and the voice pack gap filler
 - [Building from Source](authors/building.md): xmake, the fetched dependencies, and the repo layout
 
 ---

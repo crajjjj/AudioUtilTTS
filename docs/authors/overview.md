@@ -64,6 +64,7 @@ src/
   PapyrusAPI.*        the natives of AudioUtilTTS.psc
 papyrus/Source/       AudioUtilTTS.psc (the API), AudioUtilTTSTest.psc (the console harness)
 tools/probe/          the offline probe
+tools/voicetrain/     the voice training kit
 tools/dbvo/           the voice pack gap filler
 ```
 

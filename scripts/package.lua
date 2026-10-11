@@ -42,3 +42,22 @@ function main()
         print("package: " .. model_zip)
     end
 end
+
+-- Release\AudioUtilTTS-VoiceTraining-<version>.zip: tools\voicetrain as it is.
+-- The scripts in it run under Linux, so they keep their LF line endings
+-- (.gitattributes), and tar stores the bytes untouched.
+function voicetrain()
+    import("core.project.project")
+    local proj = os.projectdir()
+    local rel = path.join(proj, "Release")
+    local version = project.version()
+    assert(version and version ~= "", "voicetrain: no project version")
+    if not os.isdir(rel) then
+        os.mkdir(rel)
+    end
+    local zip = path.join(rel, "AudioUtilTTS-VoiceTraining-" .. version .. ".zip")
+    os.rm(zip)
+    os.execv("tar", { "-a", "-c", "-f", zip, "-C", path.join(proj, "tools"),
+        "--exclude", "__pycache__", "voicetrain" })
+    print("package: " .. zip)
+end

@@ -33,6 +33,7 @@ xmake build package        # release archives -> Release\
 | `xmake build papyrus` | The scripts, through Pyro |
 | `xmake build package` | `Release\AudioUtilTTS-<version>.zip` and one `AudioUtilTTS-Voice-<model>.zip` per model folder in `dist`. Build the plugin and the scripts first |
 | `xmake build probe` | The offline probe; see [Tools](tools.md#the-probe) |
+| `xmake build voicetrain` | `Release\AudioUtilTTS-VoiceTraining-<version>.zip`: the [voice training kit](tools.md#the-voice-training-kit) as a download of its own |
 
 `xmake f --copy_to_mod=y` with the environment variable `XSE_TES5_MODS_PATH` set also copies `dist\*` into `<mods>\AudioUtilTTS` after each build.
 
@@ -56,6 +57,7 @@ dist/                             the mod as installed; maps onto Data\
   SKSE/CustomConsole/             the autts console command map (tracked)
 scripts/                          fetch-deps.ps1, and the xmake helpers (package, pyro, slots)
 tools/probe/                      the offline probe
+tools/voicetrain/                 the voice training kit (runs under Linux: LF line endings)
 tools/dbvo/                       the voice pack gap filler
 docs/                             these pages (MkDocs Material)
 lib/commonlibsse-ng/              SKSE framework (submodule)

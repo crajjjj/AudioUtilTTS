@@ -1,0 +1,26 @@
+# The training environment, at the versions the voices so far were trained with.
+torch==2.14.1
+torchaudio==2.11.0
+accelerate==1.15.0
+transformers==5.19.0
+librosa==1.0.0
+soundfile==0.14.0
+pyyaml==6.0.3
+tensorboard==2.21.0
+munch==4.0.0
+phonemizer==3.4.0
+huggingface-hub==2.2.0
+cython==3.3.0
+einops==0.8.2
+einops-exts==0.0.4
+nltk==3.10.3
+matplotlib==3.11.2
+pydub==0.25.1
+tqdm==4.70.1
+numpy==2.5.3
+setuptools==84.0.0
+pandas==3.0.6
+scipy==1.18.1
+# the runtime inside the plugin, at the plugin's own version: used to check
+# that an exported model loads before it goes into a game
+sherpa-onnx==1.13.8
