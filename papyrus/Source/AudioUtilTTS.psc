@@ -33,7 +33,10 @@ Scriptname AudioUtilTTS Hidden
 ; and AudioUtilTTS_Speak:<preset> (the same for AudioUtilTTS_Say). They still
 ; work, but their lines carry no name in the log. A plugin older than API 3
 ; reads ":MyMod" as part of the preset name, finds no such preset and speaks
-; the line with the default voice.
+; the line with the default voice. For AudioUtilTTS_Say that is the default
+; voice in place of the speaker's own, and a voice type the user set never to
+; be spoken for is spoken for too. Check GetAPIVersion() >= 3 where that
+; matters.
 ;
 ; Game dialogue needs no call at all: a dialogue line that has no recorded
 ; voice file is generated and spoken by the plugin on its own, in the voice of

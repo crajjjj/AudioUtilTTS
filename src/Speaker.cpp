@@ -80,7 +80,10 @@ namespace Speaker
 			std::string   label;            // whose voice, for the log
 			const void*   info = nullptr;   // the topic info it belongs to: compared, never read
 			int           response = 1;     // its number inside that topic info
-			bool          prepared = false; // made ahead of a greeting (Greetings): behind every line the game asked for
+			// made ahead of a greeting (Greetings): behind every line the game asked
+			// for. The one field that changes later: cleared under g_lock, while
+			// the job still waits, when the game does ask for the line.
+			bool          prepared = false;
 			std::uint64_t order = 0;        // arrival order
 		};
 
@@ -110,6 +113,7 @@ namespace Speaker
 			std::unordered_set<int> slotsCreated;  // made this session: not indexed until a restart
 			int                     nextSlot = 0;
 			Clock::time_point       quietAt{};  // when the line now playing on this lane ends
+			Clock::time_point       startedAt{};  // when it was handed to AudioUtil
 			std::uint64_t           inWork = 0;  // epoch of the line the worker holds for this lane, 0 = none
 		};
 
@@ -201,16 +205,22 @@ namespace Speaker
 		// its line is built only after the report.
 		struct HeardInfo
 		{
-			RE::FormID        info = 0;
+			std::uint64_t     key = 0;  // see LateKey, 0 = empty
 			RE::ActorHandle   speaker;
 			Clock::time_point at{};
 		};
 		// Later than this after the NPC said it, a greeting is not spoken any more.
 		constexpr auto LATE_GREETING_MAX = std::chrono::seconds(10);
 		constexpr auto HEARD_FRESH = std::chrono::seconds(3);
-		std::unordered_map<RE::FormID, LateGreeting> g_lateGreetings;  // by topic info; g_lock
-		std::array<HeardInfo, 16>                    g_heard{};        // g_lock
-		std::size_t                                  g_heardNext = 0;  // g_lock
+		// What a late greeting is known by: its topic info and the voice type it is
+		// said in. The same greeting said by NPCs of two voice types is two lines.
+		constexpr std::uint64_t LateKey(RE::FormID a_info, RE::FormID a_voiceType)
+		{
+			return (static_cast<std::uint64_t>(a_info) << 32) | a_voiceType;
+		}
+		std::unordered_map<std::uint64_t, LateGreeting> g_lateGreetings;  // by LateKey; g_lock
+		std::array<HeardInfo, 16>                       g_heard{};        // g_lock
+		std::size_t                                     g_heardNext = 0;  // g_lock
 
 		std::array<std::atomic<int>, kLaneCount> g_usableSlots{};
 
@@ -245,16 +255,29 @@ namespace Speaker
 		constexpr std::int32_t                            STARTING = -1;
 		std::array<std::atomic<std::int32_t>, kLaneCount> g_laneHandle{};
 
+		// A line this young is not believed to be cut: its sound may not have
+		// started yet (see LaneUseLocked).
+		constexpr auto CUT_GRACE = std::chrono::seconds(1);
+
 		// Did the line behind this lane handle stop before its time? The clock
 		// (LaneState::quietAt) knows how long a line is; only AudioUtil knows that
 		// someone cut it (StopHandle, StopChannel, StopGroup, by any mod). false
-		// when that cannot be told: the line has not started yet, or AudioUtil is
-		// older than 0.9.28. Goes into AudioUtil: not under g_lock, and from the
-		// threads lines arrive on, never the worker.
+		// when that cannot be told: the line has not started yet, AudioUtil is
+		// older than 0.9.28, or the game is paused (a paused sound is not playing
+		// either, and it will go on). Goes into AudioUtil: not under g_lock, and
+		// from the threads lines arrive on, never the worker.
 		bool WasCutShort(std::int32_t a_handle)
 		{
 			const auto isPlaying = g_isHandlePlaying.load();
-			return a_handle > 0 && isPlaying && !isPlaying(a_handle);
+			if (a_handle <= 0 || !isPlaying) {
+				return false;
+			}
+			auto* ui = RE::UI::GetSingleton();
+			auto* main = RE::Main::GetSingleton();
+			if ((ui && ui->GameIsPaused()) || (main && main->GetRuntimeData().freezeTime)) {
+				return false;
+			}
+			return !isPlaying(a_handle);
 		}
 
 		PlayFileFn ResolvePlayFile()
@@ -996,6 +1019,31 @@ namespace Speaker
 
 		// ------------------------------------------------------------------- worker
 
+		bool DialogueMenuOpen();  // further down
+
+		// Why a greeting should not be spoken late any more, nullptr = it still
+		// should. Asked when it is queued and again when it is about to play: the
+		// line may have waited in between. Game thread.
+		const char* LateGreetingStale(Clock::time_point a_asked, const RE::Actor* a_speaker)
+		{
+			if (Clock::now() - a_asked > LATE_GREETING_MAX) {
+				return "it took too long";
+			}
+			if (!a_speaker || !a_speaker->Is3DLoaded() || a_speaker->IsDead()) {
+				return "the speaker is gone";
+			}
+			if (DialogueMenuOpen()) {
+				return "a conversation has started";
+			}
+			return nullptr;
+		}
+
+		void LogLateGreetingSkipped(Clock::time_point a_asked, std::string_view a_why)
+		{
+			logger::info("Greeting not spoken late, {:.1f} s after it was said: {}. It is in the cache for the next time.",
+				std::chrono::duration<float>(Clock::now() - a_asked).count(), a_why);
+		}
+
 		// a_quietAt = what the lane's quietAt was set to for this line
 		void PostPlay(std::string a_slotRel, Line a_line, float a_seconds, long long a_synthMs,
 			Clock::time_point a_quietAt)
@@ -1035,6 +1083,14 @@ namespace Speaker
 						return;
 					}
 				}
+				const bool lateGreeting = line.asked != Clock::time_point{};
+				if (lateGreeting) {
+					if (const char* why = LateGreetingStale(line.asked, speaker.get())) {
+						LogLateGreetingSkipped(line.asked, why);
+						notSpoken();
+						return;
+					}
+				}
 
 				auto call = play;
 				bool lipSync = false;
@@ -1061,10 +1117,11 @@ namespace Speaker
 					std::scoped_lock lock{ g_lock };
 					if (g_lanes[line.lane].quietAt == a_quietAt) {
 						g_laneHandle[line.lane].store(handle);
+						g_lanes[line.lane].startedAt = Clock::now();
 					}
 				}
 				std::string late;
-				if (line.asked != Clock::time_point{}) {
+				if (lateGreeting) {
 					g_dialogueLate.fetch_add(1);
 					late = std::format(", a greeting {:.1f} s after it was said",
 						std::chrono::duration<float>(Clock::now() - line.asked).count());
@@ -1074,7 +1131,9 @@ namespace Speaker
 					line.text.size(), a_seconds, a_synthMs, LANE_NAME[line.lane], From(line.sender),
 					speech ? std::format(" by {:08X}{}", speaker->GetFormID(), lipSync ? " with lipsync" : "") : ""s, late,
 					line.model.empty() ? "default"s : line.model, line.voice, slotRel, handle);
-				if (auto* source = SKSE::GetModCallbackEventSource()) {
+				// A greeting spoken late is the game's line, not a mod's: no mod is
+				// told it started, as none is for any other dialogue line.
+				if (auto* source = lateGreeting ? nullptr : SKSE::GetModCallbackEventSource()) {
 					SKSE::ModCallbackEvent event{ RE::BSFixedString(SPOKEN_EVENT), RE::BSFixedString(line.text),
 						static_cast<float>(handle), speaker.get() };
 					source->SendEvent(&event);
@@ -1082,54 +1141,70 @@ namespace Speaker
 			});
 		}
 
-		void SpeakLateGreeting(RE::FormID a_info);  // further down, once Queue is known
+		void SpeakLateGreeting(std::uint64_t a_key);  // further down, once Queue is known
 
 		// Lines are queued on the game thread: that goes into AudioUtil (WasCutShort).
-		void PostLateGreeting(RE::FormID a_info)
+		void PostLateGreeting(std::uint64_t a_key)
 		{
 			if (auto* task = SKSE::GetTaskInterface()) {
-				task->AddTask([a_info] { SpeakLateGreeting(a_info); });
+				task->AddTask([a_key] { SpeakLateGreeting(a_key); });
 			}
+		}
+
+		// Drops the late greetings nobody came for in time. true = one of them was
+		// generated and never given a speaker. g_lock held.
+		bool PruneLateGreetingsLocked()
+		{
+			bool       unnamed = false;
+			const auto now = Clock::now();
+			for (auto it = g_lateGreetings.begin(); it != g_lateGreetings.end();) {
+				if (now - it->second.asked > LATE_GREETING_MAX) {
+					unnamed = unnamed || (it->second.ready && !it->second.named);
+					it = g_lateGreetings.erase(it);
+				} else {
+					++it;
+				}
+			}
+			return unnamed;
+		}
+
+		void LogUnnamedGreeting()
+		{
+			LogOnce("Greetings: the game did not report who spoke a greeting, so it was not spoken late (it is in the "
+					"cache for the next time)");
 		}
 
 		// The worker has a dialogue line in the cache: a greeting that waited for
 		// it can be spoken, if the game has said by now who speaks it.
 		void LateGreetingReady(const std::string& a_cacheKey)
 		{
-			std::vector<RE::FormID> speak;
+			std::vector<std::uint64_t> speak;
+			bool                       unnamed = false;
 			{
 				std::scoped_lock lock{ g_lock };
-				for (auto& [info, late] : g_lateGreetings) {
+				unnamed = PruneLateGreetingsLocked();
+				for (auto& [key, late] : g_lateGreetings) {
 					if (late.cacheKey == a_cacheKey) {
 						late.ready = true;
 						if (late.named) {
-							speak.push_back(info);
+							speak.push_back(key);
 						}
 					}
 				}
 			}
-			for (const auto info : speak) {
-				PostLateGreeting(info);
+			if (unnamed) {
+				LogUnnamedGreeting();
+			}
+			for (const auto key : speak) {
+				PostLateGreeting(key);
 			}
 		}
 
-		// The game reports a topic info as being said by a_speaker.
-		void NoteSpeaker(RE::FormID a_info, RE::ActorHandle a_speaker)
+		// The line of a late greeting will not come: it could not be generated.
+		void DropLateGreetings(const std::string& a_cacheKey)
 		{
-			bool speak = false;
-			{
-				std::scoped_lock lock{ g_lock };
-				if (const auto it = g_lateGreetings.find(a_info); it != g_lateGreetings.end()) {
-					it->second.speaker = a_speaker;
-					it->second.named = true;
-					speak = it->second.ready;
-				} else {
-					g_heard[g_heardNext++ % g_heard.size()] = HeardInfo{ a_info, a_speaker, Clock::now() };
-				}
-			}
-			if (speak) {
-				PostLateGreeting(a_info);
-			}
+			std::scoped_lock lock{ g_lock };
+			std::erase_if(g_lateGreetings, [&](const auto& a_entry) { return a_entry.second.cacheKey == a_cacheKey; });
 		}
 
 		// A dialogue line: generated, kept in the cache, and written into its slot
@@ -1149,9 +1224,15 @@ namespace Speaker
 					ForgetDialogueSlotLocked(job->slot, job->slotStamp);
 				}
 			};
+			// the line will not come: a greeting that waits to be spoken late must not
+			// wait on, to be woken by a later line of the same name
+			const auto fail = [&] {
+				settle(false);
+				DropLateGreetings(job->cacheKey);
+			};
 			const auto current = [&] { return a_line.epoch == g_dialogueEpoch.load(); };
 			if (!current()) {
-				return settle(false);
+				return fail();
 			}
 			const auto settings = Config::Get();
 			const auto modelKey = ModelKeyOf(a_line, *settings);
@@ -1170,10 +1251,10 @@ namespace Speaker
 						std::scoped_lock lock{ g_lock };
 						g_unusableModels.insert(modelKey);
 					}
-					return settle(false);
+					return fail();
 				}
 				if (!current()) {
-					return settle(false);
+					return fail();
 				}
 				MarkBusy(a_line.estimateMs);
 				std::string error;
@@ -1188,7 +1269,7 @@ namespace Speaker
 						std::scoped_lock lock{ g_lock };
 						g_failedLines.insert(job->cacheKey);
 					}
-					return settle(false);
+					return fail();
 				}
 				synthMs = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
 				NoteSpeed(modelKey, synthMs, a_line.text.size());
@@ -1393,9 +1474,17 @@ namespace Speaker
 					// early, and so does a dialogue line, which must not sit behind
 					// this pause: it is generated now, then the pause goes on
 					const auto until = g_lanes[lane].quietAt;
-					g_wake.wait_until(lock, until, [&] { return !current() || !g_dialogueWaiting.empty(); });
+					g_wake.wait_until(lock, until, [&] {
+						return !current() || !g_dialogueWaiting.empty() || g_lanes[lane].quietAt != until;
+					});
 					// the pause is over once its time is up, whatever dialogue still waits
-					if (!current() || g_dialogueWaiting.empty() || Clock::now() >= until) {
+					if (!current() || Clock::now() >= until) {
+						break;
+					}
+					if (g_lanes[lane].quietAt != until) {
+						continue;  // the line that played was cut short (LaneUseLocked): look again
+					}
+					if (g_dialogueWaiting.empty()) {
 						break;
 					}
 					Line next = TakeDialogueLocked();
@@ -1478,30 +1567,50 @@ namespace Speaker
 			return {};
 		}
 
-		// Why a_lane would not take a line right now, "" = it would. Only in
-		// one-at-a-time mode ([playback] max_pending = 0): a line being generated
-		// holds its lane, and so does one being spoken unless it may be cut into.
-		// A line that only waits for the worker holds nothing, a newer one takes
-		// its place (see Queue). g_lock held; a_started and a_cutShort were read
-		// before it was taken (see WasCutShort).
-		std::string LaneBusyLocked(Lane a_lane, const Config::Settings& a_settings, std::int32_t a_started,
-			bool a_cutShort)
+		// What a lane is doing, the most binding first.
+		enum class LaneUse
 		{
-			if (a_settings.maxPending != 0) {
-				return {};
-			}
-			const auto& state = g_lanes[a_lane];
-			if (state.inWork == g_epoch.load()) {
-				return "another one is being generated";
-			}
-			// by the clock a line still plays, and nobody cut that same line
+			kFree,
+			kWaiting,  // a line of it waits for the worker
+			kSpoken,   // a line of it is playing, a_left seconds to go
+			kInWork    // the worker holds a line of it
+		};
+
+		// g_lock held. a_started and a_cutShort were read before it was taken (see
+		// WasCutShort). A line that was cut short is written off here: nothing
+		// plays, and the worker must not wait for its end either.
+		LaneUse LaneUseLocked(Lane a_lane, std::int32_t a_started, bool a_cutShort, float* a_left = nullptr)
+		{
+			auto&      state = g_lanes[a_lane];
 			const auto now = Clock::now();
-			if (!a_settings.interrupt && state.quietAt > now &&
-				!(a_cutShort && g_laneHandle[a_lane].load() == a_started)) {
-				return std::format("another one is being spoken, {:.1f} s to go",
-					std::chrono::duration<float>(state.quietAt - now).count());
+			if (state.quietAt > now && a_cutShort && g_laneHandle[a_lane].load() == a_started &&
+				now - state.startedAt > CUT_GRACE) {
+				state.quietAt = {};
+				g_laneHandle[a_lane].store(0);
+				g_wake.notify_all();
 			}
-			return {};
+			if (state.inWork == g_epoch.load()) {
+				return LaneUse::kInWork;
+			}
+			if (state.quietAt > now) {
+				if (a_left) {
+					*a_left = std::chrono::duration<float>(state.quietAt - now).count();
+				}
+				return LaneUse::kSpoken;
+			}
+			const bool waits = std::any_of(g_waiting.begin(), g_waiting.end(),
+				[&](const Line& a_line) { return a_line.lane == a_lane; });
+			return waits ? LaneUse::kWaiting : LaneUse::kFree;
+		}
+
+		// Does a_use keep a new line out? Only in one-at-a-time mode ([playback]
+		// max_pending = 0): a line being generated holds its lane, and so does one
+		// being spoken unless it may be cut into. A line that only waits for the
+		// worker holds nothing, a newer one takes its place (see Queue).
+		bool Holds(LaneUse a_use, const Config::Settings& a_settings)
+		{
+			return a_settings.maxPending == 0 &&
+				   (a_use == LaneUse::kInWork || (a_use == LaneUse::kSpoken && !a_settings.interrupt));
 		}
 
 		// Would a line sent to a_lane right now be taken?
@@ -1514,7 +1623,7 @@ namespace Speaker
 			const auto started = g_laneHandle[a_lane].load();
 			const bool cutShort = WasCutShort(started);
 			std::scoped_lock lock{ g_lock };
-			return LaneBusyLocked(a_lane, *settings, started, cutShort).empty();
+			return !Holds(LaneUseLocked(a_lane, started, cutShort), *settings);
 		}
 
 		// Takes a line whose voice fields may still be "not set" and fills them in.
@@ -1539,7 +1648,9 @@ namespace Speaker
 			const Lane        lane = a_line.lane;
 			const std::size_t chars = a_line.text.size();
 			const auto        from = From(a_line.sender);
-			std::string       busy;  // why the lane does not take this line
+			LaneUse           use = LaneUse::kFree;
+			float             left = 0.0f;
+			bool              held = false;  // the lane does not take this line
 			std::vector<std::pair<std::size_t, std::string>> pushedOut;  // the waiting lines it replaced: size, sender
 			// asked before g_lock is taken, see WasCutShort
 			const auto started = g_laneHandle[lane].load();
@@ -1547,8 +1658,9 @@ namespace Speaker
 			{
 				std::scoped_lock lock{ g_lock };
 				a_line.epoch = g_epoch.load();
-				busy = LaneBusyLocked(lane, *settings, started, cutShort);
-				if (busy.empty()) {
+				use = LaneUseLocked(lane, started, cutShort, &left);
+				held = Holds(use, *settings);
+				if (!held) {
 					// Newest wins among the lines of a lane that wait: speech must not
 					// fall far behind the scene. One-at-a-time mode lets one wait too,
 					// for a worker that is busy with another lane or with dialogue.
@@ -1570,8 +1682,10 @@ namespace Speaker
 					g_waiting.push_back(std::move(a_line));
 				}
 			}
-			if (!busy.empty()) {
-				logger::info("A {}-char {} line{} was dropped: {}", chars, LANE_NAME[lane], from, busy);
+			if (held) {
+				logger::info("A {}-char {} line{} was dropped: {}", chars, LANE_NAME[lane], from,
+					use == LaneUse::kInWork ? "another one is being generated"s :
+											  std::format("another one is being spoken, {:.1f} s to go", left));
 				return false;
 			}
 			for (const auto& [size, sender] : pushedOut) {
@@ -1584,33 +1698,33 @@ namespace Speaker
 
 		// Game thread. Speaks a greeting whose audio and speaker are both known by
 		// now, as a character line: the cached audio, at the speaker, mouth moving.
-		void SpeakLateGreeting(RE::FormID a_info)
+		void SpeakLateGreeting(std::uint64_t a_key)
 		{
 			LateGreeting late;
 			{
 				std::scoped_lock lock{ g_lock };
-				const auto       it = g_lateGreetings.find(a_info);
+				const auto       it = g_lateGreetings.find(a_key);
 				if (it == g_lateGreetings.end() || !it->second.ready || !it->second.named) {
 					return;
 				}
 				late = std::move(it->second);
 				g_lateGreetings.erase(it);
 			}
-			const auto  waited = Clock::now() - late.asked;
-			const auto  speaker = late.speaker.get();
-			const char* why = nullptr;
-			if (waited > LATE_GREETING_MAX) {
-				why = "it took too long";
-			} else if (!speaker || !speaker->Is3DLoaded()) {
-				why = "the speaker is gone";
-			} else if (DialogueMenuOpen()) {
-				why = "a conversation has started";
+			const auto speaker = late.speaker.get();
+			if (const char* why = LateGreetingStale(late.asked, speaker.get())) {
+				return LogLateGreetingSkipped(late.asked, why);
 			}
-			if (why) {
-				logger::info("Greeting not spoken late, {:.1f} s after it was said: {}. It is in the cache for the next "
-							 "time.",
-					std::chrono::duration<float>(waited).count(), why);
-				return;
+			// A greeting gives way to every line a mod sent: it takes the character
+			// lane only when nothing of that lane waits, is being generated or plays.
+			bool laneTaken = false;
+			{
+				const auto started = g_laneHandle[kSpeech].load();
+				const bool cutShort = WasCutShort(started);
+				std::scoped_lock lock{ g_lock };
+				laneTaken = LaneUseLocked(kSpeech, started, cutShort) != LaneUse::kFree;
+			}
+			if (laneTaken) {
+				return LogLateGreetingSkipped(late.asked, "another character line is waiting, being generated or spoken");
 			}
 			Line line;
 			line.model = std::move(late.model);
@@ -1621,75 +1735,58 @@ namespace Speaker
 			line.lipSync = Config::Get()->speechLipSync;
 			line.cached = std::move(late.cacheFile);
 			line.asked = late.asked;
-			Queue(late.text, std::move(line));  // says so itself when the lane is busy
+			Queue(late.text, std::move(line));
 		}
 
 		// The game built a greeting that has no voice yet (VoiceDialogue): it is
-		// spoken once its audio and its speaker are known. Entries nobody came for
-		// are dropped here.
-		void RememberLateGreeting(RE::FormID a_info, LateGreeting a_late)
+		// spoken once its audio and its speaker are known.
+		void RememberLateGreeting(std::uint64_t a_key, LateGreeting a_late)
 		{
-			bool speak = false;
-			bool unnamed = false;
+			const auto cacheFile = a_late.cacheFile;
+			const auto cacheKey = a_late.cacheKey;
+			bool       unnamed = false;
 			{
 				std::scoped_lock lock{ g_lock };
-				const auto       now = Clock::now();
-				for (auto it = g_lateGreetings.begin(); it != g_lateGreetings.end();) {
-					if (now - it->second.asked > LATE_GREETING_MAX) {
-						unnamed = unnamed || (it->second.ready && !it->second.named);
-						it = g_lateGreetings.erase(it);
-					} else {
-						++it;
+				unnamed = PruneLateGreetingsLocked();
+				// The game may have named the speaker just before it built the line:
+				// the newest such report, used once.
+				const auto now = Clock::now();
+				HeardInfo* newest = nullptr;
+				for (auto& heard : g_heard) {
+					if (heard.key == a_key && now - heard.at < HEARD_FRESH && (!newest || heard.at > newest->at)) {
+						newest = &heard;
 					}
 				}
-				// the game may have named the speaker just before it built the line
-				for (const auto& heard : g_heard) {
-					if (heard.info == a_info && now - heard.at < HEARD_FRESH) {
-						a_late.speaker = heard.speaker;
+				if (newest) {
+					a_late.speaker = newest->speaker;
+					a_late.named = true;
+					newest->key = 0;
+				}
+				// the same line built again before it was spoken: what is known stays
+				if (const auto it = g_lateGreetings.find(a_key); it != g_lateGreetings.end()) {
+					if (it->second.named && !a_late.named) {
+						a_late.speaker = it->second.speaker;
 						a_late.named = true;
 					}
+					a_late.ready = a_late.ready || it->second.ready;
 				}
-				// asked for twice, and generated in between
-				std::error_code ec;
-				a_late.ready = fs::exists(a_late.cacheFile, ec);
-				speak = a_late.ready && a_late.named;
-				g_lateGreetings[a_info] = std::move(a_late);
+				g_lateGreetings[a_key] = std::move(a_late);
 			}
 			if (unnamed) {
-				LogOnce("Greetings: the game did not report who spoke a greeting, so it was not spoken late (it is in "
-						"the cache for the next time)");
+				LogUnnamedGreeting();
 			}
-			if (speak) {
-				PostLateGreeting(a_info);
+			// Asked for a second time and generated in between: the worker's report
+			// may have come before the entry existed. Looked up outside the lock.
+			if (std::error_code ec; fs::exists(cacheFile, ec)) {
+				LateGreetingReady(cacheKey);
 			}
 		}
 
-		void ForgetLateGreeting(RE::FormID a_info)
+		void ForgetLateGreeting(std::uint64_t a_key)
 		{
 			std::scoped_lock lock{ g_lock };
-			g_lateGreetings.erase(a_info);
+			g_lateGreetings.erase(a_key);
 		}
-
-		// The game's own report of a topic info being said, which is what names the
-		// speaker of a greeting (see LateGreeting).
-		class TopicInfoSink final : public RE::BSTEventSink<RE::TESTopicInfoEvent>
-		{
-		public:
-			RE::BSEventNotifyControl ProcessEvent(const RE::TESTopicInfoEvent* a_event,
-				RE::BSTEventSource<RE::TESTopicInfoEvent>*) override
-			{
-				using Type = RE::TESTopicInfoEvent::TopicInfoEventType;
-				if (a_event && a_event->type.get() == Type::kTopicBegin && a_event->speakerRef &&
-					g_dialogueHooked.load() && Config::Get()->dialogueGreetings) {
-					if (auto* actor = a_event->speakerRef->As<RE::Actor>()) {
-						NoteSpeaker(a_event->topicInfoFormID, actor->GetHandle());
-					}
-				}
-				return RE::BSEventNotifyControl::kContinue;
-			}
-		};
-
-		TopicInfoSink g_topicInfoSink;
 
 		// The voice fields of a preset, ready to drop into a Line. nullopt = no such preset.
 		std::optional<Line> FromPreset(const Config::Settings& a_settings, const std::string& a_key)
@@ -1777,7 +1874,10 @@ namespace Speaker
 					return choice;
 				}
 				if (mapped) {
-					WarnUnknownPreset(presetKey);
+					// the line is as good as absent: the lookup goes on below
+					LogOnce(std::format("[voicetype] {} names the preset '{}', which AudioUtilTTS.toml does not define: "
+										"that line is ignored",
+						name, presetKey));
 				}
 				// a model.toml whose model files are gone speaks for nothing
 				if (const auto it = a_settings.modelVoiceTypes.find(id);
@@ -1825,6 +1925,56 @@ namespace Speaker
 			const auto* race = a_actor->GetRace();
 			return race ? race->defaultVoiceTypes[a_female ? RE::SEXES::kFemale : RE::SEXES::kMale] : nullptr;
 		}
+
+		// The game reports a topic info as being said by a_actor: that is what
+		// names the speaker of a greeting spoken late (see LateGreeting).
+		void NoteSpeaker(RE::FormID a_info, RE::Actor* a_actor)
+		{
+			bool        female = false;
+			const auto* voiceType = VoiceTypeOf(a_actor, female);
+			if (!voiceType) {
+				return;
+			}
+			const auto key = LateKey(a_info, voiceType->GetFormID());
+			bool       speak = false;
+			bool       unnamed = false;
+			{
+				std::scoped_lock lock{ g_lock };
+				unnamed = PruneLateGreetingsLocked();
+				if (const auto it = g_lateGreetings.find(key); it != g_lateGreetings.end()) {
+					it->second.speaker = a_actor->GetHandle();
+					it->second.named = true;
+					speak = it->second.ready;
+				} else {
+					g_heard[g_heardNext++ % g_heard.size()] = HeardInfo{ key, a_actor->GetHandle(), Clock::now() };
+				}
+			}
+			if (unnamed) {
+				LogUnnamedGreeting();
+			}
+			if (speak) {
+				PostLateGreeting(key);
+			}
+		}
+
+		class TopicInfoSink final : public RE::BSTEventSink<RE::TESTopicInfoEvent>
+		{
+		public:
+			RE::BSEventNotifyControl ProcessEvent(const RE::TESTopicInfoEvent* a_event,
+				RE::BSTEventSource<RE::TESTopicInfoEvent>*) override
+			{
+				using Type = RE::TESTopicInfoEvent::TopicInfoEventType;
+				if (a_event && a_event->type.get() == Type::kTopicBegin && a_event->speakerRef &&
+					g_dialogueHooked.load() && Config::Get()->dialogueGreetings) {
+					if (auto* actor = a_event->speakerRef->As<RE::Actor>()) {
+						NoteSpeaker(a_event->topicInfoFormID, actor);
+					}
+				}
+				return RE::BSEventNotifyControl::kContinue;
+			}
+		};
+
+		TopicInfoSink g_topicInfoSink;
 
 		// "Name" -> ""  and  "Name:preset" -> "preset"; nullopt when a_event is another event
 		std::optional<std::string_view> PresetOf(std::string_view a_event, std::string_view a_name)
@@ -2292,6 +2442,7 @@ namespace Speaker
 		// A greeting said right away that cannot be in place in time is still
 		// heard this time, late, as a character line (see LateGreeting).
 		const bool lateGreeting = a_greeting != 0 && !listed && !later && settings->dialogueGreetings;
+		const auto lateKey = LateKey(a_greeting, a_voiceType->GetFormID());
 		if (lateGreeting) {
 			LateGreeting late;
 			late.cacheKey = cacheKey;
@@ -2301,7 +2452,7 @@ namespace Speaker
 			late.voice = line.voice;
 			late.volume = line.volume;
 			late.asked = Clock::now();
-			RememberLateGreeting(a_greeting, std::move(late));
+			RememberLateGreeting(lateKey, std::move(late));
 		}
 
 		auto job = std::make_shared<DialogueJob>();
@@ -2327,6 +2478,13 @@ namespace Speaker
 			std::scoped_lock lock{ g_lock };
 			if (slot < 0 && g_generating.contains(cacheKey)) {
 				onItsWay = true;  // for the cache only, and already being generated for it
+				// Made ahead as a guess, and now the game does ask for it: no longer
+				// behind every other line. Touched only while it still waits here.
+				for (auto& waiting : g_dialogueWaiting) {
+					if (waiting.job->prepared && waiting.job->cacheKey == cacheKey) {
+						waiting.job->prepared = false;
+					}
+				}
 			} else {
 				job->order = ++g_dialogueOrder;
 				line.epoch = g_dialogueEpoch.load();
@@ -2345,13 +2503,16 @@ namespace Speaker
 					queued = worst->job != job;
 					ForgetDialogueSlotLocked(worst->job->slot, worst->job->slotStamp);
 					g_generating.erase(worst->job->cacheKey);
+					// a greeting that waited for that line to be spoken late does not any more
+					std::erase_if(g_lateGreetings,
+						[&](const auto& a_entry) { return a_entry.second.cacheKey == worst->job->cacheKey; });
 					g_dialogueWaiting.erase(worst);
 				}
 			}
 		}
 		if (!queued && !onItsWay) {
 			if (lateGreeting) {
-				ForgetLateGreeting(a_greeting);
+				ForgetLateGreeting(lateKey);
 			}
 			return leave(label, "too many dialogue lines are waiting");
 		}

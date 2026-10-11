@@ -1,6 +1,7 @@
 #include "Config.h"
 
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <toml++/toml.hpp>
 
@@ -27,19 +28,26 @@ namespace Config
 					continue;
 				}
 				try {
-					auto folder = Normalize(entry.path().filename().string());
+					// UTF-8, which is how the rest of the plugin reads a model's name
+					const auto utf8 = entry.path().filename().u8string();
+					auto       folder = Normalize(std::string(utf8.begin(), utf8.end()));
 					if (IsFolderName(folder)) {
 						files.emplace(std::move(folder), file);
 					}
 				} catch (const std::exception&) {
-					// a name this code page cannot hold: that model cannot be loaded either
+					// a name that is not valid text: that model cannot be loaded either
 				}
 			}
 
 			for (const auto& [folder, file] : files) {
 				toml::table root;
 				try {
-					root = toml::parse_file(file.string());
+					// opened by its path object, so any folder name works
+					std::ifstream in(file, std::ios::binary);
+					if (!in) {
+						throw std::runtime_error("the file could not be opened");
+					}
+					root = toml::parse(in);
 				} catch (const toml::parse_error& e) {
 					logger::error("Failed to parse {} of model '{}': {} (line {}), file ignored", MODEL_FILE, folder,
 						e.description(), e.source().begin.line);
