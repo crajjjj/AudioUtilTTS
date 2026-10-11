@@ -9,6 +9,9 @@ compile_commands.json
 *.obj
 *.exp
 
+# Docs site built by mkdocs (the pages themselves are docs/ + mkdocs.yml)
+/site/
+
 # Third-party build inputs (about 1 GB), fetched by scripts\fetch-deps.ps1
 extern/
 

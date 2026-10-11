@@ -7,6 +7,20 @@ per voice type. The voice model runs inside the plugin, on the CPU, with no
 internet connection and no helper program. Speech is generated on background
 threads, not on the game's own, and no effect on frame rate was seen in game.
 
+## Documentation
+
+Full documentation lives on the docs site: **https://crajjjj.github.io/AudioUtilTTS/**
+
+For players:
+- [Getting Started](https://crajjjj.github.io/AudioUtilTTS/players/getting-started/) and [What to Expect](https://crajjjj.github.io/AudioUtilTTS/players/what-to-expect/)
+- [Unvoiced Dialogue](https://crajjjj.github.io/AudioUtilTTS/players/unvoiced-dialogue/)
+- [Voices, Presets & Voice Types](https://crajjjj.github.io/AudioUtilTTS/players/voices/) and [Voice Models](https://crajjjj.github.io/AudioUtilTTS/players/models/)
+- [Configuration Reference](https://crajjjj.github.io/AudioUtilTTS/players/configuration/), [Console Commands](https://crajjjj.github.io/AudioUtilTTS/players/console-commands/), [Troubleshooting & Logs](https://crajjjj.github.io/AudioUtilTTS/players/troubleshooting/)
+
+For mod authors:
+- [Overview](https://crajjjj.github.io/AudioUtilTTS/authors/overview/), [Mod Events](https://crajjjj.github.io/AudioUtilTTS/authors/modevents/), [Papyrus API](https://crajjjj.github.io/AudioUtilTTS/authors/papyrus-api/)
+- [Shipping a Voice Model](https://crajjjj.github.io/AudioUtilTTS/authors/voice-models/), [How It Works](https://crajjjj.github.io/AudioUtilTTS/authors/how-it-works/), [Tools](https://crajjjj.github.io/AudioUtilTTS/authors/tools/), [Building from Source](https://crajjjj.github.io/AudioUtilTTS/authors/building/)
+
 ## Requirements
 
 - Skyrim SE / AE with SKSE64 and Address Library
@@ -92,8 +106,7 @@ the speaking actor (none for narration). The full API is documented in
   the text and starts the finished audio, so rendering is not held up while a
   line is made. In game no drop in frame rate was seen (i7-12700KF, default
   model, two threads; `[model] threads` sets how many cores a line may use).
-  The one time the game itself waits is a dialogue line said right away, for
-  up to a quarter of a second, once per line (see
+  The game is never made to wait for a line (see
   [Unvoiced dialogue](#unvoiced-dialogue)).
 - **Speech starts late.** A line is generated when it is asked for. With the
   default model a sentence takes about two seconds on two threads of an

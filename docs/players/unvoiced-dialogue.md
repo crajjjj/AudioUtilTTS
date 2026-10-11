@@ -1,0 +1,76 @@
+# Unvoiced Dialogue
+
+Plenty of mod dialogue ships without voice files. With `[dialogue] enable = true` (the default) the plugin speaks those lines: when the game builds a dialogue line and no voice file exists for it, the line is generated in the voice of the speaker's voice type and handed to the game as that line's voice file.
+
+Added in 0.2.0. Nothing has to be called or patched by the dialogue mod.
+
+## Which lines are spoken
+
+Out of the box the plugin speaks for the voice types you have set a voice up for; see [Voice Types](voices.md#voice-types). Every other voice type stays as it was. `[dialogue] fallback = true` extends it to all of them with a generic voice, picked by sex.
+
+!!! info "Changed in 0.2.1"
+    `fallback` is off by default. In 0.2.0 it was on, so every unvoiced line was spoken with the preset `female` or `male`.
+
+- **Only lines with no recorded voice.** The plugin asks the game whether a voice file exists (loose or in an archive, `.fuz`, `.wav` or `.xwm`). If one does, nothing happens.
+- **Placeholder lines are left alone.** A line with nothing to say, such as `...`, `(...)`, `[...]` or a lone dash, stays silent: it holds no letter and no digit once markup and directions are gone. `autts dialogue` counts them.
+- **Text is cleaned up first.** Markup in angle brackets is dropped, stage directions such as `(sighs)` too (`[dialogue] skip_directions`), and text in the Windows-1252 encoding that English game data uses is converted, so curly apostrophes and accented letters are read correctly.
+
+## How a spoken line behaves
+
+- **The game plays the line itself**, like a recorded one. It lasts as long as the speech, the subtitle follows the usual setting, the voice volume slider applies, the sound comes from the speaker, and the conversation moves on when the line ends.
+- **The mouth moves.** A mouth animation is written beside the audio in the game's own `.lip` format. Its shapes are guessed from the loudness of the line, so it reads as talking without forming the actual sounds. `[dialogue] lip_strength` sets how far the mouth opens.
+- **Each line is generated once.** Generated lines are kept in `Data\SKSE\Plugins\AudioUtilTTS\cache` (256 MB by default) and come from there at once every later time.
+
+## When a line is ready
+
+A new line has to be generated first, and the game is never made to wait for that. What happens depends on how the line comes up:
+
+| The line is... | First time | Every later time |
+|---|---|---|
+| **Listed in the dialogue menu** | Voiced if it can be generated within about 2.5 seconds, the time it takes to pick a topic. Otherwise unvoiced this once | Voiced, from the cache |
+| **Said right away** (a scene, a greeting, a remark in passing) | Unvoiced this once, and generated for next time | Voiced, from the cache |
+| **A later line of the same topic** | Generated while the earlier lines play | Voiced, from the cache |
+
+- **Lines in the dialogue menu are prepared while you read it.** The game builds the lines of every topic the menu shows when it fills the menu. The plugin puts the unvoiced ones in place in the background, the first line of each topic first.
+- **Preparing a menu costs CPU.** Every unvoiced line the menu lists is generated once, whether it is picked or not. With a fast model that is a few seconds of work per menu; with the default model it is about two seconds per line on `[model] threads` cores.
+
+## Greetings made ahead
+
+Added in 0.2.1. A greeting is the plainest case of a line said right away: with a slow model it is silent the first time and spoken from the second. `[dialogue] prepare_greetings = true` (off by default) closes that gap.
+
+While you walk around, the plugin looks at the NPCs within about 20 m, one every two seconds, works out which greetings each would say right now, and generates the unvoiced ones in the background, behind every line the game actually asked for. When the NPC then greets you, the line is in the cache and is spoken at once.
+
+- **It is a guess.** The greetings are picked the way the game picks them (the greeting topics of running quests by priority, the first topic info whose conditions hold), but conditions can change before the NPC speaks.
+- **It costs CPU for NPCs that never greet you.** Up to three lines per NPC, each NPC looked at once every five minutes, each line made once.
+- **Only where it can matter.** NPCs whose voice type has no voice are skipped, and nothing happens while the game is paused, in a menu or in combat.
+
+The setting can be switched with `autts reload`, no restart needed.
+
+## Beside other dialogue mods
+
+Works beside **Fuz Ro D'oh** and **Dynamic Dialogue Replacer**. Fuz Ro D'oh keeps covering the lines this plugin leaves alone.
+
+One gap: a line the plugin expected to have ready, picked before it is, plays as silence that once, and Fuz Ro D'oh does not step in for it.
+
+## Checking on it
+
+```
+autts dialogue
+```
+
+shows whether it is running, how many lines were given a voice, left unvoiced and generated this session (and how many of those were greetings made ahead), and the size of the cache. `AudioUtilTTS.log` says what was done about a line that stays unvoiced and why; see [Troubleshooting & Logs](troubleshooting.md#a-dialogue-line-stays-unvoiced).
+
+| Command | Does |
+|---|---|
+| `autts dialogue` | Show the status |
+| `autts dialogue 0` | Switch unvoiced-dialogue speech off for this session (`1` = on) |
+| `autts clearcache` | Delete the cached lines, so each is generated afresh |
+
+!!! note "Switching it off for good"
+    `[dialogue] enable = false` leaves the game unpatched. A change of that key needs a game restart; `autts dialogue 0` only switches it off for the session.
+
+## The cache
+
+- Lives in `Data\SKSE\Plugins\AudioUtilTTS\cache`, limited by `[dialogue] cache_max_mb` (256 by default, `0` = no limit). The lines used longest ago are dropped first.
+- A line is cached per model file. After replacing a model's files, run `autts reload`: the lines of the old model are not played again, and nothing has to be cleared by hand.
+- The folder can be deleted freely. Every line is simply generated again the next time it comes up.
