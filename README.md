@@ -208,8 +208,10 @@ A voice type finds its voice in this order:
 
 1. its line in `[voicetype]`, naming a preset
 2. a preset named exactly like the voice type
-3. a model folder named exactly like the voice type (its first voice)
-4. the preset `female` or `male` by sex, only with `[dialogue] fallback = true`
+3. a model that lists the voice type in its own `model.toml` (see
+   [A model's own voice types](#a-models-own-voice-types))
+4. a model folder named exactly like the voice type (its first voice)
+5. the preset `female` or `male` by sex, only with `[dialogue] fallback = true`
 
 ```toml
 [voicetype]
@@ -245,6 +247,41 @@ file, so the lines of the old model are not played again.
 
 The same lookup gives a character their voice for `SpeakActor` and
 `AudioUtilTTS_Say` when no preset is named.
+
+### A model's own voice types
+
+A model can say which voice types it speaks for, in a file inside its own
+folder. Installing the model is then all it takes, and removing the model
+removes its voice types with it: nothing has to be written into
+`AudioUtilTTS.toml`. This is what lets a voice be released as a mod of its own.
+
+`Data\SKSE\Plugins\AudioUtilTTS\models\<folder>\model.toml`:
+
+```toml
+# voice type editor ID = voice number inside this model
+[voicetype]
+MaleNord = 0
+MaleNordCommander = 0
+MaleGuard = 0
+
+# optional, for every voice type listed above
+[voice]
+speed = 1.0
+volume = 1.0
+```
+
+- A model with one voice uses `0` everywhere. A model holding many voices
+  gives each voice type its number.
+- A folder named exactly like a voice type already speaks for that one with no
+  file; the file is for every further voice type.
+- `[voicetype]` and the presets in `AudioUtilTTS.toml` are asked first, so the
+  user can overrule a model, or silence a voice type with `Name = ""`.
+- When two installed models list the same voice type, the one later in folder
+  name order is used, and `AudioUtilTTS.log` names both.
+- The file is read at game start and on `autts reload`. `autts voice` shows the
+  result for the selected NPC ("listed by model ...").
+- `xmake build package` puts the file into the model's archive with the rest of
+  the folder.
 
 ## Cost
 
@@ -354,6 +391,9 @@ Models go into `Data\SKSE\Plugins\AudioUtilTTS\models\<folder>`. Kokoro
 the [sherpa-onnx model list](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models)
 are supported. `kokoro-en-v0_19` and `vits-piper-en_US-lessac-medium` have been
 checked outside the game, loaded together.
+
+A model folder may carry a `model.toml` naming the voice types it speaks for
+(see [A model's own voice types](#a-models-own-voice-types)).
 
 A model that the runtime cannot read can close the game while loading, because
 the runtime exits on some malformed files. Check a new model outside the game

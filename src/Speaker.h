@@ -54,8 +54,9 @@ namespace Speaker
 
 	// a_actor says the line: positioned at them, mouth moving when a_lipSync and
 	// [speech] lipsync allow. An empty preset picks the voice of the actor's
-	// voice type ([voicetype], a preset or a model folder named like it), else
-	// "female" / "male" by their sex when the config defines those.
+	// voice type ([voicetype], a preset named like it, a model that lists it in
+	// its model.toml or a model folder named like it), else "female" / "male" by
+	// their sex when the config defines those.
 	bool SpeakActor(RE::Actor* a_actor, std::string_view a_text, std::string_view a_preset, bool a_lipSync);
 
 	// Dialogue. Called by DialogueHook, on the thread building the response,

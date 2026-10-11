@@ -1,5 +1,7 @@
 #include "Config.h"
 
+#include <filesystem>
+#include <map>
 #include <toml++/toml.hpp>
 
 namespace Config
@@ -10,6 +12,84 @@ namespace Config
 
 		std::shared_ptr<const Settings> g_settings = std::make_shared<Settings>();
 		std::mutex                      g_lock;
+
+		// Reads every models\<folder>\model.toml (see ModelVoice), in folder name
+		// order: a voice type two models list goes to the later one.
+		void LoadModelFiles(Settings& a_settings)
+		{
+			namespace fs = std::filesystem;
+			std::map<std::string, fs::path> files;  // by Normalize(folder name)
+			std::error_code                 ec;
+			for (const auto& entry : fs::directory_iterator(fs::path(MODELS_DIR), ec)) {
+				std::error_code ignored;
+				const auto      file = entry.path() / fs::path(MODEL_FILE);
+				if (!fs::is_regular_file(file, ignored)) {
+					continue;
+				}
+				try {
+					auto folder = Normalize(entry.path().filename().string());
+					if (IsFolderName(folder)) {
+						files.emplace(std::move(folder), file);
+					}
+				} catch (const std::exception&) {
+					// a name this code page cannot hold: that model cannot be loaded either
+				}
+			}
+
+			for (const auto& [folder, file] : files) {
+				toml::table root;
+				try {
+					root = toml::parse_file(file.string());
+				} catch (const toml::parse_error& e) {
+					logger::error("Failed to parse {} of model '{}': {} (line {}), file ignored", MODEL_FILE, folder,
+						e.description(), e.source().begin.line);
+					continue;
+				} catch (const std::exception& e) {
+					logger::error("Failed to read {} of model '{}': {}, file ignored", MODEL_FILE, folder, e.what());
+					continue;
+				}
+
+				ModelVoice base;
+				base.model = folder;
+				if (const auto* voice = root["voice"].as_table()) {
+					base.speed = (*voice)["speed"].value_or(base.speed);
+					base.volume = (*voice)["volume"].value_or(base.volume);
+					if (base.speed > 0.0f) {
+						base.speed = std::clamp(base.speed, 0.5f, 2.0f);
+					}
+					if (base.volume > 1.0f) {
+						base.volume = 1.0f;
+					}
+				}
+
+				std::size_t listed = 0;
+				if (const auto* voiceTypes = root["voicetype"].as_table()) {
+					for (auto&& [name, node] : *voiceTypes) {
+						const auto         key = Normalize(name.str());
+						std::optional<int> number;
+						if (node.is_integer()) {
+							number = node.value<int>();
+						}
+						if (key.empty() || !number || *number < 0) {
+							logger::warn("{} of model '{}': {} must be a voice number (0 or more), ignored", MODEL_FILE,
+								folder, name.str());
+							continue;
+						}
+						if (const auto it = a_settings.modelVoiceTypes.find(key);
+							it != a_settings.modelVoiceTypes.end() && it->second.model != folder) {
+							logger::warn("Voice type {} is listed by model '{}' and by model '{}': '{}' is used. A "
+										 "[voicetype] line in AudioUtilTTS.toml settles it.",
+								name.str(), it->second.model, folder, folder);
+						}
+						auto voice = base;
+						voice.voice = *number;
+						a_settings.modelVoiceTypes[key] = std::move(voice);
+						++listed;
+					}
+				}
+				logger::info("Model '{}' lists {} voice types in its {}", folder, listed, MODEL_FILE);
+			}
+		}
 	}
 
 	bool IsFolderName(const std::string& a_name)
@@ -154,6 +234,8 @@ namespace Config
 			}
 		}
 
+		LoadModelFiles(*settings);
+
 		logger::info("Config: model '{}' ({}), voice {}, speed {:.2f}, volume {:.2f}, threads {}, max_loaded {}, "
 					 "group '{}', channel '{}', interrupt {}, max_pending {}, slots {}, output_rate {}, {} presets, "
 					 "speech group '{}', channel '{}', slots {}, lipsync {}{}",
@@ -163,10 +245,10 @@ namespace Config
 			settings->speechGroup, settings->speechChannel, settings->speechSlots, settings->speechLipSync,
 			settings->enable ? "" : " [disabled]");
 		logger::info("Config: dialogue {}, slots {}, lipsync {} (strength {:.2f}), fallback {}, "
-					 "prepare_greetings {}, skip_directions {}, cache {} MB, {} voice types mapped",
+					 "prepare_greetings {}, skip_directions {}, cache {} MB, {} voice types mapped, {} listed by models",
 			settings->dialogue, settings->dialogueSlots, settings->dialogueLip, settings->dialogueLipStrength,
 			settings->dialogueFallback, settings->dialoguePrepare, settings->dialogueSkipDirections,
-			settings->dialogueCacheMb, settings->voiceTypes.size());
+			settings->dialogueCacheMb, settings->voiceTypes.size(), settings->modelVoiceTypes.size());
 
 		std::scoped_lock lock{ g_lock };
 		g_settings = std::move(settings);

@@ -163,12 +163,25 @@ cache_max_mb = 256
 # A voice type finds its voice in this order:
 #   1. its line below:  <voice type ID> = "<preset name>"
 #   2. a preset named exactly like the voice type, e.g. [preset.MaleNord]
-#   3. a model folder named exactly like the voice type, models\MaleNord
+#   3. a model that lists the voice type in its own model.toml (see below)
+#   4. a model folder named exactly like the voice type, models\MaleNord
 #      (its first voice), with no line here at all
-#   4. the preset "female" or "male" by sex, only when [dialogue] fallback is on
+#   5. the preset "female" or "male" by sex, only when [dialogue] fallback is on
 # The ID is the voice type's editor ID as xEdit shows it; case is ignored.
 # "autts voice" in the console shows which voice the selected actor gets.
 # An empty preset name means that voice type is never spoken for.
+#
+# A model can bring its own list, so that installing the model is all it takes:
+# a file models\<folder>\model.toml inside the model's folder,
+#   [voicetype]
+#   MaleNord = 0             # voice type ID = voice number inside that model
+#   MaleNordCommander = 0
+#   [voice]                  # optional, for every voice type the file lists
+#   speed = 1.0
+#   volume = 1.0
+# Lines 1 and 2 here win over it, so a model's choice can always be overruled
+# or silenced from this file. When two models list the same voice type, the
+# one later in folder name order is used and the log says so.
 [voicetype]
 # MaleNord = "malenord"
 # FemaleEvenToned = "eventoned"

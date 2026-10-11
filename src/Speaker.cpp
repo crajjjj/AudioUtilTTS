@@ -25,7 +25,7 @@ namespace Speaker
 		namespace fs = std::filesystem;
 		using Clock = std::chrono::steady_clock;
 
-		constexpr auto MODELS_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\models\\"sv;
+		constexpr auto MODELS_DIR = Config::MODELS_DIR;
 		constexpr auto CACHE_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\cache"sv;
 		constexpr auto SPOKEN_EVENT = "AudioUtilTTS_Spoken"sv;  // sent when a line starts playing
 		constexpr auto SPEAK_EVENT = "AudioUtilTTS_Speak"sv;    // received: narrate strArg
@@ -1429,8 +1429,9 @@ namespace Speaker
 		// The voice of a voice type, looked for in this order:
 		//   1. its line in [voicetype], naming a preset ("" = never spoken for)
 		//   2. a preset named like the voice type
-		//   3. a model folder named like the voice type (its first voice)
-		//   4. when a_fallback: the preset "female" / "male" by sex, else the
+		//   3. a model that lists the voice type in its own model.toml
+		//   4. a model folder named like the voice type (its first voice)
+		//   5. when a_fallback: the preset "female" / "male" by sex, else the
 		//      default voice
 		struct VoiceChoice
 		{
@@ -1438,8 +1439,8 @@ namespace Speaker
 			{
 				kNone,    // nothing matched and no fallback was allowed
 				kSilent,  // the config says this voice type is never spoken for
-				kOwn,     // steps 1 to 3: a voice meant for this voice type
-				kBySex    // step 4
+				kOwn,     // steps 1 to 4: a voice meant for this voice type
+				kBySex    // step 5
 			};
 			Line        line;
 			Source      source = kNone;
@@ -1477,6 +1478,18 @@ namespace Speaker
 				}
 				if (mapped) {
 					WarnUnknownPreset(presetKey);
+				}
+				// a model.toml whose model files are gone speaks for nothing
+				if (const auto it = a_settings.modelVoiceTypes.find(id);
+					it != a_settings.modelVoiceTypes.end() && ModelStampFor(it->second.model) != 0) {
+					const auto& listed = it->second;
+					choice.line.model = listed.model == Config::Normalize(a_settings.model) ? std::string{} : listed.model;
+					choice.line.voice = listed.voice;
+					choice.line.speed = listed.speed;
+					choice.line.volume = listed.volume;
+					choice.source = VoiceChoice::kOwn;
+					choice.label += std::format(": listed by model '{}'", listed.model);
+					return choice;
 				}
 				if (ModelStampFor(id) != 0) {
 					choice.line.model = id == Config::Normalize(a_settings.model) ? std::string{} : id;
@@ -2140,11 +2153,13 @@ namespace Speaker
 		}
 		return std::format("dialogue {} | this session: {} responses given a voice, {} left unvoiced, {} with "
 						   "nothing to say, {} lines generated ({} of them greetings made ahead, which is {}) | "
-						   "slots {} of {} | lipsync {} | {} voice types mapped | cache {} lines, {:.1f} MB",
+						   "slots {} of {} | lipsync {} | {} voice types mapped, {} listed by models | cache {} lines, "
+						   "{:.1f} MB",
 			state, g_dialogueGiven.load(), g_dialogueUnvoiced.load(), g_dialogueNothing.load(),
 			g_dialogueGenerated.load(), g_dialoguePrepared.load(), settings->dialoguePrepare ? "on" : "off",
 			g_usableSlots[kDialogue].load(), settings->dialogueSlots, settings->dialogueLip ? "on" : "off",
-			settings->voiceTypes.size(), lines, static_cast<double>(bytes) / (1024.0 * 1024.0));
+			settings->voiceTypes.size(), settings->modelVoiceTypes.size(), lines,
+			static_cast<double>(bytes) / (1024.0 * 1024.0));
 	}
 
 	int ClearDialogueCache()

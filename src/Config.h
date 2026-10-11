@@ -4,12 +4,33 @@
 // ReloadConfig. Every key is optional; the defaults below are the shipped file.
 namespace Config
 {
+	// Where the model folders are, relative to the game folder.
+	inline constexpr std::string_view MODELS_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\models\\";
+	// What a model says about itself, inside its own folder (see ModelVoice).
+	inline constexpr std::string_view MODEL_FILE = "model.toml";
+
 	// A named voice a caller asks for by name: [preset.<name>]. Anything left out
 	// is inherited from the defaults.
 	struct Preset
 	{
 		std::string model;           // "" = the [model] dir
 		int         voice = -1;      // < 0 = not set
+		float       speed = 0.0f;    // <= 0 = not set
+		float       volume = -1.0f;  // < 0 = not set
+	};
+
+	// The voice a model offers for one voice type, from models\<folder>\model.toml:
+	//   [voicetype]
+	//   MaleNord = 0      # voice type editor ID = voice number inside this model
+	//   [voice]           # optional, for every voice type the file lists
+	//   speed = 1.0
+	//   volume = 1.0
+	// The file travels with the model, so a model can be installed, updated and
+	// removed on its own, with no line in AudioUtilTTS.toml.
+	struct ModelVoice
+	{
+		std::string model;           // Normalize(folder name)
+		int         voice = 0;
 		float       speed = 0.0f;    // <= 0 = not set
 		float       volume = -1.0f;  // < 0 = not set
 	};
@@ -63,6 +84,11 @@ namespace Config
 		// [voicetype]: Normalize(voice type editor ID) -> Normalize(preset name).
 		// An empty preset name means that voice type is never spoken for.
 		std::unordered_map<std::string, std::string> voiceTypes;
+
+		// The model.toml files: Normalize(voice type editor ID) -> the voice a
+		// model offers for it. Asked after the two maps above, so the main config
+		// always has the last word.
+		std::unordered_map<std::string, ModelVoice> modelVoiceTypes;
 	};
 
 	// false = the file did not parse and the previous settings were kept
