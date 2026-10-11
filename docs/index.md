@@ -20,7 +20,7 @@ Install it, hear it, set it up. Start here if you just want to use the mod.
 
 - [Getting Started](players/getting-started.md): requirements, the two archives, and a first check in the console
 - [What to Expect](players/what-to-expect.md): how soon a line is spoken, what happens to lines that arrive too fast, and what it costs in memory and CPU
-- [Unvoiced Dialogue](players/unvoiced-dialogue.md): how dialogue without voice files gets a voice, the cache, and greetings made ahead
+- [Unvoiced Dialogue](players/unvoiced-dialogue.md): how dialogue without voice files gets a voice, what happens to greetings, and the cache
 - [Voices, Presets & Voice Types](players/voices.md): the voices of the default model, naming your own, and giving each voice type its voice
 - [Voice Models](players/models.md): adding models, models that bring their own voice types, and how many fit in memory
 - [Configuration Reference](players/configuration.md): every key of `AudioUtilTTS.toml` in one place
@@ -34,6 +34,7 @@ Make your mod talk, or release a voice of your own.
 - [Overview](authors/overview.md): the ways in, and what to design around
 - [Mod Events](authors/modevents.md): speak a line with no dependency on this mod
 - [Papyrus API](authors/papyrus-api.md): every function of `AudioUtilTTS.psc`
+- [Training a Voice](authors/training-voices.md): fine-tuning a voice of your own and exporting it to the format the plugin loads
 - [Shipping a Voice Model](authors/voice-models.md): what a model folder holds and how it names the voice types it speaks for
 - [How It Works](authors/how-it-works.md): placeholder files, the dialogue patch, and the statically linked speech runtime
 - [Tools](authors/tools.md): the offline probe and the voice pack gap filler

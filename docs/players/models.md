@@ -17,6 +17,8 @@ Two families are supported:
 
 `kokoro-en-v0_19` and `vits-piper-en_US-lessac-medium` have been checked outside the game, loaded together. Larger multi-language Kokoro builds are on the same model list but have not been tried with this plugin.
 
+A voice does not have to come from that list. For making one of your own, see [Training a Voice](../authors/training-voices.md).
+
 A model does nothing until something names it:
 
 - make it the default with `[model] dir = "<folder>"`,

@@ -19,7 +19,7 @@ For players:
 
 For mod authors:
 - [Overview](https://crajjjj.github.io/AudioUtilTTS/authors/overview/), [Mod Events](https://crajjjj.github.io/AudioUtilTTS/authors/modevents/), [Papyrus API](https://crajjjj.github.io/AudioUtilTTS/authors/papyrus-api/)
-- [Shipping a Voice Model](https://crajjjj.github.io/AudioUtilTTS/authors/voice-models/), [How It Works](https://crajjjj.github.io/AudioUtilTTS/authors/how-it-works/), [Tools](https://crajjjj.github.io/AudioUtilTTS/authors/tools/), [Building from Source](https://crajjjj.github.io/AudioUtilTTS/authors/building/)
+- [Training a Voice](https://crajjjj.github.io/AudioUtilTTS/authors/training-voices/), [Shipping a Voice Model](https://crajjjj.github.io/AudioUtilTTS/authors/voice-models/), [How It Works](https://crajjjj.github.io/AudioUtilTTS/authors/how-it-works/), [Tools](https://crajjjj.github.io/AudioUtilTTS/authors/tools/), [Building from Source](https://crajjjj.github.io/AudioUtilTTS/authors/building/)
 
 ## Requirements
 

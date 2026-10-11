@@ -44,7 +44,9 @@ The two run on separate lanes with their own channel and files, so a character a
 - **The mouth is shared.** Character speech moves the mouth through AudioUtil's lipsync, and AudioUtil's guards apply: a gag, a worn tongue item, a dialogue with the player or another mod's claim on the mouth all keep it still. If your mod owns the actor's face, pass `abLipSync = false` to `SpeakActorFrom`.
 - **The speaker has to be there.** A character line is dropped if the speaker is gone or unloaded by the time it is ready.
 
-## Releasing a voice
+## Making and releasing a voice
+
+A voice of your own is a model folder like any other. [Training a Voice](training-voices.md) describes a route that has worked: fine-tuning Kokoro on one speaker and exporting the result to the format the plugin loads.
 
 A voice model can be released as a mod of its own: a model folder with a `model.toml` naming the voice types it speaks for. Installing it is all a user has to do. See [Shipping a Voice Model](voice-models.md).
 

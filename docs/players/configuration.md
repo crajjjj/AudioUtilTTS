@@ -95,7 +95,7 @@ The value is a preset name in quotes. Case is ignored on both sides.
 
 ## [playback]
 
-Narration: lines with no speaker. `max_pending` and `max_chars` also apply to character speech.
+Narration: lines with no speaker. Some keys here reach further: `interrupt` and `max_pending` also govern character speech, and `max_chars` and `output_rate` apply to every line the plugin generates, dialogue included.
 
 | Key | Default | Meaning |
 |---|---|---|

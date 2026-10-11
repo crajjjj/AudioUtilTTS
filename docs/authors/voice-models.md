@@ -17,7 +17,7 @@ Data\SKSE\Plugins\AudioUtilTTS\models\<folder>\
 - **The folder name is the model's name.** It is what a preset's `model = "..."` refers to. Keep it one plain folder name; case is ignored.
 - **A folder named exactly like a voice type speaks for that voice type** with no further file: `models\MaleNord` speaks for `MaleNord` with its first voice.
 
-Kokoro (`kokoro-en-v0_19`, the default) and VITS models such as the Piper voices from the [sherpa-onnx model list](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models) are supported.
+Kokoro (`kokoro-en-v0_19`, the default) and VITS models such as the Piper voices from the [sherpa-onnx model list](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models) are supported. To make a model of your own, see [Training a Voice](training-voices.md).
 
 ## model.toml
 

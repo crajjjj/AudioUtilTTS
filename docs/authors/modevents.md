@@ -47,6 +47,10 @@ akSpeaker.SendModEvent("AudioUtilTTS_Say:whisper:MyMod", "Not so loud.")
 
 With no preset named, the speaker gets the voice set up for their voice type, else the preset `female` or `male` by their sex when the config defines those. See [Voice Types](../players/voices.md#voice-types).
 
+### Names without a sender
+
+`AudioUtilTTS_Speak` and `AudioUtilTTS_Speak:<preset>`, and the same two forms of `AudioUtilTTS_Say`, are the event names of 0.2.0. They still work, but are deprecated since 0.2.1: their lines carry no name in the log.
+
 ### Older plugin versions
 
 The sender name arrived with 0.2.1. An older plugin reads `:MyMod` as part of the preset name, finds no such preset and speaks the line with the default voice. The line is still spoken; only a preset named in the same event is lost.
@@ -103,7 +107,7 @@ The example calls an AudioUtil function, so it needs AudioUtil's scripts to comp
 
 ## Trying the events in game
 
-The console harness sends the same events, so you can check the path without writing a script. See [Console Commands](../players/console-commands.md#the-way-other-mods-do-it).
+The console harness sends the events too, in the form without a sender name, so you can check the path without writing a script. See [Console Commands](../players/console-commands.md#the-way-other-mods-do-it).
 
 ```
 autts event "Some text"

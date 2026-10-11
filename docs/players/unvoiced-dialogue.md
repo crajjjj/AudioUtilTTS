@@ -14,6 +14,7 @@ Out of the box the plugin speaks for the voice types you have set a voice up for
 - **Only lines with no recorded voice.** The plugin asks the game whether a voice file exists (loose or in an archive, `.fuz`, `.wav` or `.xwm`). If one does, nothing happens.
 - **Placeholder lines are left alone.** A line with nothing to say, such as `...`, `(...)`, `[...]` or a lone dash, stays silent: it holds no letter and no digit once markup and directions are gone. `autts dialogue` counts them.
 - **Text is cleaned up first.** Markup in angle brackets is dropped, stage directions such as `(sighs)` too (`[dialogue] skip_directions`), and text in the Windows-1252 encoding that English game data uses is converted, so curly apostrophes and accented letters are read correctly.
+- **Very long lines are cut.** Speech stops at the last sentence that fits into `[playback] max_chars` (400 characters by default), while the subtitle shows the whole line. Raise the setting if a mod writes longer responses.
 
 ## How a spoken line behaves
 
@@ -69,7 +70,7 @@ One gap: a line the plugin expected to have ready, picked before it is, plays as
 autts dialogue
 ```
 
-shows whether it is running, how many lines were given a voice, left unvoiced and generated this session (and how many of those were greetings made ahead), and the size of the cache. `AudioUtilTTS.log` says what was done about a line that stays unvoiced and why; see [Troubleshooting & Logs](troubleshooting.md#a-dialogue-line-stays-unvoiced).
+shows whether it is running, how many lines this session were given a voice, left unvoiced, had nothing to say or were generated, how many greetings were spoken late or made ahead, and the size of the cache. `AudioUtilTTS.log` says what was done about a line that stays unvoiced and why; see [Troubleshooting & Logs](troubleshooting.md#a-dialogue-line-stays-unvoiced).
 
 | Command | Does |
 |---|---|
