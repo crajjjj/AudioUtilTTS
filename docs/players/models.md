@@ -62,13 +62,13 @@ A model takes memory only while it is loaded. An installed model that no line ha
 
 - The **default model** is loaded at game start and never unloaded.
 - **Any other model** is loaded the first time a line asks for it. Loading takes about a second, so that one line is later by that much.
-- `[model] max_loaded` caps how many are kept, the default one included (3 by default, 1 to 32). Past the limit the least recently used one is unloaded, never the default.
+- `[model] max_loaded` caps how many are kept, the default one included (4 by default, 1 to 32). Past the limit the least recently used one is unloaded, never the default.
 
 Measured per loaded model: a Kokoro model 450 to 500 MB after its first lines and about 625 MB once settled; a Piper voice about 350 MB.
 
 | `max_loaded` | Kokoro models, settled |
 |---|---|
-| 3 (default) | about 1.9 GB |
+| 4 (default) | about 2.5 GB |
 | 6 | about 3.8 GB |
 | 10 | about 6.3 GB |
 

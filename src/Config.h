@@ -46,7 +46,7 @@ namespace Config
 		int         threads = 2;
 		std::string lexicon;
 		std::string lang;
-		int         maxLoaded = 3;
+		int         maxLoaded = 4;
 
 		// [voice]
 		int   voice = 7;
@@ -77,7 +77,7 @@ namespace Config
 		bool  dialoguePrepare = false;  // prepare_greetings
 		bool  dialogueGreetings = true;  // greetings: a new greeting is spoken late, once it is ready
 		bool  dialogueSkipDirections = true;
-		int   dialogueCacheMb = 256;
+		int   dialogueCacheMb = 1024;
 
 		// [preset.<name>], keyed by Normalize(name)
 		std::unordered_map<std::string, Preset> presets;

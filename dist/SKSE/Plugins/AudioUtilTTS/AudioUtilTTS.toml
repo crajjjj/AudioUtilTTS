@@ -32,10 +32,10 @@ lang = ""
 # default one, or a fine-tuned voice of the same size) 450 to 500 MB after its
 # first lines and about 625 MB once settled; a Piper voice about 350 MB. With
 # Kokoro models this setting therefore allows up to about 0.6 GB times its
-# value: 3 = 1.9 GB, 6 = 3.8 GB, 10 = 6.3 GB.
+# value: 4 = 2.5 GB, 6 = 3.8 GB, 10 = 6.3 GB.
 # With one model per voice type, raise this to the number of voices a busy
 # scene mixes, or loading and unloading will delay lines.
-max_loaded = 3
+max_loaded = 4
 
 [voice]
 # The default voice: what a line gets when it names no preset.
@@ -167,7 +167,7 @@ slots = 128
 # cache), in MB. The lines used longest ago are dropped first. 0 = no limit.
 # A line is cached per model file, so a retrained model starts afresh by itself
 # after "autts reload".
-cache_max_mb = 256
+cache_max_mb = 1024
 
 # Voice types: which voice speaks for which of the game's voice types. This is
 # what makes an NPC's generated lines sound like that NPC. Used for unvoiced

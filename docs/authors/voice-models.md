@@ -90,5 +90,5 @@ It writes one `Release\AudioUtilTTS-Voice-<folder>.zip` per model folder, `model
 ## What to tell your users
 
 - **It needs AudioUtilTTS 0.2.1 or newer** for `model.toml`. With an older plugin only a folder named like a voice type is picked up.
-- **Memory.** Each loaded model costs memory, and `[model] max_loaded` (3 by default) caps how many are kept. A pack of many single-voice models should say so; see [How many fit in memory](../players/models.md#how-many-fit-in-memory). One model holding many voices costs the memory once.
+- **Memory.** Each loaded model costs memory, and `[model] max_loaded` (4 by default) caps how many are kept. A pack of many single-voice models should say so; see [How many fit in memory](../players/models.md#how-many-fit-in-memory). One model holding many voices costs the memory once.
 - **The license.** Voice models carry their own license. Put it in the model folder.

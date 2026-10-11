@@ -27,7 +27,7 @@ The default model. See [Voice Models](models.md).
 | `threads` | `2` | CPU threads used while a line is being generated, 1 to 16. More threads = the line is ready sooner, but the game loses those cores for that moment |
 | `lexicon` | `""` | Only for models that need it (multi-language Kokoro builds). File names inside the model folder, comma separated |
 | `lang` | `""` | Only for models that need it |
-| `max_loaded` | `3` | How many models may be in memory at once, the default one included, 1 to 32. See [How many fit in memory](models.md#how-many-fit-in-memory) |
+| `max_loaded` | `4` | How many models may be in memory at once, the default one included, 1 to 32. See [How many fit in memory](models.md#how-many-fit-in-memory) |
 
 ## [voice]
 
@@ -77,7 +77,7 @@ Game dialogue that has no recorded voice. See [Unvoiced Dialogue](unvoiced-dialo
 | `lip_strength` | `0.8` | How far the mouth opens, 0.0 to 1.5 |
 | `skip_directions` | `true` | Leave out stage directions: text in `(parentheses)`, `[brackets]` or `*asterisks*` |
 | `slots` | `128` | Placeholder voice files (`Data\Sound\Voice\AudioUtilTTS`), 64 to 256. A line that finds none free stays unvoiced. A slot added by raising this starts working after the next restart |
-| `cache_max_mb` | `256` | Size limit of the cache of generated lines, in MB. The lines used longest ago are dropped first. `0` = no limit |
+| `cache_max_mb` | `1024` | Size limit of the cache of generated lines, in MB. The lines used longest ago are dropped first. `0` = no limit |
 
 `wait_ms`, a key of 0.2.0, is gone in 0.2.1: the game is no longer made to wait for a line.
 

@@ -20,7 +20,7 @@ Out of the box the plugin speaks for the voice types you have set a voice up for
 
 - **The game plays the line itself**, like a recorded one. It lasts as long as the speech, the subtitle follows the usual setting, the voice volume slider applies, the sound comes from the speaker, and the conversation moves on when the line ends.
 - **The mouth moves.** A mouth animation is written beside the audio in the game's own `.lip` format. Its shapes are guessed from the loudness of the line, so it reads as talking without forming the actual sounds. `[dialogue] lip_strength` sets how far the mouth opens.
-- **Each line is generated once.** Generated lines are kept in `Data\SKSE\Plugins\AudioUtilTTS\cache` (256 MB by default) and come from there at once every later time.
+- **Each line is generated once.** Generated lines are kept in `Data\SKSE\Plugins\AudioUtilTTS\cache` (1024 MB by default) and come from there at once every later time.
 
 ## When a line is ready
 
@@ -83,6 +83,6 @@ shows whether it is running, how many lines this session were given a voice, lef
 
 ## The cache
 
-- Lives in `Data\SKSE\Plugins\AudioUtilTTS\cache`, limited by `[dialogue] cache_max_mb` (256 by default, `0` = no limit). The lines used longest ago are dropped first.
+- Lives in `Data\SKSE\Plugins\AudioUtilTTS\cache`, limited by `[dialogue] cache_max_mb` (1024 by default, `0` = no limit). The lines used longest ago are dropped first.
 - A line is cached per model file. After replacing a model's files, run `autts reload`: the lines of the old model are not played again, and nothing has to be cleared by hand.
 - The folder can be deleted freely. Every line is simply generated again the next time it comes up.

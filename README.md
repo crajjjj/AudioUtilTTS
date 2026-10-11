@@ -170,7 +170,7 @@ extends it to every other voice type with a generic voice.
   game's own `.lip` format. Its shapes are guessed from the loudness of the
   line, so it reads as talking without forming the actual sounds.
 - **Each line is generated once.** Generated lines are kept in
-  `Data\SKSE\Plugins\AudioUtilTTS\cache` (256 MB by default) and come from
+  `Data\SKSE\Plugins\AudioUtilTTS\cache` (1024 MB by default) and come from
   there at once every later time.
 - **Lines in the dialogue menu are prepared while you read it.** The game builds
   the lines of every topic the menu shows when it fills the menu. The plugin
@@ -422,7 +422,7 @@ Anything a preset leaves out comes from the defaults. The shipped config defines
 
 A preset may name a different model. That model is loaded the first time a line
 asks for it, which delays that one line by about a second, and then stays in
-memory (see [Cost](#cost)). `[model] max_loaded` (default 3, up to 32) caps how
+memory (see [Cost](#cost)). `[model] max_loaded` (default 4, up to 32) caps how
 many are kept; the least recently used one is unloaded first, never the default.
 
 ### Models
