@@ -82,6 +82,22 @@ namespace Speaker
 	std::string VoiceDialogue(std::string_view a_text, const RE::BGSVoiceType* a_voiceType, int a_response,
 		const void* a_info);
 
+	// Greetings made ahead (Greetings.cpp, [dialogue] prepare_greetings).
+	//
+	// The voice type a_actor's unvoiced lines are spoken for, or nullptr when
+	// those lines would stay unvoiced (no voice set up for it, dialogue off).
+	const RE::BGSVoiceType* DialogueVoiceType(RE::Actor* a_actor);
+	// Generates a line for the cache only, behind every line the game asked for,
+	// so that it is there when the game does say it. Never hands out a
+	// placeholder and never makes anything wait. false = nothing queued: no
+	// voice for that voice type, already cached or on its way, or the queue is
+	// full.
+	bool PrepareDialogue(std::string_view a_text, const RE::BGSVoiceType* a_voiceType, int a_response,
+		const void* a_info);
+	// Is there room for a_lines more of those? The queue holds only a few: ask
+	// before working out what to prepare.
+	bool CanPrepareDialogue(int a_lines);
+
 	void SetDialogueHooked(bool a_hooked);    // DialogueHook reports whether its patch is in place
 	void SetDialogueEnabled(bool a_enabled);  // session switch on top of [dialogue] enable
 	bool IsDialogueEnabled();                 // hooked, switched on and enabled in the config

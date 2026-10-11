@@ -15,6 +15,11 @@ namespace DialogueHook
 		// response that skips the first site can never pick up another one's text.
 		thread_local std::string t_subtitle;
 
+		// See Preparing: set while this thread builds responses only to learn them.
+		thread_local bool t_preparing = false;
+		thread_local int  t_seen = 0;
+		thread_local int  t_queued = 0;
+
 		// "Data\Sound\Voice\Plugin.esp\VoiceType\Topic_0001ABCD_1.wav": is there a
 		// voice file for it, in any of the three forms the game accepts? Asked
 		// through the game's own resource lookup, so archives count.
@@ -102,6 +107,14 @@ namespace DialogueHook
 				if (text.empty() || HasVoiceFile(a_path)) {
 					return built;
 				}
+				if (t_preparing) {
+					// not about to be said: generated for the cache, the path stays
+					++t_seen;
+					if (Speaker::PrepareDialogue(text, a_voiceType, a_response->responseNumber, a_info)) {
+						++t_queued;
+					}
+					return built;
+				}
 				const auto voiced = Speaker::VoiceDialogue(text, a_voiceType, a_response->responseNumber, a_info);
 				if (!voiced.empty() && voiced.size() < PATH_BUFFER) {
 					std::memcpy(a_path, voiced.c_str(), voiced.size() + 1);
@@ -110,6 +123,28 @@ namespace DialogueHook
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
+	}
+
+	Preparing::Preparing()
+	{
+		t_preparing = true;
+		t_seen = 0;
+		t_queued = 0;
+	}
+
+	Preparing::~Preparing()
+	{
+		t_preparing = false;
+	}
+
+	int Preparing::Seen() const
+	{
+		return t_seen;
+	}
+
+	int Preparing::Queued() const
+	{
+		return t_queued;
 	}
 
 	void Reserve()

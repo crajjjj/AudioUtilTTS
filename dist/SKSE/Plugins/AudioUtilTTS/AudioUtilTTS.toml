@@ -125,6 +125,17 @@ wait_ms = 250
 # true  = such a voice type is spoken with the preset "female" or "male" by
 #         its sex.
 fallback = false
+# Make greetings ahead of time. A greeting is said the moment the game decides
+# on it, so a new one cannot be generated in time and stays unvoiced the first
+# time. With this on, the plugin looks at the NPCs near you (about 20 m, one
+# every 2 seconds), works out which greetings each would say right now, and
+# generates the unvoiced ones in the background, behind every line the game
+# actually asked for. When the NPC then greets you, the line is ready.
+# The cost: up to 3 lines of CPU work for every NPC you come near whose voice
+# type has a voice, whether or not they ever greet you. Only NPCs whose lines
+# would be spoken anyway are looked at, and nothing happens while the game is
+# paused, in a menu or in combat. Can be switched with "autts reload".
+prepare_greetings = false
 # Move the speaker's mouth. The mouth shapes are guessed from the loudness of
 # the line, as the speech model gives no timing: it reads as talking, it does
 # not form the actual sounds.

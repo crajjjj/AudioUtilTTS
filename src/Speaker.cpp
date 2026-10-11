@@ -53,6 +53,9 @@ namespace Speaker
 		constexpr std::array<std::string_view, kLaneCount> LANE_NAME{ "narration"sv, "speech"sv, "dialogue"sv };
 
 		constexpr std::size_t MAX_DIALOGUE_WAITING = 96;
+		// Greeting lines made ahead may fill this much of the queue and no more:
+		// they are a guess, and each costs a line's worth of CPU.
+		constexpr std::size_t MAX_PREPARED_WAITING = 12;
 		// A dialogue slot handed out this recently may belong to a line that waits
 		// in the dialogue menu to be picked: it is not given to another line.
 		constexpr auto MIN_SLOT_AGE = std::chrono::seconds(30);
@@ -78,6 +81,7 @@ namespace Speaker
 			const void*   info = nullptr;   // the topic info it belongs to: compared, never read
 			int           response = 1;     // its number inside that topic info
 			bool          urgent = false;   // a game thread is waiting for it
+			bool          prepared = false; // made ahead of a greeting (Greetings): behind every line the game asked for
 			std::uint64_t order = 0;        // arrival order
 
 			std::mutex              lock;  // guards the block below
@@ -172,6 +176,7 @@ namespace Speaker
 		std::atomic<std::uint32_t> g_dialogueGiven{ 0 };      // responses handed a voice file
 		std::atomic<std::uint32_t> g_dialogueUnvoiced{ 0 };   // responses left as the game built them
 		std::atomic<std::uint32_t> g_dialogueGenerated{ 0 };  // lines generated
+		std::atomic<std::uint32_t> g_dialoguePrepared{ 0 };   // of those, greetings made ahead
 
 		std::array<std::atomic<int>, kLaneCount> g_usableSlots{};
 
@@ -618,7 +623,9 @@ namespace Speaker
 
 		// Work ahead of a dialogue line queued now: the rest of the line being
 		// generated plus the dialogue lines waiting (only the urgent ones when
-		// a_urgentOnly: an urgent line jumps the others). g_lock held.
+		// a_urgentOnly: an urgent line jumps the others). Greetings made ahead
+		// wait behind every line the game asked for, so they never count.
+		// g_lock held.
 		float BacklogMsLocked(bool a_urgentOnly)
 		{
 			float      backlog = 0.0f;
@@ -627,6 +634,9 @@ namespace Speaker
 				backlog += std::chrono::duration<float, std::milli>(g_busyUntil - now).count();
 			}
 			for (const auto& waiting : g_dialogueWaiting) {
+				if (waiting.job->prepared) {
+					continue;
+				}
 				if (!a_urgentOnly || waiting.job->urgent) {
 					backlog += waiting.estimateMs;
 				}
@@ -1036,9 +1046,14 @@ namespace Speaker
 			}
 			settle(inSlot);
 			if (synthMs >= 0) {
+				if (job->prepared) {
+					g_dialoguePrepared.fetch_add(1);
+				}
 				logger::info("Dialogue line generated in {} ms: {} chars as {:.1f} s of speech ({}), {}", synthMs,
 					a_line.text.size(), audio.Seconds(), job->label,
-					inSlot ? "in " + SlotName(kDialogue, job->slot) : "kept for the next time it is said"s);
+					inSlot          ? "in " + SlotName(kDialogue, job->slot) :
+					job->prepared ? "a greeting made ahead"s :
+									"kept for the next time it is said"s);
 			}
 		}
 
@@ -1062,10 +1077,12 @@ namespace Speaker
 		// The order dialogue lines are generated in, smallest first: one a game
 		// thread is waiting for, then the lines of the topic being spoken, then
 		// first responses before later ones (a first response is what plays when a
-		// topic is picked), then the oldest.
+		// topic is picked), then the oldest. Greetings made ahead come after all
+		// of those: the game has not asked for them.
 		auto RankOf(const DialogueJob& a_job, const void* a_saying)
 		{
-			return std::tuple(!a_job.urgent, !(a_saying && a_job.info == a_saying), a_job.response, a_job.order);
+			return std::tuple(a_job.prepared, !a_job.urgent, !(a_saying && a_job.info == a_saying), a_job.response,
+				a_job.order);
 		}
 
 		// g_lock held, g_dialogueWaiting not empty
@@ -1097,7 +1114,8 @@ namespace Speaker
 			const void* saying = TopicBeingSaid();
 			return std::any_of(g_dialogueWaiting.begin(), g_dialogueWaiting.end(), [&](const Line& a_line) {
 				const auto& job = *a_line.job;
-				return job.urgent || job.response <= 1 || (saying && job.info == saying);
+				// a greeting made ahead is a guess: narration is not kept waiting for it
+				return !job.prepared && (job.urgent || job.response <= 1 || (saying && job.info == saying));
 			});
 		}
 
@@ -1112,7 +1130,7 @@ namespace Speaker
 				ahead += std::chrono::duration<float, std::milli>(g_busyUntil - now).count();
 			}
 			for (const auto& waiting : g_dialogueWaiting) {
-				if (waiting.job->urgent || waiting.job->response <= a_response) {
+				if (!waiting.job->prepared && (waiting.job->urgent || waiting.job->response <= a_response)) {
 					ahead += waiting.estimateMs;
 				}
 			}
@@ -1992,6 +2010,91 @@ namespace Speaker
 								   "it was not ready in time, it is being generated for the next time");
 	}
 
+	const RE::BGSVoiceType* DialogueVoiceType(RE::Actor* a_actor)
+	{
+		if (!a_actor || !IsDialogueEnabled()) {
+			return nullptr;
+		}
+		const auto  settings = Config::Get();
+		bool        female = false;
+		const auto* type = VoiceTypeOf(a_actor, female);
+		if (!type) {
+			return nullptr;
+		}
+		const auto source = VoiceForType(*settings, type, female, settings->dialogueFallback).source;
+		return source == VoiceChoice::kOwn || source == VoiceChoice::kBySex ? type : nullptr;
+	}
+
+	bool CanPrepareDialogue(int a_lines)
+	{
+		std::scoped_lock lock{ g_lock };
+		const auto       waitingAhead = static_cast<std::size_t>(std::count_if(g_dialogueWaiting.begin(),
+			  g_dialogueWaiting.end(), [](const Line& a_line) { return a_line.job->prepared; }));
+		const auto       wanted = static_cast<std::size_t>(std::max(a_lines, 1));
+		return waitingAhead + wanted <= MAX_PREPARED_WAITING && g_dialogueWaiting.size() + wanted <= MAX_DIALOGUE_WAITING;
+	}
+
+	bool PrepareDialogue(std::string_view a_text, const RE::BGSVoiceType* a_voiceType, int a_response,
+		const void* a_info)
+	{
+		if (!a_voiceType || !IsDialogueEnabled() || !g_defaultLoaded.load()) {
+			return false;
+		}
+		const auto settings = Config::Get();
+		auto       text = CleanDialogue(a_text, *settings);
+		if (text.empty()) {
+			return false;
+		}
+		const bool female = a_voiceType->data.flags.any(RE::VOICE_TYPE_DATA::Flag::kFemale);
+		auto       choice = VoiceForType(*settings, a_voiceType, female, settings->dialogueFallback);
+		if (choice.source != VoiceChoice::kOwn && choice.source != VoiceChoice::kBySex) {
+			return false;
+		}
+
+		Line line = std::move(choice.line);
+		line.text = std::move(text);
+		line.lane = kDialogue;
+		FillDefaults(line, *settings);
+		const auto modelKey = ModelKeyOf(line, *settings);
+		const auto cacheFile = CacheFileFor(modelKey, line, *settings);
+		if (cacheFile.empty()) {
+			return false;
+		}
+		if (std::error_code ec; fs::exists(cacheFile, ec)) {
+			return false;  // said or made before
+		}
+		const auto cacheKey = cacheFile.filename().string();
+
+		auto job = std::make_shared<DialogueJob>();
+		job->cacheFile = cacheFile;
+		job->cacheKey = cacheKey;
+		job->label = choice.label;
+		job->info = a_info;
+		job->response = a_response;
+		job->prepared = true;
+		line.job = job;
+		{
+			std::scoped_lock lock{ g_lock };
+			if (g_unusableModels.contains(modelKey) || g_failedLines.contains(cacheKey) ||
+				g_generating.contains(cacheKey)) {
+				return false;
+			}
+			const auto waitingAhead = std::count_if(g_dialogueWaiting.begin(), g_dialogueWaiting.end(),
+				[](const Line& a_line) { return a_line.job->prepared; });
+			if (static_cast<std::size_t>(waitingAhead) >= MAX_PREPARED_WAITING ||
+				g_dialogueWaiting.size() >= MAX_DIALOGUE_WAITING) {
+				return false;  // the queue is full: this one is left for when it is said
+			}
+			job->order = ++g_dialogueOrder;
+			line.epoch = g_dialogueEpoch.load();
+			line.estimateMs = EstimateMsLocked(modelKey, line.text.size());
+			g_generating.insert(cacheKey);
+			g_dialogueWaiting.push_back(std::move(line));
+		}
+		g_wake.notify_all();
+		return true;
+	}
+
 	std::string DescribeVoice(RE::Actor* a_actor)
 	{
 		if (!a_actor) {
@@ -2039,12 +2142,12 @@ namespace Speaker
 			}
 		}
 		return std::format("dialogue {} | this session: {} responses given a voice, {} left unvoiced, {} lines "
-						   "generated | slots {} of {} | lipsync {} | wait {} ms | {} voice types mapped | cache {} "
-						   "lines, {:.1f} MB",
+						   "generated ({} of them greetings made ahead, which is {}) | slots {} of {} | lipsync {} | "
+						   "wait {} ms | {} voice types mapped | cache {} lines, {:.1f} MB",
 			state, g_dialogueGiven.load(), g_dialogueUnvoiced.load(), g_dialogueGenerated.load(),
-			g_usableSlots[kDialogue].load(), settings->dialogueSlots, settings->dialogueLip ? "on" : "off",
-			settings->dialogueWaitMs, settings->voiceTypes.size(), lines,
-			static_cast<double>(bytes) / (1024.0 * 1024.0));
+			g_dialoguePrepared.load(), settings->dialoguePrepare ? "on" : "off", g_usableSlots[kDialogue].load(),
+			settings->dialogueSlots, settings->dialogueLip ? "on" : "off", settings->dialogueWaitMs,
+			settings->voiceTypes.size(), lines, static_cast<double>(bytes) / (1024.0 * 1024.0));
 	}
 
 	int ClearDialogueCache()

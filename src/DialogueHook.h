@@ -26,4 +26,20 @@ namespace DialogueHook
 	// kDataLoaded, once. false = the patch was not applied (the bytes at the
 	// call sites are not what was expected, so nothing was written).
 	bool Install();
+
+	// While one of these lives on a thread, the responses that thread builds are
+	// not about to be said: they are built to learn what a speaker would say
+	// (Greetings). The hook then leaves their voice file paths alone and hands
+	// each unvoiced one to Speaker::PrepareDialogue, for the cache only.
+	class Preparing
+	{
+	public:
+		Preparing();
+		~Preparing();
+		Preparing(const Preparing&) = delete;
+		Preparing& operator=(const Preparing&) = delete;
+
+		[[nodiscard]] int Seen() const;    // unvoiced responses built so far
+		[[nodiscard]] int Queued() const;  // of those, lines queued for generation
+	};
 }

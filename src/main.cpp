@@ -3,6 +3,7 @@
 
 #include "Config.h"
 #include "DialogueHook.h"
+#include "Greetings.h"
 #include "PapyrusAPI.h"
 #include "Speaker.h"
 
@@ -52,7 +53,11 @@ namespace
 			Speaker::Start();
 			// the game code is only patched when the feature is wanted at launch
 			if (Config::Get()->dialogue) {
-				Speaker::SetDialogueHooked(DialogueHook::Install());
+				const bool hooked = DialogueHook::Install();
+				Speaker::SetDialogueHooked(hooked);
+				if (hooked) {
+					Greetings::Start();
+				}
 			} else {
 				log::info("Dialogue: off in the config, the game is left unpatched");
 			}
@@ -61,6 +66,7 @@ namespace
 		case MessagingInterface::kNewGame:
 			// AudioUtil stops its own audio here; drop what is still on the way
 			Speaker::Reset();
+			Greetings::Reset();
 			break;
 		default:
 			break;

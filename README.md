@@ -172,8 +172,27 @@ extends it to every other voice type with a generic voice.
   the Windows-1252 encoding that English game data uses is converted, so curly
   apostrophes and accented letters are read correctly.
 
+### Greetings made ahead
+
+A greeting is the plainest case of a line said right away: with a slow model it
+is silent the first time and spoken from the second. `[dialogue]
+prepare_greetings = true` (off by default) closes that gap. While you walk
+around, the plugin looks at the NPCs within about 20 m, one every two seconds,
+works out which greetings each would say right now, and generates the unvoiced
+ones in the background, behind every line the game actually asked for. When the
+NPC then greets you, the line is in the cache and is spoken at once.
+
+- **It is a guess.** The greetings are picked the way the game picks them (the
+  greeting topics of running quests by priority, the first topic info whose
+  conditions hold), but conditions can change before the NPC speaks.
+- **It costs CPU for NPCs that never greet you.** Up to three lines per NPC,
+  each NPC looked at once every five minutes, each line made once.
+- **Only where it can matter.** NPCs whose voice type has no voice are skipped,
+  and nothing happens while the game is paused, in a menu or in combat.
+
 `autts dialogue` shows whether it is running, how many lines were given a
-voice, left unvoiced and generated this session, and the size of the cache.
+voice, left unvoiced and generated this session (and how many of those were
+greetings made ahead), and the size of the cache.
 `AudioUtilTTS.log` says what was done about a line that stays unvoiced and why.
 
 ### Voice types

@@ -54,6 +54,7 @@ namespace Config
 		bool  dialogueLip = true;
 		float dialogueLipStrength = 0.8f;
 		bool  dialogueFallback = false;
+		bool  dialoguePrepare = false;  // prepare_greetings
 		bool  dialogueSkipDirections = true;
 		int   dialogueCacheMb = 256;
 
