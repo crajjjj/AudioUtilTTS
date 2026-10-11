@@ -41,16 +41,6 @@ Makes an actor say a line: positioned at them, on the character channel, with th
 !!! note "One line at a time"
     By default a line that arrives while another line of its kind is being generated or spoken is dropped and noted in `AudioUtilTTS.log`. Narration and character lines are counted separately. `IsNarrationFree()` and `IsSpeechFree()` tell beforehand. The user can let lines wait with `[playback] max_pending`; see the [Configuration Reference](../players/configuration.md#max_pending).
 
-### Deprecated
-
-Three older functions speak a line with no sender name. They are deprecated since API 3, but kept and working as before for scripts compiled against them. Their lines carry no name in the log.
-
-| Function | Use instead |
-|---|---|
-| `bool Speak(string asText, int aiVoice = -1, float afVolume = -1.0, float afSpeed = -1.0)` | `SpeakFrom`. This one speaks narration by a voice number of the default model, and arguments below zero take the configured defaults. A voice, volume or speed of your own is what a preset is for |
-| `bool SpeakAs(string asText, string asPreset)` | `SpeakFrom` |
-| `bool SpeakActor(Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true)` | `SpeakActorFrom` |
-
 ## Stopping
 
 ```papyrus
