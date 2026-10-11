@@ -21,6 +21,8 @@ threads = 2
 # Only for models that need them (multi-language Kokoro builds).
 lexicon = ""
 lang = ""
+# Loading a model takes about 1 second; a line whose model is not in memory
+# is delayed by that.
 # How many models may be in memory at once, the default one included (1 to 32).
 # A preset or a voice type can name another model; it is loaded the first time a
 # line asks for it and kept. Past this limit the least recently used one is
@@ -32,8 +34,7 @@ lang = ""
 # Kokoro models this setting therefore allows up to about 0.6 GB times its
 # value: 3 = 1.9 GB, 6 = 3.8 GB, 10 = 6.3 GB.
 # With one model per voice type, raise this to the number of voices a busy
-# scene mixes, or loading and unloading will delay lines (a model takes about
-# a second to load).
+# scene mixes, or loading and unloading will delay lines.
 max_loaded = 3
 
 [voice]
