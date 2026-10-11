@@ -193,10 +193,29 @@ namespace Speaker
 		// ---------------------------------------------------------------- AudioUtil
 
 		using PlayFileFn = decltype(&AudioUtil_PlayFile);
+		using IsPlayingFn = decltype(&AudioUtil_IsHandlePlaying);
 
 		std::atomic<PlayFileFn>    g_playFile{ nullptr };
 		std::atomic<PlayFileFn>    g_playFileLipSync{ nullptr };  // same signature
+		std::atomic<IsPlayingFn>   g_isHandlePlaying{ nullptr };  // AudioUtil 0.9.28 and newer
 		std::atomic<std::uint32_t> g_audioUtilVersion{ 0 };
+
+		// The AudioUtil handle of the line last started on each lane: STARTING from
+		// the moment a line is handed to the game thread until it plays, 0 = none.
+		constexpr std::int32_t                            STARTING = -1;
+		std::array<std::atomic<std::int32_t>, kLaneCount> g_laneHandle{};
+
+		// Did the line behind this lane handle stop before its time? The clock
+		// (LaneState::quietAt) knows how long a line is; only AudioUtil knows that
+		// someone cut it (StopHandle, StopChannel, StopGroup, by any mod). false
+		// when that cannot be told: the line has not started yet, or AudioUtil is
+		// older than 0.9.28. Goes into AudioUtil: not under g_lock, and from the
+		// threads lines arrive on, never the worker.
+		bool WasCutShort(std::int32_t a_handle)
+		{
+			const auto isPlaying = g_isHandlePlaying.load();
+			return a_handle > 0 && isPlaying && !isPlaying(a_handle);
+		}
 
 		PlayFileFn ResolvePlayFile()
 		{
@@ -213,6 +232,8 @@ namespace Speaker
 			}
 			g_playFileLipSync.store(
 				reinterpret_cast<PlayFileFn>(GetProcAddress(module, "AudioUtil_PlayFileWithLipSync")));
+			g_isHandlePlaying.store(
+				reinterpret_cast<IsPlayingFn>(GetProcAddress(module, "AudioUtil_IsHandlePlaying")));
 			const auto found = reinterpret_cast<PlayFileFn>(GetProcAddress(module, "AudioUtil_PlayFile"));
 			g_playFile.store(found);
 			return found;
@@ -931,6 +952,7 @@ namespace Speaker
 					std::scoped_lock lock{ g_lock };
 					if (auto& quietAt = g_lanes[line.lane].quietAt; quietAt == a_quietAt) {
 						quietAt = {};
+						g_laneHandle[line.lane].store(0);
 					}
 				};
 				const auto play = ResolvePlayFile();
@@ -971,6 +993,13 @@ namespace Speaker
 					logger::warn("AudioUtil did not play {} (see AudioUtil.log)", slotRel);
 					notSpoken();
 					return;
+				}
+				{
+					// unless a newer line has taken the lane meanwhile
+					std::scoped_lock lock{ g_lock };
+					if (g_lanes[line.lane].quietAt == a_quietAt) {
+						g_laneHandle[line.lane].store(handle);
+					}
 				}
 				logger::info("Spoke {} chars as {:.1f} s of speech, generated in {} ms ({}{}, model {}, voice {}, {}, "
 							 "handle {})",
@@ -1251,6 +1280,7 @@ namespace Speaker
 				}
 				quietAt = Clock::now() + length;
 				g_lanes[lane].quietAt = quietAt;
+				g_laneHandle[lane].store(STARTING);
 			}
 			PostPlay(SlotDataRel(lane, slot), std::move(a_line), audio.Seconds(), synthMs, quietAt);
 		}
@@ -1343,6 +1373,9 @@ namespace Speaker
 			const std::size_t        chars = a_line.text.size();
 			std::string              busy;       // why the lane does not take this line
 			std::vector<std::size_t> pushedOut;  // sizes of the waiting lines it replaced
+			// asked before g_lock is taken, see WasCutShort
+			const auto started = g_laneHandle[lane].load();
+			const bool cutShort = WasCutShort(started);
 			{
 				std::scoped_lock lock{ g_lock };
 				a_line.epoch = g_epoch.load();
@@ -1357,7 +1390,9 @@ namespace Speaker
 					const auto  now = Clock::now();
 					if (same > 0 || state.inWork == a_line.epoch) {
 						busy = "another one is waiting or being generated";
-					} else if (!settings->interrupt && state.quietAt > now) {
+					} else if (!settings->interrupt && state.quietAt > now &&
+							   !(cutShort && g_laneHandle[lane].load() == started)) {
+						// by the clock a line still plays, and nobody cut that same line
 						busy = std::format("another one is being spoken, {:.1f} s to go",
 							std::chrono::duration<float>(state.quietAt - now).count());
 					}

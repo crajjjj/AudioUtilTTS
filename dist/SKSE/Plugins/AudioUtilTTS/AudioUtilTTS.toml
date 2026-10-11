@@ -211,6 +211,9 @@ interrupt = false
 #     being generated or being spoken is dropped. A mod that sends lines faster
 #     than they can be spoken is then not read out back to back. With interrupt
 #     on, a line being spoken does not count, the new one cuts into it.
+#     A line that was cut short (AudioUtil's StopHandle, StopChannel, StopGroup)
+#     frees its lane at once with AudioUtil 0.9.28 or newer; with an older one
+#     the lane stays busy until that line would have ended.
 # 1 or more = that many wait and follow each other without a pause. When more
 #     arrive, the oldest waiting line is dropped.
 # Applies to narration and to character speech, each counted on its own. Every

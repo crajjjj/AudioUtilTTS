@@ -113,6 +113,8 @@ Narration: lines with no speaker. `max_pending` and `max_chars` also apply to ch
 
 Narration and character speech are each counted on their own. Every dropped line is noted in `AudioUtilTTS.log` with the reason.
 
+A line that was cut short (AudioUtil's `StopHandle`, `StopChannel` or `StopGroup`, from any mod) frees its lane at once with AudioUtil 0.9.28 or newer. With an older AudioUtil the plugin cannot see the cut, and the lane stays busy until that line would have ended.
+
 ## A model's own file
 
 A model folder may carry a `model.toml` naming the voice types it speaks for. It is not part of `AudioUtilTTS.toml`; see [Models that bring their own voice types](models.md#models-that-bring-their-own-voice-types).

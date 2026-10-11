@@ -49,8 +49,9 @@ namespace RE
 //   instance; "" = no channel.
 // - Returns an instance handle: >0 success, 0 = nothing played. Handles share the id
 //   space of the Papyrus API, so a handle returned here works with AudioUtil.StopHandle /
-//   IsHandlePlaying / SetHandleVolume etc. from script. This C surface has no handle
-//   ops of its own (yet) - feature-detect additions via AudioUtil_GetInterfaceVersion.
+//   IsHandlePlaying / SetHandleVolume etc. from script. The one handle op on this C
+//   surface is AudioUtil_IsHandlePlaying (interface version >= 10200) - feature-detect
+//   additions via AudioUtil_GetInterfaceVersion.
 // - A same-named `.toml` caption sidecar next to the wav shows its text as a game
 //   subtitle attributed to `follow` (loose files only), exactly like the Papyrus call.
 // - The WithLipSync variant additionally drives `follow`'s mouth like a voice line:
@@ -190,5 +191,15 @@ float AudioUtil_GetMouthClaimTimeLeft(RE::Actor* actor);
 //
 // Interface version >= 10100.
 std::uint32_t AudioUtil_GetClaimedActors(RE::Actor** out, std::uint32_t max);
+
+// ----------------------------------------------------------------------------- Handles
+// Is the instance behind `handle` still playing? The same test as the Papyrus
+// AudioUtil.IsHandlePlaying: false for 0, for a handle AudioUtil does not know, and for
+// one whose sound has finished or was stopped (StopHandle, StopChannel, StopGroup,
+// StopAllAudio, a newer sound on its channel, a game load). A plugin that paces its own
+// lines by their length can ask this to learn that a line was cut short, since its own
+// clock cannot see that. Give it the threads of the playback calls. Interface version
+// >= 10200.
+bool AudioUtil_IsHandlePlaying(std::int32_t handle);
 
 }  // extern "C"

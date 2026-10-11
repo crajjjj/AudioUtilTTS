@@ -116,7 +116,10 @@ the speaking actor (none for narration). The full API is documented in
   than they can be spoken is not read out back to back. Each dropped line is
   noted in `AudioUtilTTS.log` with the reason. Narration and character speech
   are counted separately. To let lines wait instead, raise
-  `[playback] max_pending`.
+  `[playback] max_pending`. A line that was cut short (AudioUtil's
+  `StopHandle`, `StopChannel`, `StopGroup`) frees its lane at once with
+  AudioUtil 0.9.28 or newer; with an older one the lane stays busy until that
+  line would have ended.
 - **Narration and character speech are separate.** Narration plays flat and moves
   no mouth. A character line plays at the actor and moves their mouth. Neither
   goes through the game's dialogue system, so there are no dialogue subtitles.
