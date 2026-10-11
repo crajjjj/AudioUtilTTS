@@ -48,7 +48,7 @@ Speaks a list with the model loaded once. The list is UTF-8, one line each: a fi
 
 Scripts in [`tools/dbvo`](https://github.com/crajjjj/AudioUtilTTS/tree/main/tools/dbvo). Dragonborn Voice Over plays a recorded file for each player line its voice pack has, and stays silent for the rest. These scripts find the lines of a load order that no installed pack covers and generate a voice file for each, in the pack's own layout and format, so that mod plays them like any recorded line.
 
-Made for legacy packs (`Sound\DBVO\<pack>\<line>.fuz`) under Mod Organizer 2. **Not yet confirmed in game.**
+Made for legacy packs (`Sound\DBVO\<pack>\<line>.fuz`) under Mod Organizer 2.
 
 ### What you need
 

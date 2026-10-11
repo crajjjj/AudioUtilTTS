@@ -6,7 +6,6 @@ that no installed pack covers and generate a voice file for each, in the pack's
 own layout and format, so that mod plays them like any recorded line.
 
 Made for legacy packs (`Sound\DBVO\<pack>\<line>.fuz`) under Mod Organizer 2.
-Not yet confirmed in game.
 
 ## What you need
 
