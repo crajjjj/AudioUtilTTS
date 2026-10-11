@@ -43,7 +43,7 @@ The speech model returns audio and no timing, so there are no real phonemes to a
 
 ### Greetings spoken late
 
-A new greeting cannot be handed to the game in time, and the patch above is not told who speaks. With `[dialogue] late_greetings` on, the plugin remembers such a line by its topic info, waits for the game's own report of that topic info being said (which names the speaker), and plays the generated audio as a character line at that actor.
+A new greeting cannot be handed to the game in time, and the patch above is not told who speaks. With `[dialogue] greetings` on, the plugin remembers such a line by its topic info, waits for the game's own report of that topic info being said (which names the speaker), and plays the generated audio as a character line at that actor.
 
 ### Greetings made ahead
 

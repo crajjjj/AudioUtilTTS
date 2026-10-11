@@ -37,7 +37,7 @@ A new line has to be generated first, and the game is never made to wait for tha
 
 ## Greetings spoken late
 
-Added in 0.2.1. A greeting is the plainest case of a line said right away. With `[dialogue] late_greetings = true` (the default) a new one is generated the moment the NPC says it and spoken as soon as it is ready, about as late as a line takes to generate. From the second time on it comes from the cache and the game says it on time itself.
+Added in 0.2.1. A greeting is the plainest case of a line said right away. With `[dialogue] greetings = true` (the default) a new one is generated the moment the NPC says it and spoken as soon as it is ready, about as late as a line takes to generate. From the second time on it comes from the cache and the game says it on time itself.
 
 - **It plays as character speech**, not through the game's dialogue: at the NPC, with their mouth moving, on the `[speech]` group and channel. The subtitle has been shown already, when the game said the line.
 - **Only greetings of one line.**

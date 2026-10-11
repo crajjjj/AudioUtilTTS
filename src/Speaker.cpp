@@ -179,7 +179,7 @@ namespace Speaker
 		std::atomic<std::uint32_t> g_dialogueLate{ 0 };       // greetings spoken late
 
 		// A greeting the game said before its voice existed ([dialogue]
-		// late_greetings). The game cannot be handed the line any more, so it is
+		// greetings). The game cannot be handed the line any more, so it is
 		// spoken as a character line, on the speech lane, as soon as two things are
 		// known: the audio (the dialogue job that generates it for the cache) and
 		// who said it. The hook is not told the speaker; the game names them in its
@@ -1680,7 +1680,7 @@ namespace Speaker
 			{
 				using Type = RE::TESTopicInfoEvent::TopicInfoEventType;
 				if (a_event && a_event->type.get() == Type::kTopicBegin && a_event->speakerRef &&
-					g_dialogueHooked.load() && Config::Get()->dialogueLateGreetings) {
+					g_dialogueHooked.load() && Config::Get()->dialogueGreetings) {
 					if (auto* actor = a_event->speakerRef->As<RE::Actor>()) {
 						NoteSpeaker(a_event->topicInfoFormID, actor->GetHandle());
 					}
@@ -2291,7 +2291,7 @@ namespace Speaker
 
 		// A greeting said right away that cannot be in place in time is still
 		// heard this time, late, as a character line (see LateGreeting).
-		const bool lateGreeting = a_greeting != 0 && !listed && !later && settings->dialogueLateGreetings;
+		const bool lateGreeting = a_greeting != 0 && !listed && !later && settings->dialogueGreetings;
 		if (lateGreeting) {
 			LateGreeting late;
 			late.cacheKey = cacheKey;
@@ -2506,7 +2506,7 @@ namespace Speaker
 						   "slots {} of {} | lipsync {} | {} voice types mapped, {} listed by models | cache {} lines, "
 						   "{:.1f} MB",
 			state, g_dialogueGiven.load(), g_dialogueUnvoiced.load(), g_dialogueNothing.load(), g_dialogueLate.load(),
-			settings->dialogueLateGreetings ? "on" : "off", g_dialogueGenerated.load(), g_dialoguePrepared.load(),
+			settings->dialogueGreetings ? "on" : "off", g_dialogueGenerated.load(), g_dialoguePrepared.load(),
 			settings->dialoguePrepare ? "on" : "off",
 			g_usableSlots[kDialogue].load(), settings->dialogueSlots, settings->dialogueLip ? "on" : "off",
 			settings->voiceTypes.size(), settings->modelVoiceTypes.size(), lines,

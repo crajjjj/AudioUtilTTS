@@ -75,7 +75,7 @@ namespace Config
 		float dialogueLipStrength = 0.8f;
 		bool  dialogueFallback = false;
 		bool  dialoguePrepare = false;  // prepare_greetings
-		bool  dialogueLateGreetings = true;  // late_greetings: a new greeting is spoken once it is ready
+		bool  dialogueGreetings = true;  // greetings: a new greeting is spoken late, once it is ready
 		bool  dialogueSkipDirections = true;
 		int   dialogueCacheMb = 256;
 

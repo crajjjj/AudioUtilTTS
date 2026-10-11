@@ -199,7 +199,7 @@ extends it to every other voice type with a generic voice.
 ### Greetings spoken late
 
 A greeting is the plainest case of a line said right away. With `[dialogue]
-late_greetings = true` (the default) a new one is generated the moment the NPC
+greetings = true` (the default) a new one is generated the moment the NPC
 says it and spoken as soon as it is ready, about as late as a line takes to
 generate. From the second time on it comes from the cache and the game says it
 on time itself.

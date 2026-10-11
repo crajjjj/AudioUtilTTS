@@ -117,7 +117,7 @@ enable = true
 #  - A line said right away (a scene, a greeting, a remark in passing) cannot
 #    be prepared: a new one stays unvoiced this once and is voiced from the
 #    next time on. Later lines of the same topic are generated while the
-#    earlier ones play. Greetings are the exception, see late_greetings below.
+#    earlier ones play. Greetings are the exception, see "greetings" below.
 # A line with nothing to say (a stage direction, or a placeholder such as "...")
 # is left alone.
 # false = a voice type with no voice of its own (see [voicetype]) stays
@@ -136,7 +136,7 @@ fallback = false
 # seconds late, when the speaker is gone, when a conversation has started
 # meanwhile, or when another character line is being spoken.
 # Can be switched with "autts reload".
-late_greetings = true
+greetings = true
 # Make greetings ahead of time, so that a new one is on time. A greeting is
 # said the moment the game decides on it, so a new one cannot be generated in
 # time. With this on, the plugin looks at the NPCs near you (about 20 m, one
