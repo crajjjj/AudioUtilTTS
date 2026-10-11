@@ -72,11 +72,15 @@ namespace Speaker
 	//     first, and the game never waits: a cached line is copied into its
 	//     placeholder, a new one is generated if that should take no longer
 	//     than a player takes to pick a topic.
-	//   - A line said right away (a scene, a greeting, a remark in passing) is
-	//     copied or generated while the caller waits, up to [dialogue] wait_ms;
-	//     later responses of its topic are generated while the earlier ones play.
+	//   - A line said right away (a scene, a greeting, a remark in passing): a
+	//     cached one is copied into its placeholder there and then. A new one
+	//     cannot be made in time, and the game is never kept waiting for it;
+	//     only the later responses of its topic are generated while the earlier
+	//     ones play. Greetings can be made ahead instead (Greetings.cpp).
 	// A line that cannot be in place in time is left as the game built it this
 	// once (unvoiced, for Fuz Ro D'oh to cover) and generated for the next time.
+	// A line with nothing to say (a stage direction, markup, a placeholder such
+	// as "...") is left alone altogether.
 	// The one gap: a listed line that was expected in time and is picked before
 	// it is in plays as silence, since its placeholder was already handed over.
 	std::string VoiceDialogue(std::string_view a_text, const RE::BGSVoiceType* a_voiceType, int a_response,

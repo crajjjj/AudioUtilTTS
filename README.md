@@ -152,13 +152,11 @@ extends it to every other voice type with a generic voice.
   copied from the cache. A new one is voiced this time only if it should be
   generated within about 2.5 seconds, the time it takes to pick a topic;
   otherwise it is left unvoiced this once and voiced from the next time on.
-- **A line said right away may pause the game briefly, once.** A scene line, a
-  greeting or a remark in passing cannot be prepared, so the game waits for it
-  up to `[dialogue] wait_ms` (250 ms). A Piper voice fits in that. A slow model
-  does not, and the plugin learns that after one line: from then on the game
-  does not wait, the line stays unvoiced that once and is voiced from the next
-  time on. Later lines of the same topic are generated while the earlier ones
-  play.
+- **A line said right away is voiced from its second time.** A scene line, a
+  greeting or a remark in passing cannot be prepared, and the game is never
+  made to wait for one: a new line stays unvoiced that once and is generated
+  for the next time. Later lines of the same topic are generated while the
+  earlier ones play. Greetings can be made ahead instead (see below).
 - **Preparing a menu costs CPU.** Every unvoiced line the menu lists is
   generated once, whether it is picked or not. With a fast model that is a few
   seconds of work per menu; with the default model it is about two seconds per
@@ -171,6 +169,9 @@ extends it to every other voice type with a generic voice.
   directions such as `(sighs)` too (`[dialogue] skip_directions`), and text in
   the Windows-1252 encoding that English game data uses is converted, so curly
   apostrophes and accented letters are read correctly.
+- **Placeholder lines are left alone.** A line with nothing to say, such as
+  `...`, `(...)`, `[...]` or a lone dash, stays silent: it holds no letter and
+  no digit once markup and directions are gone. `autts dialogue` counts them.
 
 ### Greetings made ahead
 
@@ -400,8 +401,8 @@ core outside the game:
 xmake run probe dist\SKSE\Plugins\AudioUtilTTS\models\kokoro-en-v0_19 "Some text" 7 out.wav
 ```
 
-It prints how long the line took to generate (the number `wait_ms` is weighed
-against) and writes `out.lip` beside the wav: the mouth animation a dialogue
+It prints how long the line took to generate and writes `out.lip` beside the
+wav: the mouth animation a dialogue
 line with that audio would get. AudioUtil's LipSim plays the pair.
 
 ## Licenses

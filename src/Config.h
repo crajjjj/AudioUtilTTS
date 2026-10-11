@@ -49,7 +49,6 @@ namespace Config
 
 		// [dialogue]: game dialogue that has no recorded voice file
 		bool  dialogue = true;
-		int   dialogueWaitMs = 250;
 		int   dialogueSlots = 128;
 		bool  dialogueLip = true;
 		float dialogueLipStrength = 0.8f;

@@ -106,20 +106,18 @@ slots = 4
 # "autts dialogue 0" switches it off for the session.
 enable = true
 # A line said before comes from a cache on disk. A new one has to be generated
-# first:
+# first, and the game is never made to wait for that:
 #  - Lines in the dialogue menu are prepared in the background while the menu
-#    is up, the first line of each topic first, and the game never waits for
-#    them. A new line is voiced this time only if it should be generated within
-#    about 2.5 seconds, the time a player takes to pick a topic; otherwise it
-#    is left unvoiced this once and voiced from the next time on.
+#    is up, the first line of each topic first. A new line is voiced this time
+#    only if it should be generated within about 2.5 seconds, the time a player
+#    takes to pick a topic; otherwise it is left unvoiced this once and voiced
+#    from the next time on.
 #  - A line said right away (a scene, a greeting, a remark in passing) cannot
-#    be prepared, so the game waits for it up to this many milliseconds: a
-#    short freeze, once per line ever. If the line would take longer (the
-#    plugin learns how fast each model is), the game does not wait: the line
-#    stays unvoiced this once and is voiced from the next time on.
-# A Piper voice needs roughly 100 to 300 ms a line, the default Kokoro model
-# about two seconds. 0 = never make the game wait.
-wait_ms = 250
+#    be prepared: a new one stays unvoiced this once and is voiced from the
+#    next time on. Later lines of the same topic are generated while the
+#    earlier ones play. For greetings see prepare_greetings below.
+# A line with nothing to say (a stage direction, or a placeholder such as "...")
+# is left alone.
 # false = a voice type with no voice of its own (see [voicetype]) stays
 #         unvoiced, so only the voice types you set up are spoken.
 # true  = such a voice type is spoken with the preset "female" or "male" by

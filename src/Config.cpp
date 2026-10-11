@@ -81,7 +81,6 @@ namespace Config
 
 		if (const auto* dialogue = root["dialogue"].as_table()) {
 			settings->dialogue = (*dialogue)["enable"].value_or(settings->dialogue);
-			settings->dialogueWaitMs = (*dialogue)["wait_ms"].value_or(settings->dialogueWaitMs);
 			settings->dialogueSlots = (*dialogue)["slots"].value_or(settings->dialogueSlots);
 			settings->dialogueLip = (*dialogue)["lipsync"].value_or(settings->dialogueLip);
 			settings->dialogueLipStrength = (*dialogue)["lip_strength"].value_or(settings->dialogueLipStrength);
@@ -91,7 +90,6 @@ namespace Config
 				(*dialogue)["skip_directions"].value_or(settings->dialogueSkipDirections);
 			settings->dialogueCacheMb = (*dialogue)["cache_max_mb"].value_or(settings->dialogueCacheMb);
 		}
-		settings->dialogueWaitMs = std::clamp(settings->dialogueWaitMs, 0, 2000);
 		settings->dialogueSlots = std::clamp(settings->dialogueSlots, 64, 256);
 		settings->dialogueLipStrength = std::clamp(settings->dialogueLipStrength, 0.0f, 1.5f);
 		settings->dialogueCacheMb = std::clamp(settings->dialogueCacheMb, 0, 16384);
@@ -164,11 +162,11 @@ namespace Config
 			settings->maxPending, settings->slots, settings->outputRate, settings->presets.size(),
 			settings->speechGroup, settings->speechChannel, settings->speechSlots, settings->speechLipSync,
 			settings->enable ? "" : " [disabled]");
-		logger::info("Config: dialogue {}, wait {} ms, slots {}, lipsync {} (strength {:.2f}), fallback {}, "
+		logger::info("Config: dialogue {}, slots {}, lipsync {} (strength {:.2f}), fallback {}, "
 					 "prepare_greetings {}, skip_directions {}, cache {} MB, {} voice types mapped",
-			settings->dialogue, settings->dialogueWaitMs, settings->dialogueSlots, settings->dialogueLip,
-			settings->dialogueLipStrength, settings->dialogueFallback, settings->dialoguePrepare,
-			settings->dialogueSkipDirections, settings->dialogueCacheMb, settings->voiceTypes.size());
+			settings->dialogue, settings->dialogueSlots, settings->dialogueLip, settings->dialogueLipStrength,
+			settings->dialogueFallback, settings->dialoguePrepare, settings->dialogueSkipDirections,
+			settings->dialogueCacheMb, settings->voiceTypes.size());
 
 		std::scoped_lock lock{ g_lock };
 		g_settings = std::move(settings);
