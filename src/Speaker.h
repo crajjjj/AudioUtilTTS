@@ -91,7 +91,8 @@ namespace Speaker
 	// not 0, is the form ID of the topic info of a one-line greeting. Such a
 	// line is still left unvoiced for the game, but it is spoken as a character
 	// line, a moment late, as soon as it is generated and the game has reported
-	// who speaks it.
+	// who speaks it. It is generated ahead of every other waiting line, and
+	// spoken unless its speaker has gone on to another line by then.
 	// A line with nothing to say (a stage direction, markup, a placeholder such
 	// as "...") is left alone altogether.
 	// The one gap: a listed line that was expected in time and is picked before

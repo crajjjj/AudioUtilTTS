@@ -213,10 +213,14 @@ on time itself.
   NPC, with their mouth moving, on the `[speech]` group and channel. The
   subtitle has been shown already, when the game said the line.
 - **Only greetings of one line.**
+- **First in line.** A greeting waiting to be spoken is generated before every
+  other dialogue line that waits, and played before any other line.
+- **Also once you are talking.** A greeting that opened a conversation is
+  still spoken after the dialogue menu has come up.
 - **Not at any price.** It is not spoken when it would be more than about 10
-  seconds late, when the speaker is gone, when a conversation has started
-  meanwhile, or when another character line is being spoken. The line is in the
-  cache for the next time either way.
+  seconds late, when the speaker is gone, when the speaker has gone on to
+  another line, or when another character line is being spoken. The line is in
+  the cache for the next time either way.
 
 ### Greetings made ahead
 
