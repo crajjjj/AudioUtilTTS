@@ -240,16 +240,18 @@ namespace Speaker
 			std::string                             restText;  // for the log
 			bool                                    playing = false;  // the beginning was handed to AudioUtil
 			bool                                    queued = false;   // the rest is on its way to the lane
-			// how the beginning is spoken, copied when it starts: the rest goes the same way
-			RE::ActorHandle   speaker;
-			RE::FormID        info = 0;
-			Clock::time_point asked{};
-			std::string       model;
-			int               voice = -1;
-			float             volume = 1.0f;
-			bool              lipSync = false;
-			std::uint64_t     epoch = 0;
+			bool                                    cut = false;      // the speaker went on: no rest any more
+			// the beginning as it was spoken, copied when it starts: the rest goes
+			// the same way (same speaker, voice, volume, lane). It holds no audio
+			// and no way back to this split.
+			Line spoken;
 		};
+		// The line in two parts that is being spoken, from its beginning starting
+		// to its rest having played or been dropped: the lines and the job that
+		// hold the split are what keeps this alive. While it is, the character
+		// lane is not given to another line spoken late, also not in the moment
+		// between the two parts. g_lock.
+		std::weak_ptr<LateSplit> g_splitSpeaking;
 		// A topic info the game reported as being said, kept for a moment in case
 		// its line is built only after the report.
 		struct HeardInfo
@@ -285,7 +287,9 @@ namespace Speaker
 			RE::FormID        info = 0;
 			Clock::time_point at{};
 		};
-		std::array<SaidInfo, 16> g_said{};        // g_lock
+		// The last reports of all speakers together: enough of them that a busy
+		// place does not push one out within the seconds it matters for.
+		std::array<SaidInfo, 64> g_said{};        // g_lock
 		std::size_t              g_saidNext = 0;  // g_lock
 		// The line spoken late that plays on the character lane right now, if any.
 		// The game cuts its own line when the speaker goes on to the next one; this
@@ -1146,23 +1150,17 @@ namespace Speaker
 		void QueueRestLocked(const std::shared_ptr<LateSplit>& a_split)
 		{
 			auto& split = *a_split;
-			if (!split.playing || !split.rest || split.queued) {
+			if (!split.playing || !split.rest || split.queued || split.cut) {
 				return;
 			}
 			split.queued = true;
-			Line line;
+			// as the beginning was spoken; its epoch too, so that a Cancel since
+			// then drops the rest as well
+			Line line = split.spoken;
 			line.text = split.restText;
-			line.model = split.model;
-			line.voice = split.voice;
-			line.volume = split.volume;
-			line.lane = kSpeech;
-			line.speaker = split.speaker;
-			line.lipSync = split.lipSync;
 			line.ready = split.rest;
-			line.asked = split.asked;
-			line.lateInfo = split.info;
+			line.split = a_split;
 			line.latePart = 1;
-			line.epoch = split.epoch;  // a Cancel since the beginning started drops the rest too
 			g_waiting.push_back(std::move(line));
 			g_wake.notify_all();
 		}
@@ -1214,6 +1212,16 @@ namespace Speaker
 						notSpoken();
 						return;
 					}
+					// the rest of a line whose beginning was stopped: the speaker went on
+					bool cut = false;
+					if (line.latePart > 0 && line.split) {
+						std::scoped_lock lock{ g_lock };
+						cut = line.split->cut;
+					}
+					if (cut) {
+						notSpoken();
+						return;
+					}
 				}
 
 				auto call = play;
@@ -1239,9 +1247,16 @@ namespace Speaker
 				{
 					// unless a newer line has taken the lane meanwhile
 					std::scoped_lock lock{ g_lock };
-					if (g_lanes[line.lane].quietAt == a_quietAt) {
+					if (auto& state = g_lanes[line.lane]; state.quietAt == a_quietAt) {
 						g_laneHandle[line.lane].store(handle);
-						g_lanes[line.lane].startedAt = Clock::now();
+						state.startedAt = Clock::now();
+						// It ends its length from now: the worker reckoned from when it
+						// handed the line over, a frame or a hitch ago, and whoever waits
+						// for the end (the rest of a line in two parts) would start that
+						// much too early and cut into it.
+						state.quietAt = state.startedAt +
+										std::chrono::milliseconds(static_cast<long long>(a_seconds * 1000.0f));
+						g_wake.notify_all();
 					}
 					if (speech) {
 						// whatever played on the character lane before is over now
@@ -1253,14 +1268,11 @@ namespace Speaker
 						// same way, now or as soon as it is generated
 						auto& split = *line.split;
 						split.playing = true;
-						split.speaker = line.speaker;
-						split.info = line.lateInfo;
-						split.asked = line.asked;
-						split.model = line.model;
-						split.voice = line.voice;
-						split.volume = line.volume;
-						split.lipSync = line.lipSync;
-						split.epoch = line.epoch;
+						split.spoken = line;
+						split.spoken.split.reset();
+						split.spoken.ready.reset();
+						split.spoken.cached.clear();
+						g_splitSpeaking = line.split;
 						QueueRestLocked(line.split);
 					}
 				}
@@ -1496,9 +1508,10 @@ namespace Speaker
 				// A long line that is spoken late: its first sentence only, for now.
 				// That is spoken while the rest is generated as a job of its own. The
 				// rest plays from another file of the character lane, so that lane
-				// needs two.
+				// needs two it can play from now.
 				Cut cut;
-				if (!rest && job->greeting && job->slot < 0 && settings->dialogueLateSplit && settings->speechSlots >= 2) {
+				if (!rest && job->greeting && job->slot < 0 && settings->dialogueLateSplit &&
+					g_usableSlots[kSpeech].load() >= 2) {
 					float perChar = 0.0f;
 					{
 						std::scoped_lock lock{ g_lock };
@@ -1556,10 +1569,14 @@ namespace Speaker
 				}
 				if (rest) {
 					// the cache gets the whole line: its beginning and this
-					restAudio = std::make_shared<const TtsEngine::Audio>(audio);
-					TtsEngine::Audio whole = *job->head;
-					if (whole.sampleRate == audio.sampleRate) {
-						whole.samples.insert(whole.samples.end(), audio.samples.begin(), audio.samples.end());
+					restAudio = std::make_shared<const TtsEngine::Audio>(std::move(audio));
+					const auto&      head = *job->head;
+					TtsEngine::Audio whole;
+					whole.sampleRate = head.sampleRate;
+					whole.samples.reserve(head.samples.size() + restAudio->samples.size());
+					whole.samples.insert(whole.samples.end(), head.samples.begin(), head.samples.end());
+					if (head.sampleRate == restAudio->sampleRate) {
+						whole.samples.insert(whole.samples.end(), restAudio->samples.begin(), restAudio->samples.end());
 					}
 					audio = std::move(whole);
 					synthMs += job->headMs;
@@ -1621,9 +1638,29 @@ namespace Speaker
 				!(a_saying && a_job.info == a_saying), a_job.response, a_job.order);
 		}
 
+		// Does someone still wait to speak this line late? Not once the limit has
+		// passed, or the line was spoken or given up. g_lock held.
+		bool LateWantedLocked(const std::string& a_cacheKey, float a_maxLate)
+		{
+			const auto now = Clock::now();
+			return std::any_of(g_lateGreetings.begin(), g_lateGreetings.end(), [&](const auto& a_entry) {
+				return a_entry.second.cacheKey == a_cacheKey &&
+					   std::chrono::duration<float>(now - a_entry.second.asked).count() <= a_maxLate;
+			});
+		}
+
 		// The line generated next. g_lock held, g_dialogueWaiting not empty.
 		auto NextDialogueLocked()
 		{
+			// A line that waited too long to be spoken late any more is a line for
+			// the cache like any other: no longer ahead of the rest, and not cut
+			// in two.
+			const float maxLate = Config::Get()->dialogueLateMax;
+			for (auto& waiting : g_dialogueWaiting) {
+				if (auto& job = *waiting.job; job.greeting && !job.head && !LateWantedLocked(job.cacheKey, maxLate)) {
+					job.greeting = false;
+				}
+			}
 			const void* saying = TopicBeingSaid();
 			auto        best = g_dialogueWaiting.begin();
 			for (auto it = best + 1; it != g_dialogueWaiting.end(); ++it) {
@@ -1726,8 +1763,8 @@ namespace Speaker
 			std::string      error;
 			long long        synthMs = 0;
 			if (a_line.ready) {
-				// a part of a line spoken late in two parts: generated a moment ago
-				audio = *a_line.ready;
+				// a part of a line spoken late in two parts: generated a moment ago,
+				// used where it is (see out below)
 			} else if (!a_line.cached.empty()) {
 				// a greeting spoken late: generated as a dialogue line a moment ago
 				if (!LoadCached(a_line.cached, audio)) {
@@ -1765,18 +1802,23 @@ namespace Speaker
 				TtsEngine::Resample(audio, settings->outputRate);
 			}
 
+			// what is spoken: kept alive by the line where it is not this function's own
+			const std::shared_ptr<const TtsEngine::Audio> ready = a_line.ready;
+			const TtsEngine::Audio&                       out = ready ? *ready : audio;
+			const float                                   seconds = out.Seconds();
+
 			const int slot = TakeSlot(lane);
 			if (slot < 0) {
 				logger::warn("No playable {} slot (they work from the launch after they are created), line dropped",
 					LANE_NAME[lane]);
 				return;
 			}
-			if (!TtsEngine::WriteWav(SlotDisk(lane, slot), audio, error)) {
+			if (!TtsEngine::WriteWav(SlotDisk(lane, slot), out, error)) {
 				logger::warn("Could not write {}: {}", SlotDataRel(lane, slot), error);
 				return;
 			}
 
-			const auto        length = std::chrono::milliseconds(static_cast<long long>(audio.Seconds() * 1000.0f));
+			const auto        length = std::chrono::milliseconds(static_cast<long long>(seconds * 1000.0f));
 			Clock::time_point quietAt;
 			{
 				std::unique_lock lock{ g_lock };
@@ -1796,12 +1838,25 @@ namespace Speaker
 						if (!follows) {
 							return true;
 						}
-						const float need = NextDialogueLocked()->estimateMs;
-						return need > 0.0f &&
-							   need + 150.0f <= std::chrono::duration<float, std::milli>(until - Clock::now()).count();
+						// what it should take; for a model not measured yet, a guess
+						const auto  next = NextDialogueLocked();
+						const float need =
+							next->estimateMs > 0.0f ? next->estimateMs : 25.0f * static_cast<float>(next->text.size());
+						return need + 150.0f <= std::chrono::duration<float, std::milli>(until - Clock::now()).count();
+					};
+					// Where lines may cut in ([playback] interrupt), a line a mod sent
+					// takes the lane from a line spoken late: its rest gives way.
+					const auto givesWay = [&] {
+						return follows && settings->interrupt &&
+							   std::any_of(g_waiting.begin(), g_waiting.end(), [&](const Line& a_waiting) {
+								   return a_waiting.lane == lane && a_waiting.asked == Clock::time_point{};
+							   });
 					};
 					g_wake.wait_until(lock, until,
-						[&] { return !current() || fits() || g_lanes[lane].quietAt != until; });
+						[&] { return !current() || givesWay() || fits() || g_lanes[lane].quietAt != until; });
+					if (givesWay()) {
+						return;
+					}
 					// the pause is over once its time is up, whatever dialogue still waits
 					if (!current() || Clock::now() >= until) {
 						break;
@@ -1827,7 +1882,7 @@ namespace Speaker
 				g_lanes[lane].quietAt = quietAt;
 				g_laneHandle[lane].store(STARTING);
 			}
-			PostPlay(SlotDataRel(lane, slot), std::move(a_line), audio.Seconds(), synthMs, quietAt);
+			PostPlay(SlotDataRel(lane, slot), std::move(a_line), seconds, synthMs, quietAt);
 		}
 
 		void Worker()
@@ -1864,7 +1919,13 @@ namespace Speaker
 					}
 					// A greeting spoken late is already generated and only has to be
 					// put in place, and every moment it waits is heard: ahead of all.
-					const auto late = std::find_if(g_waiting.begin(), g_waiting.end(), isLate);
+					// The rest of a line whose beginning is being spoken comes before
+					// another late line: the two parts belong together.
+					auto late = std::find_if(g_waiting.begin(), g_waiting.end(),
+						[](const Line& a_line) { return a_line.latePart > 0; });
+					if (late == g_waiting.end()) {
+						late = std::find_if(g_waiting.begin(), g_waiting.end(), isLate);
+					}
 					dialogue = late == g_waiting.end() && DialogueGoesFirstLocked();
 					if (dialogue) {
 						line = TakeDialogueLocked();
@@ -1873,7 +1934,13 @@ namespace Speaker
 						line = std::move(*next);
 						g_waiting.erase(next);
 						g_working.store(true);  // IsBusy is about narration and character lines
-						g_lanes[line.lane].inWork = line.epoch;
+						// The lane is the worker's while it generates a line for it. The
+						// rest of a late line is generated already and only waits for
+						// its beginning to end: the lane stays what that makes it, being
+						// spoken on, so a line that may cut in still can.
+						if (line.latePart == 0) {
+							g_lanes[line.lane].inWork = line.epoch;
+						}
 					}
 				}
 				if (dialogue) {
@@ -2081,7 +2148,10 @@ namespace Speaker
 				const auto started = g_laneHandle[kSpeech].load();
 				const bool cutShort = WasCutShort(started);
 				std::scoped_lock lock{ g_lock };
-				laneTaken = LaneUseLocked(kSpeech, started, cutShort) != LaneUse::kFree;
+				// a line in two parts holds the lane until its rest is through, also
+				// in the moment between the two; not once its speaker has gone on
+				const auto split = g_splitSpeaking.lock();
+				laneTaken = LaneUseLocked(kSpeech, started, cutShort) != LaneUse::kFree || (split && !split->cut);
 			}
 			if (laneTaken) {
 				return LogLateGreetingSkipped(late.asked, "another character line is waiting, being generated or spoken");
@@ -2302,16 +2372,34 @@ namespace Speaker
 			{
 				std::scoped_lock lock{ g_lock };
 				g_said[g_saidNext++ % g_said.size()] = SaidInfo{ a_actor->GetFormID(), a_info, Clock::now() };
-				if (g_latePlaying.handle > 0 && g_latePlaying.speaker == a_actor->GetFormID() &&
-					g_latePlaying.info != a_info) {
+				// Any line this speaker begins while one of theirs is being spoken
+				// late, the same topic info included: the game's report of the late
+				// line itself came before that started playing, so this is a repeat,
+				// which the game voices itself by now.
+				if (g_latePlaying.handle > 0 && g_latePlaying.speaker == a_actor->GetFormID()) {
 					cut = g_latePlaying.handle;
 					g_latePlaying = {};
+					// and should the line be one in two parts, its rest stays out
+					if (const auto split = g_splitSpeaking.lock();
+						split && split->spoken.speaker.native_handle() == a_actor->GetHandle().native_handle()) {
+						split->cut = true;
+					}
 				}
 			}
 			// The speaker goes on to another line while one of theirs is still being
 			// spoken late: that one stops, as the game stops its own. Needs AudioUtil
 			// 0.9.29; with an older one the two lines overlap.
 			if (const auto stop = g_stopHandle.load(); cut > 0 && stop && stop(cut)) {
+				{
+					// nothing plays on the lane any more: whoever waits for its end
+					// (the worker, with the next line of the lane) need not
+					std::scoped_lock lock{ g_lock };
+					if (g_laneHandle[kSpeech].load() == cut) {
+						g_lanes[kSpeech].quietAt = {};
+						g_laneHandle[kSpeech].store(0);
+					}
+				}
+				g_wake.notify_all();
 				logger::info("A line spoken late was cut short: its speaker began another line");
 			}
 			bool        female = false;
@@ -2491,6 +2579,7 @@ namespace Speaker
 		g_heard = {};
 		g_said = {};
 		g_latePlaying = {};
+		g_splitSpeaking.reset();
 		// the lines on their way will not come: no line has a slot any more,
 		// so each is asked for afresh
 		g_slotOfKey.clear();
