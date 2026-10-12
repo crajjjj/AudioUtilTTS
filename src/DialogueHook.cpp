@@ -115,11 +115,12 @@ namespace DialogueHook
 					}
 					return built;
 				}
-				// a greeting of one line may still be spoken late when it has no voice yet
-				const bool greeting = a_topic && a_info && a_response->responseNumber <= 1 && !a_response->next &&
-									  a_topic->data.subtype.get() == RE::DIALOGUE_DATA::Subtype::kHello;
+				// A line of one response may still be spoken late when it has no voice
+				// yet: a greeting, and just as much the line that opens a conversation
+				// or a remark in passing, whatever kind of topic the mod filed it under.
+				const bool oneLine = a_info && a_response->responseNumber <= 1 && !a_response->next;
 				const auto voiced = Speaker::VoiceDialogue(text, a_voiceType, a_response->responseNumber, a_info,
-					greeting ? a_info->GetFormID() : 0);
+					oneLine ? a_info->GetFormID() : 0);
 				if (!voiced.empty() && voiced.size() < PATH_BUFFER) {
 					std::memcpy(a_path, voiced.c_str(), voiced.size() + 1);
 				}

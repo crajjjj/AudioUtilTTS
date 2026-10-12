@@ -41,9 +41,9 @@ A new line has to be generated first, and the game is never made to wait for tha
 Added in 0.2.1. A greeting is the plainest case of a line said right away. With `[dialogue] greetings = true` (the default) a new one is generated the moment the NPC says it and spoken as soon as it is ready, about as late as a line takes to generate. From the second time on it comes from the cache and the game says it on time itself.
 
 - **It plays as character speech**, not through the game's dialogue: at the NPC, with their mouth moving, on the `[speech]` group and channel. The subtitle has been shown already, when the game said the line.
-- **Only greetings of one line.**
-- **First in line.** A greeting waiting to be spoken is generated before every other dialogue line that waits, and played before any other line.
-- **Also once you are talking.** A greeting that opened a conversation is still spoken after the dialogue menu has come up.
+- **Not only greetings.** From 0.2.3 on this goes for every line of one response that is said right away: a greeting, the line that opens a conversation, a remark in passing, whatever kind of topic it is filed under. A line with further responses behind it is not spoken late.
+- **First in line.** A line waiting to be spoken late is generated before every other dialogue line that waits, and played before any other line.
+- **Also once you are talking.** A line that opened a conversation is still spoken after the dialogue menu has come up.
 - **Not at any price.** It is not spoken when it would be more than about 10 seconds late, when the speaker is gone, when the speaker has gone on to another line, or when another character line is being spoken. The line is in the cache for the next time either way.
 
 The setting can be switched with `autts reload`, and `autts dialogue` counts the greetings spoken late.

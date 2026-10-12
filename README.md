@@ -183,8 +183,8 @@ extends it to every other voice type with a generic voice.
   greeting or a remark in passing cannot be prepared, and the game is never
   made to wait for one: a new line stays unvoiced that once and is generated
   for the next time. Later lines of the same topic are generated while the
-  earlier ones play. A greeting is the exception: it is spoken late, the first
-  time too (see below).
+  earlier ones play. A line of one response is the exception: it is spoken
+  late, the first time too (see below).
 - **Preparing a menu costs CPU.** Every unvoiced line the menu lists is
   generated once, whether it is picked or not. With a fast model that is a few
   seconds of work per menu; with the default model it is about two seconds per
@@ -212,11 +212,14 @@ on time itself.
 - **It plays as character speech**, not through the game's dialogue: at the
   NPC, with their mouth moving, on the `[speech]` group and channel. The
   subtitle has been shown already, when the game said the line.
-- **Only greetings of one line.**
-- **First in line.** A greeting waiting to be spoken is generated before every
+- **Not only greetings.** From 0.2.3 on this goes for every line of one
+  response that is said right away: a greeting, the line that opens a
+  conversation, a remark in passing, whatever kind of topic it is filed under.
+  A line with further responses behind it is not spoken late.
+- **First in line.** A line waiting to be spoken late is generated before every
   other dialogue line that waits, and played before any other line.
-- **Also once you are talking.** A greeting that opened a conversation is
-  still spoken after the dialogue menu has come up.
+- **Also once you are talking.** A line that opened a conversation is still
+  spoken after the dialogue menu has come up.
 - **Not at any price.** It is not spoken when it would be more than about 10
   seconds late, when the speaker is gone, when the speaker has gone on to
   another line, or when another character line is being spoken. The line is in

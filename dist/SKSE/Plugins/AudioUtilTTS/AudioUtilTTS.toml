@@ -132,11 +132,13 @@ fallback = false
 # [speech] group and channel, at the NPC, mouth moving), not through the game's
 # dialogue, so its subtitle has been shown already. From the second time on the
 # line comes from the cache and the game says it on time itself.
-# Only greetings of one line. Such a greeting is generated before every other
-# dialogue line that waits, and it is still spoken once the conversation it
-# opened has started. Not spoken when it would be more than about 10 seconds
-# late, when the speaker is gone, when the speaker has gone on to another line,
-# or when another character line is being spoken.
+# Not only greetings: every line of one response that is said right away, such
+# as the line that opens a conversation or a remark in passing. Such a line is
+# generated before every other dialogue line that waits, and it is still spoken
+# once the conversation it opened has started. Not spoken when it has further
+# responses behind it, when it would be more than about 10 seconds late, when
+# the speaker is gone, when the speaker has gone on to another line, or when
+# another character line is being spoken.
 # Can be switched with "autts reload".
 greetings = true
 # Make greetings ahead of time, so that a new one is on time. A greeting is

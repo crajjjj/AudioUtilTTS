@@ -87,8 +87,9 @@ namespace Speaker
 	//     ones play. Greetings can be made ahead instead (Greetings.cpp).
 	// A line that cannot be in place in time is left as the game built it this
 	// once (unvoiced, for Fuz Ro D'oh to cover) and generated for the next time.
-	// The exception is a greeting ([dialogue] greetings): a_greeting, when
-	// not 0, is the form ID of the topic info of a one-line greeting. Such a
+	// The exception is a line of one response ([dialogue] greetings; a greeting
+	// is the plainest case, the line that opens a conversation another):
+	// a_greeting, when not 0, is the form ID of the topic info of such a line. Such a
 	// line is still left unvoiced for the game, but it is spoken as a character
 	// line, a moment late, as soon as it is generated and the game has reported
 	// who speaks it. It is generated ahead of every other waiting line, and

@@ -1068,7 +1068,7 @@ namespace Speaker
 
 		void LogLateGreetingSkipped(Clock::time_point a_asked, std::string_view a_why)
 		{
-			logger::info("Greeting not spoken late, {:.1f} s after it was said: {}. It is in the cache for the next time.",
+			logger::info("Line not spoken late, {:.1f} s after it was said: {}. It is in the cache for the next time.",
 				std::chrono::duration<float>(Clock::now() - a_asked).count(), a_why);
 		}
 
@@ -1151,7 +1151,7 @@ namespace Speaker
 				std::string late;
 				if (lateGreeting) {
 					g_dialogueLate.fetch_add(1);
-					late = std::format(", a greeting {:.1f} s after it was said",
+					late = std::format(", late, {:.1f} s after it was said",
 						std::chrono::duration<float>(Clock::now() - line.asked).count());
 				}
 				logger::info("Spoke {} chars as {:.1f} s of speech, generated in {} ms ({}{}{}{}, model {}, voice {}, {}, "
@@ -1198,7 +1198,7 @@ namespace Speaker
 
 		void LogUnnamedGreeting()
 		{
-			LogOnce("Greetings: the game did not report who spoke a greeting, so it was not spoken late (it is in the "
+			LogOnce("Late lines: the game did not report who spoke a line, so it was not spoken late (it is in the "
 					"cache for the next time)");
 		}
 
@@ -1451,7 +1451,7 @@ namespace Speaker
 			if (!a_line.cached.empty()) {
 				// a greeting spoken late: generated as a dialogue line a moment ago
 				if (!LoadCached(a_line.cached, audio)) {
-					logger::warn("A greeting could not be read back from the cache, it is not spoken late");
+					logger::warn("A line could not be read back from the cache, it is not spoken late");
 					return;
 				}
 			} else {
@@ -2566,8 +2566,8 @@ namespace Speaker
 
 		if (slot < 0) {
 			return leave(label,
-				lateGreeting ? "a greeting that cannot be in place in time: it is being generated and is spoken as "
-							   "soon as it is ready" :
+				lateGreeting ? "a line of one response that cannot be in place in time: it is being generated and is "
+							   "spoken as soon as it is ready" :
 							   "it cannot be in place in time, it is being generated for the next time",
 				onItsWay ? Log::kNo : Log::kLine);
 		}
@@ -2708,7 +2708,7 @@ namespace Speaker
 			}
 		}
 		return std::format("dialogue {} | this session: {} responses given a voice, {} left unvoiced, {} with "
-						   "nothing to say, {} greetings spoken late (which is {}), {} lines generated ({} of them "
+						   "nothing to say, {} lines spoken late (which is {}), {} lines generated ({} of them "
 						   "greetings made ahead, which is {}) | "
 						   "slots {} of {} | lipsync {} | {} voice types mapped, {} listed by models | cache {} lines, "
 						   "{:.1f} MB",

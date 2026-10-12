@@ -71,7 +71,7 @@ Game dialogue that has no recorded voice. See [Unvoiced Dialogue](unvoiced-dialo
 |---|---|---|
 | `enable` | `true` | `false` = the game is not patched at all. **A change needs a game restart**; `autts dialogue 0` switches it off for the session |
 | `fallback` | `false` | `false` = a voice type with no voice of its own stays unvoiced. `true` = it is spoken with the preset `female` or `male` by its sex. Was `true` in 0.2.0 |
-| `greetings` | `true` | Speak a new greeting as soon as it is generated, a moment after the NPC said it, instead of leaving it unvoiced the first time. Added in 0.2.1. See [Greetings spoken late](unvoiced-dialogue.md#greetings-spoken-late) |
+| `greetings` | `true` | Speak a new greeting as soon as it is generated, a moment after the NPC said it, instead of leaving it unvoiced the first time. Added in 0.2.1. From 0.2.3 on the same goes for every line of one response that is said right away, such as the line that opens a conversation. See [Greetings spoken late](unvoiced-dialogue.md#greetings-spoken-late) |
 | `prepare_greetings` | `false` | Generate the greetings of nearby NPCs ahead of time, so that a new one is on time. Added in 0.2.1. See [Greetings made ahead](unvoiced-dialogue.md#greetings-made-ahead) |
 | `lipsync` | `true` | Move the speaker's mouth, with shapes guessed from the loudness of the line |
 | `lip_strength` | `0.8` | How far the mouth opens, 0.0 to 1.5 |

@@ -74,7 +74,7 @@ With the feature on, the log gives the reason per line, or once for a reason tha
 - **`the config says so`**. The voice type has an empty line in `[voicetype]`.
 - **The line was unvoiced the first time only.** That is by design for a line said right away; see [When a line is ready](unvoiced-dialogue.md#when-a-line-is-ready).
 - **A greeting is heard a moment after its subtitle.** Also by design, the first time an NPC says a greeting the plugin has not generated before: it is spoken as soon as it is ready. From the second time on it is on time. `[dialogue] greetings = false` leaves it unvoiced that first time instead, and `prepare_greetings = true` tries to have it ready; see [Greetings spoken late](unvoiced-dialogue.md#greetings-spoken-late).
-- **`Greeting not spoken late, N s after it was said: ...`**. The greeting took too long to generate (more than about 10 seconds), the speaker left, or the speaker went on to another line in the meantime. It is in the cache for the next time.
+- **`Line not spoken late, N s after it was said: ...`**. The line took too long to generate (more than about 10 seconds), the speaker left, or the speaker went on to another line in the meantime. It is in the cache for the next time.
 - **Speech stops before the subtitle ends.** A response longer than `[playback] max_chars` is cut at the last sentence that fits.
 - **`every placeholder file is held by a recent line`**. Raise `[dialogue] slots` and restart.
 - **`the model '...' could not be loaded`** or **`the model folder '...' holds no model`**. The model the voice type points at is missing or broken.
