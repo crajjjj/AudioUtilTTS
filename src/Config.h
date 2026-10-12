@@ -8,6 +8,8 @@ namespace Config
 	inline constexpr std::string_view MODELS_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\models\\";
 	// What a model says about itself, inside its own folder (see ModelVoice).
 	inline constexpr std::string_view MODEL_FILE = "model.toml";
+	// Where the voice type patches are (see Settings::patchVoiceTypes).
+	inline constexpr std::string_view PATCH_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\voicetypes\\";
 
 	// A named voice a caller asks for by name: [preset.<name>]. Anything left out
 	// is inherited from the defaults.
@@ -33,6 +35,7 @@ namespace Config
 		int         voice = 0;
 		float       speed = 0.0f;    // <= 0 = not set
 		float       volume = -1.0f;  // < 0 = not set
+		std::string source;          // the patch file that says so, "" for a model.toml
 	};
 
 	struct Settings
@@ -88,8 +91,19 @@ namespace Config
 		// An empty preset name means that voice type is never spoken for.
 		std::unordered_map<std::string, std::string> voiceTypes;
 
+		// The voice type patches, voicetypes\*.toml: Normalize(voice type editor
+		// ID) -> the voice of an installed model that speaks for it. A patch is a
+		// file of its own, so the voice types of a mod can be given voices by
+		// dropping one in, and several patches add up (in file name order; a
+		// voice type two of them name goes to the later one):
+		//   [voicetype]
+		//   HjoromirVoice = "MaleYoungEager"                  # the model folder
+		//   RumarinVoice = { model = "my-voices", voice = 3 }  # speed, volume too
+		// Asked after the two maps above and before the model.toml files.
+		std::unordered_map<std::string, ModelVoice> patchVoiceTypes;
+
 		// The model.toml files: Normalize(voice type editor ID) -> the voice a
-		// model offers for it. Asked after the two maps above, so the main config
+		// model offers for it. Asked after the maps above, so the main config
 		// always has the last word.
 		std::unordered_map<std::string, ModelVoice> modelVoiceTypes;
 	};

@@ -47,11 +47,12 @@ A voice type finds its voice in a fixed order, and the user's own config is aske
 
 1. the user's `[voicetype]` line
 2. a preset named exactly like the voice type
-3. **your `model.toml`**
-4. a model folder named exactly like the voice type
-5. the generic voice by sex, when the user has `[dialogue] fallback` on
+3. a [voice type patch](../players/voices.md#voice-type-patches) the user installed (0.2.3 and newer)
+4. **your `model.toml`**
+5. a model folder named exactly like the voice type
+6. the generic voice by sex, when the user has `[dialogue] fallback` on
 
-So a user can always overrule a model, or silence a voice type with `Name = ""`.
+So a user can always overrule a model, or silence a voice type with `Name = ""`. A patch is the way to give further voice types to a voice you did not make: it is a file outside the model's folder, so it does not replace the model's own `model.toml`.
 
 When two installed models list the same voice type, the one later in folder name order is used, and `AudioUtilTTS.log` names both. Pick a folder name of your own, and list only the voice types your voice is meant for.
 

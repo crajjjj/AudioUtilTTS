@@ -193,13 +193,21 @@ cache_max_mb = 1024
 # A voice type finds its voice in this order:
 #   1. its line below:  <voice type ID> = "<preset name>"
 #   2. a preset named exactly like the voice type, e.g. [preset.MaleNord]
-#   3. a model that lists the voice type in its own model.toml (see below)
-#   4. a model folder named exactly like the voice type, models\MaleNord
+#   3. a voice type patch that names an installed model (see below)
+#   4. a model that lists the voice type in its own model.toml (see below)
+#   5. a model folder named exactly like the voice type, models\MaleNord
 #      (its first voice), with no line here at all
-#   5. the preset "female" or "male" by sex, only when [dialogue] fallback is on
+#   6. the preset "female" or "male" by sex, only when [dialogue] fallback is on
 # The ID is the voice type's editor ID as xEdit shows it; case is ignored.
 # "autts voice" in the console shows which voice the selected actor gets.
 # An empty preset name means that voice type is never spoken for.
+#
+# A patch gives voice types to voices that are already installed, from a file of
+# its own: every voicetypes\*.toml beside this file is read, in file name order,
+#   [voicetype]
+#   HjoromirVoice = "MaleYoungEager"     # voice type ID = the model folder
+#   RumarinVoice = { model = "my-voices", voice = 3 }   # speed, volume too
+# Several patches add up, and a line whose model is not installed is ignored.
 #
 # A model can bring its own list, so that installing the model is all it takes:
 # a file models\<folder>\model.toml inside the model's folder,

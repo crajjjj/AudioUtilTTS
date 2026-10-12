@@ -2264,9 +2264,10 @@ namespace Speaker
 		// The voice of a voice type, looked for in this order:
 		//   1. its line in [voicetype], naming a preset ("" = never spoken for)
 		//   2. a preset named like the voice type
-		//   3. a model that lists the voice type in its own model.toml
-		//   4. a model folder named like the voice type (its first voice)
-		//   5. when a_fallback: the preset "female" / "male" by sex, else the
+		//   3. a voice type patch (voicetypes\*.toml) that names an installed model
+		//   4. a model that lists the voice type in its own model.toml
+		//   5. a model folder named like the voice type (its first voice)
+		//   6. when a_fallback: the preset "female" / "male" by sex, else the
 		//      default voice
 		struct VoiceChoice
 		{
@@ -2274,8 +2275,8 @@ namespace Speaker
 			{
 				kNone,    // nothing matched and no fallback was allowed
 				kSilent,  // the config says this voice type is never spoken for
-				kOwn,     // steps 1 to 4: a voice meant for this voice type
-				kBySex    // step 5
+				kOwn,     // steps 1 to 5: a voice meant for this voice type
+				kBySex    // step 6
 			};
 			Line        line;
 			Source      source = kNone;
@@ -2317,16 +2318,30 @@ namespace Speaker
 										"that line is ignored",
 						name, presetKey));
 				}
+				const auto borrow = [&](const Config::ModelVoice& a_voice) {
+					choice.line.model = a_voice.model == Config::Normalize(a_settings.model) ? std::string{} : a_voice.model;
+					choice.line.voice = a_voice.voice;
+					choice.line.speed = a_voice.speed;
+					choice.line.volume = a_voice.volume;
+					choice.source = VoiceChoice::kOwn;
+				};
+				// A patch is written for a voice somebody else installs: when that
+				// model is not there, the patch says nothing and the lookup goes on.
+				if (const auto it = a_settings.patchVoiceTypes.find(id); it != a_settings.patchVoiceTypes.end()) {
+					if (ModelStampFor(it->second.model) != 0) {
+						borrow(it->second);
+						choice.label += std::format(": model '{}' by the patch {}", it->second.model, it->second.source);
+						return choice;
+					}
+					LogOnce(std::format("The patch {} gives {} the voice of model '{}', which is not installed: that "
+										"line is ignored",
+						it->second.source, name, it->second.model));
+				}
 				// a model.toml whose model files are gone speaks for nothing
 				if (const auto it = a_settings.modelVoiceTypes.find(id);
 					it != a_settings.modelVoiceTypes.end() && ModelStampFor(it->second.model) != 0) {
-					const auto& listed = it->second;
-					choice.line.model = listed.model == Config::Normalize(a_settings.model) ? std::string{} : listed.model;
-					choice.line.voice = listed.voice;
-					choice.line.speed = listed.speed;
-					choice.line.volume = listed.volume;
-					choice.source = VoiceChoice::kOwn;
-					choice.label += std::format(": listed by model '{}'", listed.model);
+					borrow(it->second);
+					choice.label += std::format(": listed by model '{}'", it->second.model);
 					return choice;
 				}
 				if (ModelStampFor(id) != 0) {
@@ -3142,13 +3157,13 @@ namespace Speaker
 		return std::format("dialogue {} | this session: {} responses given a voice, {} left unvoiced, {} with "
 						   "nothing to say, {} lines spoken late (which is {}), {} lines generated ({} of them "
 						   "greetings made ahead, which is {}) | "
-						   "slots {} of {} | lipsync {} | {} voice types mapped, {} listed by models | cache {} lines, "
-						   "{:.1f} MB",
+						   "slots {} of {} | lipsync {} | {} voice types mapped, {} given a voice by patches, {} listed "
+						   "by models | cache {} lines, {:.1f} MB",
 			state, g_dialogueGiven.load(), g_dialogueUnvoiced.load(), g_dialogueNothing.load(), g_dialogueLate.load(),
 			settings->dialogueGreetings ? "on" : "off", g_dialogueGenerated.load(), g_dialoguePrepared.load(),
 			settings->dialoguePrepare ? "on" : "off",
 			g_usableSlots[kDialogue].load(), settings->dialogueSlots, settings->dialogueLip ? "on" : "off",
-			settings->voiceTypes.size(), settings->modelVoiceTypes.size(), lines,
+			settings->voiceTypes.size(), settings->patchVoiceTypes.size(), settings->modelVoiceTypes.size(), lines,
 			static_cast<double>(bytes) / (1024.0 * 1024.0));
 	}
 

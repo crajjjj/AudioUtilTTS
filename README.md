@@ -263,10 +263,12 @@ A voice type finds its voice in this order:
 
 1. its line in `[voicetype]`, naming a preset
 2. a preset named exactly like the voice type
-3. a model that lists the voice type in its own `model.toml` (see
+3. a voice type patch that names an installed model (see
+   [Voice type patches](#voice-type-patches))
+4. a model that lists the voice type in its own `model.toml` (see
    [A model's own voice types](#a-models-own-voice-types))
-4. a model folder named exactly like the voice type (its first voice)
-5. the preset `female` or `male` by sex, only with `[dialogue] fallback = true`
+5. a model folder named exactly like the voice type (its first voice)
+6. the preset `female` or `male` by sex, only with `[dialogue] fallback = true`
 
 ```toml
 [voicetype]
@@ -302,6 +304,39 @@ file, so the lines of the old model are not played again.
 
 The same lookup gives a character their voice for `SpeakActorFrom` and
 `AudioUtilTTS_Say` when no preset is named.
+
+### Voice type patches
+
+A patch gives voice types to voices that are already installed. It is one small
+file of its own, so the characters of a mod can be given voices by dropping a
+file in, with no line in `AudioUtilTTS.toml` and nothing added to a model's
+folder. Added in 0.2.3.
+
+`Data\SKSE\Plugins\AudioUtilTTS\voicetypes\<any name>.toml`:
+
+```toml
+# voice type editor ID = the model folder that speaks for it (its first voice)
+[voicetype]
+HjoromirVoice = "MaleYoungEager"
+GorrVoice = "MaleBrute"
+
+# when the model holds several voices, or the voice needs its own speed or volume
+RumarinVoice = { model = "my-voices", voice = 3, speed = 1.0, volume = 1.0 }
+```
+
+- Every `.toml` file in that folder is read, in file name order, and they add
+  up. A voice type that two patches name goes to the later one, and
+  `AudioUtilTTS.log` names both.
+- A line whose model is not installed is ignored, with one line in the log: the
+  lookup goes on as if the patch did not name that voice type. So a patch can
+  be installed before the voices it points at.
+- `[voicetype]` and the presets in `AudioUtilTTS.toml` are asked first, so the
+  user can overrule a patch or silence a voice type with `Name = ""`. A patch
+  in turn is asked before the models' own `model.toml` files.
+- The files are read at game start and on `autts reload`. `autts voice` shows
+  the result for the selected NPC ("model '...' by the patch ...").
+- A character with recorded lines keeps those: a patch only matters for the
+  lines that have no recording.
 
 ### A model's own voice types
 

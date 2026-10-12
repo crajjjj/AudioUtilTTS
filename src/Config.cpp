@@ -98,6 +98,87 @@ namespace Config
 				logger::info("Model '{}' lists {} voice types in its {}", folder, listed, MODEL_FILE);
 			}
 		}
+
+		// Reads every voicetypes\*.toml (see Settings::patchVoiceTypes), in file
+		// name order: a voice type two patches name goes to the later one.
+		void LoadPatchFiles(Settings& a_settings)
+		{
+			namespace fs = std::filesystem;
+			std::map<std::string, std::pair<std::string, fs::path>> files;  // by Normalize(file name)
+			std::error_code                                         ec;
+			for (const auto& entry : fs::directory_iterator(fs::path(PATCH_DIR), ec)) {
+				std::error_code ignored;
+				if (!entry.is_regular_file(ignored)) {
+					continue;
+				}
+				try {
+					const auto utf8 = entry.path().filename().u8string();
+					auto       name = std::string(utf8.begin(), utf8.end());
+					if (auto key = Normalize(name); key.ends_with(".toml")) {
+						files.emplace(std::move(key), std::pair{ std::move(name), entry.path() });
+					}
+				} catch (const std::exception&) {
+					// a name that is not valid text: skipped
+				}
+			}
+
+			for (const auto& [key, file] : files) {
+				const auto& [name, path] = file;
+				toml::table root;
+				try {
+					// opened by its path object, so any file name works
+					std::ifstream in(path, std::ios::binary);
+					if (!in) {
+						throw std::runtime_error("the file could not be opened");
+					}
+					root = toml::parse(in);
+				} catch (const toml::parse_error& e) {
+					logger::error("Failed to parse the voice type patch {}: {} (line {}), file ignored", name,
+						e.description(), e.source().begin.line);
+					continue;
+				} catch (const std::exception& e) {
+					logger::error("Failed to read the voice type patch {}: {}, file ignored", name, e.what());
+					continue;
+				}
+
+				std::size_t given = 0;
+				if (const auto* voiceTypes = root["voicetype"].as_table()) {
+					for (auto&& [type, node] : *voiceTypes) {
+						const auto id = Normalize(type.str());
+						ModelVoice voice;
+						voice.source = name;
+						if (const auto model = node.value<std::string>()) {
+							voice.model = Normalize(*model);
+						} else if (const auto* table = node.as_table()) {
+							voice.model = Normalize((*table)["model"].value_or(std::string{}));
+							voice.voice = (*table)["voice"].value_or(voice.voice);
+							voice.speed = (*table)["speed"].value_or(voice.speed);
+							voice.volume = (*table)["volume"].value_or(voice.volume);
+						}
+						if (id.empty() || !IsFolderName(voice.model) || voice.voice < 0) {
+							logger::warn("Voice type patch {}: {} must name a model folder, as \"folder\" or as "
+										 "{{ model = \"folder\", voice = 0 }}; ignored",
+								name, type.str());
+							continue;
+						}
+						if (voice.speed > 0.0f) {
+							voice.speed = std::clamp(voice.speed, 0.5f, 2.0f);
+						}
+						if (voice.volume > 1.0f) {
+							voice.volume = 1.0f;
+						}
+						if (const auto it = a_settings.patchVoiceTypes.find(id);
+							it != a_settings.patchVoiceTypes.end() && it->second.source != name) {
+							logger::info("Voice type {} is named by the patches {} and {}: {} is used", type.str(),
+								it->second.source, name, name);
+						}
+						a_settings.patchVoiceTypes[id] = std::move(voice);
+						++given;
+					}
+				}
+				logger::info("Voice type patch {}: {} voice types", name, given);
+			}
+		}
 	}
 
 	bool IsFolderName(const std::string& a_name)
@@ -248,6 +329,7 @@ namespace Config
 		}
 
 		LoadModelFiles(*settings);
+		LoadPatchFiles(*settings);
 
 		logger::info("Config: model '{}' ({}), voice {}, speed {:.2f}, volume {:.2f}, threads {}, max_loaded {}, "
 					 "group '{}', channel '{}', interrupt {}, max_pending {}, slots {}, output_rate {}, {} presets, "
@@ -259,12 +341,13 @@ namespace Config
 			settings->enable ? "" : " [disabled]");
 		logger::info("Config: dialogue {}, slots {}, lipsync {} (strength {:.2f}), fallback {}, "
 					 "greetings {} (up to {:.1f} s late, in two parts {}), prepare_greetings {}, skip_directions {}, "
-					 "cache {} MB, {} voice types mapped, {} listed by models",
+					 "cache {} MB, {} voice types mapped, {} given a voice by patches, {} listed by models",
 			settings->dialogue, settings->dialogueSlots, settings->dialogueLip, settings->dialogueLipStrength,
 			settings->dialogueFallback, settings->dialogueGreetings, settings->dialogueLateMax,
 			settings->dialogueLateSplit, settings->dialoguePrepare,
 			settings->dialogueSkipDirections,
-			settings->dialogueCacheMb, settings->voiceTypes.size(), settings->modelVoiceTypes.size());
+			settings->dialogueCacheMb, settings->voiceTypes.size(), settings->patchVoiceTypes.size(),
+			settings->modelVoiceTypes.size());
 
 		std::scoped_lock lock{ g_lock };
 		g_settings = std::move(settings);

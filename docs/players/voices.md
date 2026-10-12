@@ -59,9 +59,10 @@ A voice type finds its voice in this order:
 
 1. its line in `[voicetype]`, naming a preset
 2. a preset named exactly like the voice type
-3. a model that lists the voice type in its own `model.toml` (see [Models that bring their own voice types](models.md#models-that-bring-their-own-voice-types))
-4. a model folder named exactly like the voice type (its first voice)
-5. the preset `female` or `male` by sex, only with `[dialogue] fallback = true`
+3. a voice type patch that names an installed model (see [Voice type patches](#voice-type-patches))
+4. a model that lists the voice type in its own `model.toml` (see [Models that bring their own voice types](models.md#models-that-bring-their-own-voice-types))
+5. a model folder named exactly like the voice type (its first voice)
+6. the preset `female` or `male` by sex, only with `[dialogue] fallback = true`
 
 ```toml
 [voicetype]
@@ -82,8 +83,30 @@ voice = 4
 - **An empty preset name silences a voice type.** `CrDogVoice = ""` means that voice type is never spoken for, whatever else is installed: not in dialogue, and not in character speech that names no preset.
 - **The quickest setup is no config at all.** A model folder called `models\MaleNord` speaks for the voice type `MaleNord`.
 
-!!! info "Added in 0.2.1"
-    Step 3, a model's own `model.toml`, is new in 0.2.1. In 0.2.0 the order was steps 1, 2, 4 and 5.
+!!! info "Added in 0.2.1 and 0.2.3"
+    A model's own `model.toml` (step 4) is new in 0.2.1, voice type patches (step 3) in 0.2.3. In 0.2.0 the order was steps 1, 2, 5 and 6.
+
+### Voice type patches
+
+Added in 0.2.3. A patch gives voice types to voices that are already installed. It is one small file of its own, so the characters of a mod can be given voices by dropping a file in, with no line in `AudioUtilTTS.toml` and nothing added to a model's folder.
+
+`Data\SKSE\Plugins\AudioUtilTTS\voicetypes\<any name>.toml`:
+
+```toml
+# voice type editor ID = the model folder that speaks for it (its first voice)
+[voicetype]
+HjoromirVoice = "MaleYoungEager"
+GorrVoice = "MaleBrute"
+
+# when the model holds several voices, or the voice needs its own speed or volume
+RumarinVoice = { model = "my-voices", voice = 3, speed = 1.0, volume = 1.0 }
+```
+
+- **Patches add up.** Every `.toml` file in that folder is read, in file name order. A voice type that two patches name goes to the later one, and `AudioUtilTTS.log` names both.
+- **A missing voice is no error.** A line whose model is not installed is ignored, with one line in the log, and the lookup goes on as if the patch did not name that voice type.
+- **Your own config wins.** `[voicetype]` and the presets in `AudioUtilTTS.toml` are asked first, so you can overrule a patch or silence a voice type with `Name = ""`.
+- **Read at game start and on `autts reload`.**
+- **Recorded lines stay as they are.** A patch only matters for the lines of that character that have no recording.
 
 ### Finding out who gets which voice
 
@@ -94,7 +117,7 @@ autts voice
 autts sayactor "Some text"
 ```
 
-`autts voice` shows their voice type and the voice it leads to, with the reason: `preset 'malenord'`, `listed by model ...`, `model folder ...`, `preset 'female' by sex`, or `never spoken for`. When the voice is only the one by sex and `fallback` is off, it adds that unvoiced dialogue stays silent for this NPC. `autts sayactor` lets you hear the voice. With nothing selected, both act on the player.
+`autts voice` shows their voice type and the voice it leads to, with the reason: `preset 'malenord'`, `model '...' by the patch ...`, `listed by model ...`, `model folder ...`, `preset 'female' by sex`, or `never spoken for`. When the voice is only the one by sex and `fallback` is off, it adds that unvoiced dialogue stays silent for this NPC. `autts sayactor` lets you hear the voice. With nothing selected, both act on the player.
 
 ### What happens with no voice set up
 
