@@ -176,12 +176,14 @@ namespace Config
 			settings->dialoguePrepare = (*dialogue)["prepare_greetings"].value_or(settings->dialoguePrepare);
 			settings->dialogueGreetings =
 				(*dialogue)["greetings"].value_or(settings->dialogueGreetings);
+			settings->dialogueLateMax = (*dialogue)["greetings_max_late"].value_or(settings->dialogueLateMax);
 			settings->dialogueSkipDirections =
 				(*dialogue)["skip_directions"].value_or(settings->dialogueSkipDirections);
 			settings->dialogueCacheMb = (*dialogue)["cache_max_mb"].value_or(settings->dialogueCacheMb);
 		}
 		settings->dialogueSlots = std::clamp(settings->dialogueSlots, 64, 256);
 		settings->dialogueLipStrength = std::clamp(settings->dialogueLipStrength, 0.0f, 1.5f);
+		settings->dialogueLateMax = std::clamp(settings->dialogueLateMax, 0.5f, 20.0f);
 		settings->dialogueCacheMb = std::clamp(settings->dialogueCacheMb, 0, 16384);
 
 		if (const auto* voiceTypes = root["voicetype"].as_table()) {
@@ -255,10 +257,10 @@ namespace Config
 			settings->speechGroup, settings->speechChannel, settings->speechSlots, settings->speechLipSync,
 			settings->enable ? "" : " [disabled]");
 		logger::info("Config: dialogue {}, slots {}, lipsync {} (strength {:.2f}), fallback {}, "
-					 "greetings {}, prepare_greetings {}, skip_directions {}, cache {} MB, {} voice types mapped, "
-					 "{} listed by models",
+					 "greetings {} (up to {:.1f} s late), prepare_greetings {}, skip_directions {}, cache {} MB, "
+					 "{} voice types mapped, {} listed by models",
 			settings->dialogue, settings->dialogueSlots, settings->dialogueLip, settings->dialogueLipStrength,
-			settings->dialogueFallback, settings->dialogueGreetings, settings->dialoguePrepare,
+			settings->dialogueFallback, settings->dialogueGreetings, settings->dialogueLateMax, settings->dialoguePrepare,
 			settings->dialogueSkipDirections,
 			settings->dialogueCacheMb, settings->voiceTypes.size(), settings->modelVoiceTypes.size());
 

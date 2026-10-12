@@ -219,7 +219,10 @@ on time itself.
 - **First in line.** A line waiting to be spoken late is generated before every
   other dialogue line that waits, and played before any other line.
 - **Also once you are talking.** A line that opened a conversation is still
-  spoken after the dialogue menu has come up.
+  spoken after the dialogue menu has come up. When its speaker goes on to
+  another line while it is being spoken, it is cut short, as the game cuts its
+  own lines; that needs AudioUtil 0.9.29 or newer, with an older one the two
+  lines overlap.
 - **Not at any price.** It is not spoken when it would be more than about 10
   seconds late, when the speaker is gone, when the speaker has gone on to
   another line, or when another character line is being spoken. The line is in

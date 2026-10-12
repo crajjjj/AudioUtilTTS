@@ -3,7 +3,7 @@
 ## Requirements
 
 - **Skyrim SE / AE** with **SKSE64** and **Address Library for SKSE Plugins**. Start the game through the SKSE loader (or the SKSE entry in your mod manager), not the vanilla launcher.
-- **[AudioUtil](https://github.com/crajjjj/AudioUtil) 0.9.9 or newer.** It plays narration and character speech. Use 0.9.26 or newer for the mouth to move on character speech, and 0.9.28 or newer for a line that was cut short to make room for the next one at once. Dialogue is played by the game itself and does not need it.
+- **[AudioUtil](https://github.com/crajjjj/AudioUtil) 0.9.9 or newer.** It plays narration and character speech. Use 0.9.26 or newer for the mouth to move on character speech, 0.9.28 or newer for a line that was cut short to make room for the next one at once, and 0.9.29 or newer for a line spoken late to stop when its speaker goes on to another one. Dialogue is played by the game itself and does not need it.
 - **[ConsoleUtil Extended](https://www.nexusmods.com/skyrimspecialedition/mods/133569)**, only for the `autts` console commands.
 
 ## Installing

@@ -49,9 +49,10 @@ namespace RE
 //   instance; "" = no channel.
 // - Returns an instance handle: >0 success, 0 = nothing played. Handles share the id
 //   space of the Papyrus API, so a handle returned here works with AudioUtil.StopHandle /
-//   IsHandlePlaying / SetHandleVolume etc. from script. The one handle op on this C
-//   surface is AudioUtil_IsHandlePlaying (interface version >= 10200) - feature-detect
-//   additions via AudioUtil_GetInterfaceVersion.
+//   IsHandlePlaying / SetHandleVolume etc. from script, and the other way round. On this
+//   C surface AudioUtil_IsHandlePlaying is there from interface version 10200, and the
+//   rest of the handle, group and channel calls from 10300 (see "Playback control"
+//   below) - feature-detect additions via AudioUtil_GetInterfaceVersion.
 // - A same-named `.toml` caption sidecar next to the wav shows its text as a game
 //   subtitle attributed to `follow` (loose files only), exactly like the Papyrus call.
 // - The WithLipSync variant additionally drives `follow`'s mouth like a voice line:
@@ -201,5 +202,45 @@ std::uint32_t AudioUtil_GetClaimedActors(RE::Actor** out, std::uint32_t max);
 // clock cannot see that. Give it the threads of the playback calls. Interface version
 // >= 10200.
 bool AudioUtil_IsHandlePlaying(std::int32_t handle);
+
+// --------------------------------------------------------------------- Playback control
+// What a plugin can do to the sounds it started, and to the groups and channels it
+// plays on (interface version >= 10300, AudioUtil 0.9.29). Each is the Papyrus native of
+// the same name and runs the same code, so lipsync and captions end with a stopped
+// sound exactly as they do for a script. Give them the threads of the playback calls.
+// A handle of 0 or one AudioUtil does not know is a no-op. A null string is taken as
+// "", and "" names what was played with no group or channel: nothing sits on the
+// channel "", the volume calls do nothing for the group "", and AudioUtil_StopGroup("")
+// stops every sound that was played without a group.
+
+// Stop the instance now. Returns true if it was alive and stopped.
+bool AudioUtil_StopHandle(std::int32_t handle);
+
+// Clip length in seconds. May return 0.0 while the stream is still being prepared,
+// right after the play call; 0.0 for a dead or unknown handle too.
+float AudioUtil_GetHandleDuration(std::int32_t handle);
+
+// Change one instance's base volume mid-play (0.0-1.0; the group's volume and duck
+// factor still apply on top).
+void AudioUtil_SetHandleVolume(std::int32_t handle, float volume);
+
+// Set a group's volume (0.0-1.0). Applies at once to its playing members and to
+// everything started later. A group is created by its first use.
+void AudioUtil_SetGroupVolume(const char* group, float volume);
+
+// Scale a group by `factor` for a while (0.0 = silent, 1.0 = no duck) without touching
+// its stored volume, e.g. to duck background voice under an important line. Ducks do
+// not stack: the last factor wins. Undo with AudioUtil_UnduckGroup.
+void AudioUtil_DuckGroup(const char* group, float factor);
+
+// Restore a ducked group to its normal volume (the same as factor 1.0).
+void AudioUtil_UnduckGroup(const char* group);
+
+// Stop every playing instance that belongs to the group - every mod's, so keep to a
+// group of your own unless stopping the others is what you mean.
+void AudioUtil_StopGroup(const char* group);
+
+// Stop whatever occupies the channel, if anything, and free it.
+void AudioUtil_StopChannel(const char* channel);
 
 }  // extern "C"

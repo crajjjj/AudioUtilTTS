@@ -237,6 +237,16 @@ namespace Speaker
 		};
 		std::array<SaidInfo, 16> g_said{};        // g_lock
 		std::size_t              g_saidNext = 0;  // g_lock
+		// The line spoken late that plays on the character lane right now, if any.
+		// The game cuts its own line when the speaker goes on to the next one; this
+		// one it knows nothing about, so the plugin stops it then (NoteSpeaker).
+		struct LatePlaying
+		{
+			RE::FormID   speaker = 0;
+			RE::FormID   info = 0;
+			std::int32_t handle = 0;  // the AudioUtil handle, 0 = none
+		};
+		LatePlaying g_latePlaying;  // g_lock
 
 		std::array<std::atomic<int>, kLaneCount> g_usableSlots{};
 
@@ -260,10 +270,12 @@ namespace Speaker
 
 		using PlayFileFn = decltype(&AudioUtil_PlayFile);
 		using IsPlayingFn = decltype(&AudioUtil_IsHandlePlaying);
+		using StopHandleFn = decltype(&AudioUtil_StopHandle);
 
 		std::atomic<PlayFileFn>    g_playFile{ nullptr };
 		std::atomic<PlayFileFn>    g_playFileLipSync{ nullptr };  // same signature
 		std::atomic<IsPlayingFn>   g_isHandlePlaying{ nullptr };  // AudioUtil 0.9.28 and newer
+		std::atomic<StopHandleFn>  g_stopHandle{ nullptr };       // AudioUtil 0.9.29 and newer
 		std::atomic<std::uint32_t> g_audioUtilVersion{ 0 };
 
 		// The AudioUtil handle of the line last started on each lane: STARTING from
@@ -313,6 +325,7 @@ namespace Speaker
 				reinterpret_cast<PlayFileFn>(GetProcAddress(module, "AudioUtil_PlayFileWithLipSync")));
 			g_isHandlePlaying.store(
 				reinterpret_cast<IsPlayingFn>(GetProcAddress(module, "AudioUtil_IsHandlePlaying")));
+			g_stopHandle.store(reinterpret_cast<StopHandleFn>(GetProcAddress(module, "AudioUtil_StopHandle")));
 			const auto found = reinterpret_cast<PlayFileFn>(GetProcAddress(module, "AudioUtil_PlayFile"));
 			g_playFile.store(found);
 			return found;
@@ -1051,8 +1064,9 @@ namespace Speaker
 		// Game thread.
 		const char* LateGreetingStale(Clock::time_point a_asked, const RE::Actor* a_speaker, RE::FormID a_info)
 		{
-			if (Clock::now() - a_asked > LATE_GREETING_MAX) {
-				return "it took too long";
+			const float late = std::chrono::duration<float>(Clock::now() - a_asked).count();
+			if (late > Config::Get()->dialogueLateMax) {
+				return "that is later than [dialogue] greetings_max_late allows";
 			}
 			if (!a_speaker || !a_speaker->Is3DLoaded() || a_speaker->IsDead()) {
 				return "the speaker is gone";
@@ -1146,6 +1160,11 @@ namespace Speaker
 					if (g_lanes[line.lane].quietAt == a_quietAt) {
 						g_laneHandle[line.lane].store(handle);
 						g_lanes[line.lane].startedAt = Clock::now();
+					}
+					if (speech) {
+						// whatever played on the character lane before is over now
+						g_latePlaying =
+							lateGreeting ? LatePlaying{ speaker->GetFormID(), line.lateInfo, handle } : LatePlaying{};
 					}
 				}
 				std::string late;
@@ -1968,9 +1987,21 @@ namespace Speaker
 		// names the speaker of a greeting spoken late (see LateGreeting).
 		void NoteSpeaker(RE::FormID a_info, RE::Actor* a_actor)
 		{
+			std::int32_t cut = 0;
 			{
 				std::scoped_lock lock{ g_lock };
 				g_said[g_saidNext++ % g_said.size()] = SaidInfo{ a_actor->GetFormID(), a_info, Clock::now() };
+				if (g_latePlaying.handle > 0 && g_latePlaying.speaker == a_actor->GetFormID() &&
+					g_latePlaying.info != a_info) {
+					cut = g_latePlaying.handle;
+					g_latePlaying = {};
+				}
+			}
+			// The speaker goes on to another line while one of theirs is still being
+			// spoken late: that one stops, as the game stops its own. Needs AudioUtil
+			// 0.9.29; with an older one the two lines overlap.
+			if (const auto stop = g_stopHandle.load(); cut > 0 && stop && stop(cut)) {
+				logger::info("A line spoken late was cut short: its speaker began another line");
 			}
 			bool        female = false;
 			const auto* voiceType = VoiceTypeOf(a_actor, female);
@@ -2148,6 +2179,7 @@ namespace Speaker
 		g_lateGreetings.clear();
 		g_heard = {};
 		g_said = {};
+		g_latePlaying = {};
 		// the lines on their way will not come: no line has a slot any more,
 		// so each is asked for afresh
 		g_slotOfKey.clear();
