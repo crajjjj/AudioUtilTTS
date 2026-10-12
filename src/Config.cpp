@@ -183,7 +183,7 @@ namespace Config
 		}
 		settings->dialogueSlots = std::clamp(settings->dialogueSlots, 64, 256);
 		settings->dialogueLipStrength = std::clamp(settings->dialogueLipStrength, 0.0f, 1.5f);
-		settings->dialogueLateMax = std::clamp(settings->dialogueLateMax, 0.5f, 20.0f);
+		settings->dialogueLateMax = std::clamp(settings->dialogueLateMax, 0.5f, 10.0f);
 		settings->dialogueCacheMb = std::clamp(settings->dialogueCacheMb, 0, 16384);
 
 		if (const auto* voiceTypes = root["voicetype"].as_table()) {

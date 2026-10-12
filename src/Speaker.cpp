@@ -215,7 +215,8 @@ namespace Speaker
 			RE::ActorHandle   speaker;
 			Clock::time_point at{};
 		};
-		// Later than this after the NPC said it, a greeting is not spoken any more.
+		// How long a line waiting to be spoken late is remembered. How late it may
+		// still be spoken is [dialogue] greetings_max_late, at most this long.
 		constexpr auto LATE_GREETING_MAX = std::chrono::seconds(10);
 		constexpr auto HEARD_FRESH = std::chrono::seconds(3);
 		// What a late greeting is known by: its topic info and the voice type it is
@@ -227,6 +228,12 @@ namespace Speaker
 		std::unordered_map<std::uint64_t, LateGreeting> g_lateGreetings;  // by LateKey; g_lock
 		std::array<HeardInfo, 16>                       g_heard{};        // g_lock
 		std::size_t                                     g_heardNext = 0;  // g_lock
+		// Lines to be spoken late that are on their way to the worker: handed to
+		// the game thread (PostLateGreeting), not yet queued or turned down there
+		// (SpeakLateGreeting). The worker gives them a moment to arrive before it
+		// starts on another line, which could take seconds. g_lock.
+		int            g_lateOnItsWay = 0;
+		constexpr auto LATE_HANDOVER_WAIT = std::chrono::milliseconds(250);
 		// What the game last reported each speaker as beginning to say. A greeting
 		// spoken late stays out once its speaker has gone on to another line.
 		struct SaidInfo
@@ -1194,6 +1201,10 @@ namespace Speaker
 		void PostLateGreeting(std::uint64_t a_key)
 		{
 			if (auto* task = SKSE::GetTaskInterface()) {
+				{
+					std::scoped_lock lock{ g_lock };
+					++g_lateOnItsWay;  // SpeakLateGreeting counts it off again
+				}
 				task->AddTask([a_key] { SpeakLateGreeting(a_key); });
 			}
 		}
@@ -1570,10 +1581,23 @@ namespace Speaker
 						TrimCache(Config::Get()->dialogueCacheMb);
 						continue;
 					}
+					// A line to be spoken late is queued by the game thread, a frame
+					// after its audio is ready. The next line is not started in front
+					// of it: generating that one can take seconds, and they would be
+					// heard as lateness. Not for long, the game may be busy.
+					const auto isLate = [](const Line& a_line) { return a_line.asked != Clock::time_point{}; };
+					if (g_lateOnItsWay > 0) {
+						g_wake.wait_for(lock, LATE_HANDOVER_WAIT, [&] {
+							return g_lateOnItsWay <= 0 || std::any_of(g_waiting.begin(), g_waiting.end(), isLate);
+						});
+						// a Cancel or a load may have emptied the queues meanwhile
+						if (g_reloadWanted || (g_waiting.empty() && g_dialogueWaiting.empty())) {
+							continue;
+						}
+					}
 					// A greeting spoken late is already generated and only has to be
 					// put in place, and every moment it waits is heard: ahead of all.
-					const auto late = std::find_if(g_waiting.begin(), g_waiting.end(),
-						[](const Line& a_line) { return a_line.asked != Clock::time_point{}; });
+					const auto late = std::find_if(g_waiting.begin(), g_waiting.end(), isLate);
 					dialogue = late == g_waiting.end() && DialogueGoesFirstLocked();
 					if (dialogue) {
 						line = TakeDialogueLocked();
@@ -1755,6 +1779,19 @@ namespace Speaker
 		// now, as a character line: the cached audio, at the speaker, mouth moving.
 		void SpeakLateGreeting(std::uint64_t a_key)
 		{
+			// Queued or turned down, the worker need not wait for this line any more
+			// (see g_lateOnItsWay). Under the lock, so that the worker cannot miss it.
+			struct Arrived
+			{
+				~Arrived()
+				{
+					{
+						std::scoped_lock lock{ g_lock };
+						--g_lateOnItsWay;
+					}
+					g_wake.notify_all();
+				}
+			} arrived;
 			LateGreeting late;
 			{
 				std::scoped_lock lock{ g_lock };
