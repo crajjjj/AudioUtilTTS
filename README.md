@@ -212,7 +212,7 @@ on time itself.
 - **It plays as character speech**, not through the game's dialogue: at the
   NPC, with their mouth moving, on the `[speech]` group and channel. The
   subtitle has been shown already, when the game said the line.
-- **Not only greetings.** From 0.2.3 on this goes for every line of one
+- **Not only greetings.** From 0.3.0 on this goes for every line of one
   response that is said right away: a greeting, the line that opens a
   conversation, a remark in passing, whatever kind of topic it is filed under.
   A line with further responses behind it is not spoken late.
@@ -310,7 +310,7 @@ The same lookup gives a character their voice for `SpeakActorFrom` and
 A patch gives voice types to voices that are already installed. It is one small
 file of its own, so the characters of a mod can be given voices by dropping a
 file in, with no line in `AudioUtilTTS.toml` and nothing added to a model's
-folder. Added in 0.2.3.
+folder. Added in 0.3.0.
 
 `Data\SKSE\Plugins\AudioUtilTTS\voicetypes\<any name>.toml`:
 

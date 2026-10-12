@@ -83,12 +83,12 @@ voice = 4
 - **An empty preset name silences a voice type.** `CrDogVoice = ""` means that voice type is never spoken for, whatever else is installed: not in dialogue, and not in character speech that names no preset.
 - **The quickest setup is no config at all.** A model folder called `models\MaleNord` speaks for the voice type `MaleNord`.
 
-!!! info "Added in 0.2.1 and 0.2.3"
-    A model's own `model.toml` (step 4) is new in 0.2.1, voice type patches (step 3) in 0.2.3. In 0.2.0 the order was steps 1, 2, 5 and 6.
+!!! info "Added in 0.2.1 and 0.3.0"
+    A model's own `model.toml` (step 4) is new in 0.2.1, voice type patches (step 3) in 0.3.0. In 0.2.0 the order was steps 1, 2, 5 and 6.
 
 ### Voice type patches
 
-Added in 0.2.3. A patch gives voice types to voices that are already installed. It is one small file of its own, so the characters of a mod can be given voices by dropping a file in, with no line in `AudioUtilTTS.toml` and nothing added to a model's folder.
+Added in 0.3.0. A patch gives voice types to voices that are already installed. It is one small file of its own, so the characters of a mod can be given voices by dropping a file in, with no line in `AudioUtilTTS.toml` and nothing added to a model's folder.
 
 `Data\SKSE\Plugins\AudioUtilTTS\voicetypes\<any name>.toml`:
 
