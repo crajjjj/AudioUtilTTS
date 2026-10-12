@@ -147,6 +147,13 @@ greetings = true
 # plus about a second when its voice has to be loaded first.
 # Can be changed with "autts reload".
 greetings_max_late = 3.0
+# Speak a long line that is late in two parts, so that it is heard sooner: its
+# first sentence as soon as that is generated, and the rest right behind it,
+# generated while the first sentence is being said. Only this first time: the
+# cache gets the whole line, which the game says in one piece from then on.
+# A line of one sentence is not split.
+# Can be switched with "autts reload".
+greetings_split = true
 # Make greetings ahead of time, so that a new one is on time. A greeting is
 # said the moment the game decides on it, so a new one cannot be generated in
 # time. With this on, the plugin looks at the NPCs near you (about 20 m, one

@@ -77,6 +77,7 @@ namespace Config
 		bool  dialoguePrepare = false;  // prepare_greetings
 		bool  dialogueGreetings = true;  // greetings: a new greeting is spoken late, once it is ready
 		float dialogueLateMax = 3.0f;    // greetings_max_late: seconds (0.5 to 10); later than this it is not spoken
+		bool  dialogueLateSplit = true;  // greetings_split: a long line spoken late starts with its first sentence
 		bool  dialogueSkipDirections = true;
 		int   dialogueCacheMb = 1024;
 

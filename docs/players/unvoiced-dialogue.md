@@ -44,9 +44,10 @@ Added in 0.2.1. A greeting is the plainest case of a line said right away. With 
 - **Not only greetings.** From 0.2.3 on this goes for every line of one response that is said right away: a greeting, the line that opens a conversation, a remark in passing, whatever kind of topic it is filed under. A line with further responses behind it is not spoken late.
 - **First in line.** A line waiting to be spoken late is generated before every other dialogue line that waits, and played before any other line.
 - **Also once you are talking.** A line that opened a conversation is still spoken after the dialogue menu has come up. When its speaker goes on to another line while it is being spoken, it is cut short, as the game cuts its own lines; that needs AudioUtil 0.9.29 or newer, with an older one the two lines overlap.
+- **A long line starts with its first sentence.** With `[dialogue] greetings_split = true` (the default, added in 0.2.3) a line of several sentences is generated in two parts: the first sentence is spoken as soon as it is ready, the rest is generated meanwhile and follows it. That is for this first time only; the cache gets the whole line.
 - **Not at any price.** It is not spoken when it would be more than `[dialogue] greetings_max_late` seconds late (3 by default, 0.5 to 10; added in 0.2.3), when the speaker is gone, when the speaker has gone on to another line, or when another character line is being spoken. The line is in the cache for the next time either way.
 
-Both settings can be changed with `autts reload`, and `autts dialogue` counts the lines spoken late.
+These settings can be changed with `autts reload`, and `autts dialogue` counts the lines spoken late.
 
 ## Greetings made ahead
 

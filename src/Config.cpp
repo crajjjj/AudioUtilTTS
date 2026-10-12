@@ -177,6 +177,7 @@ namespace Config
 			settings->dialogueGreetings =
 				(*dialogue)["greetings"].value_or(settings->dialogueGreetings);
 			settings->dialogueLateMax = (*dialogue)["greetings_max_late"].value_or(settings->dialogueLateMax);
+			settings->dialogueLateSplit = (*dialogue)["greetings_split"].value_or(settings->dialogueLateSplit);
 			settings->dialogueSkipDirections =
 				(*dialogue)["skip_directions"].value_or(settings->dialogueSkipDirections);
 			settings->dialogueCacheMb = (*dialogue)["cache_max_mb"].value_or(settings->dialogueCacheMb);
@@ -257,10 +258,11 @@ namespace Config
 			settings->speechGroup, settings->speechChannel, settings->speechSlots, settings->speechLipSync,
 			settings->enable ? "" : " [disabled]");
 		logger::info("Config: dialogue {}, slots {}, lipsync {} (strength {:.2f}), fallback {}, "
-					 "greetings {} (up to {:.1f} s late), prepare_greetings {}, skip_directions {}, cache {} MB, "
-					 "{} voice types mapped, {} listed by models",
+					 "greetings {} (up to {:.1f} s late, in two parts {}), prepare_greetings {}, skip_directions {}, "
+					 "cache {} MB, {} voice types mapped, {} listed by models",
 			settings->dialogue, settings->dialogueSlots, settings->dialogueLip, settings->dialogueLipStrength,
-			settings->dialogueFallback, settings->dialogueGreetings, settings->dialogueLateMax, settings->dialoguePrepare,
+			settings->dialogueFallback, settings->dialogueGreetings, settings->dialogueLateMax,
+			settings->dialogueLateSplit, settings->dialoguePrepare,
 			settings->dialogueSkipDirections,
 			settings->dialogueCacheMb, settings->voiceTypes.size(), settings->modelVoiceTypes.size());
 

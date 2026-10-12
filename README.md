@@ -223,6 +223,11 @@ on time itself.
   another line while it is being spoken, it is cut short, as the game cuts its
   own lines; that needs AudioUtil 0.9.29 or newer, with an older one the two
   lines overlap.
+- **A long line starts with its first sentence.** With `[dialogue]
+  greetings_split = true` (the default) a line of several sentences is
+  generated in two parts: the first sentence is spoken as soon as it is ready,
+  the rest is generated meanwhile and follows it. That is for this first time
+  only; the cache gets the whole line.
 - **Not at any price.** It is not spoken when it would be more than
   `[dialogue] greetings_max_late` seconds late (3 by default, 0.5 to 10), when
   the speaker is gone, when the speaker has gone on to another line, or when
