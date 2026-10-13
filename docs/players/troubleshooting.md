@@ -49,6 +49,7 @@ Open `AudioUtilTTS.log` and look for the line's moment.
 
 - **`A N-char narration line was dropped: another one is being generated`** or **`... another one is being spoken, N s to go`**. This is by design: one line at a time. When the sending mod gave its name, the line reads `... narration line from 'ModName' was dropped ...`, which tells you whose lines they are. Raise [`[playback] max_pending`](configuration.md#max_pending) to let lines wait, or set `interrupt = true` to let a new line cut in.
 - **`A narration line was ignored: the default model is not loaded (...)`**. The line asked for a voice on the default model, and that one is not installed. Logged once. Install the default voice archive; see [The default voice is optional](models.md#the-default-voice-is-optional).
+- **`A ... line was ignored: its model '...' is not installed, and there is no default model to fall back on`**. A preset names a model folder that is not there. With the default voice installed such a line is spoken in the default voice instead; without it there is nothing to speak it with.
 - **`Speaker is gone or not loaded, a N-char line was dropped`**. The actor left before the line was ready.
 - **`Preset '...' is not defined in AudioUtilTTS.toml, using the default voice`**. The line was spoken, but not in the voice the mod asked for. Add the preset; see [Presets](voices.md#presets).
 - **`AudioUtilTTS_Say ignored: it must be sent by the actor who speaks`**. A mod sent the character event from something that is not an actor.

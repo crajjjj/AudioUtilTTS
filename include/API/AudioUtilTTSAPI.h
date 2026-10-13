@@ -98,7 +98,10 @@ std::uint32_t AudioUtilTTS_GetInterfaceVersion();
 // line whose voice has no model of its own, so check what the call returns.
 bool AudioUtilTTS_IsReady();
 // Would a narration line (AudioUtilTTS_SpeakFrom) or a character line
-// (AudioUtilTTS_SpeakActorFrom) sent right now be taken?
+// (AudioUtilTTS_SpeakActorFrom) sent right now be taken? Neither knows which voice the
+// line will ask for. IsNarrationFree takes it to be the default voice, so it is false
+// while the default model is not installed. IsSpeechFree cannot tell whether the
+// speaker's voice has a model: check what AudioUtilTTS_SpeakActorFrom returns.
 bool AudioUtilTTS_IsNarrationFree();
 bool AudioUtilTTS_IsSpeechFree();
 // True when AudioUtilTTS.toml defines [preset.<preset>].

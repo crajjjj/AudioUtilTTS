@@ -149,7 +149,7 @@ autts voice
 autts sayactor "Some text"
 ```
 
-`autts voice` shows their voice type and the voice it leads to, with the reason: `preset 'malenord'`, `model '...' by the patch ...`, `listed by model ...`, `model folder ...`, `preset 'female' by sex`, or `never spoken for`. When the voice is only the one by sex and `fallback` is off, it adds that unvoiced dialogue stays silent for this NPC. When the voice is on the default model and that one is not installed, it adds `not spoken: the default model is not loaded`. `autts sayactor` lets you hear the voice. With nothing selected, both act on the player.
+`autts voice` shows their voice type and the voice it leads to, with the reason: `preset 'malenord'`, `model '...' by the patch ...`, `listed by model ...`, `model folder ...`, `preset 'female' by sex`, or `never spoken for`. When the voice is only the one by sex and `fallback` is off, it adds that unvoiced dialogue stays silent for this NPC. When the voice cannot speak, it says why: `not spoken: the default model is not loaded` for a voice on the default model without that one installed, `its model is not installed` or `its model could not be loaded` for a voice whose own model is the trouble. `autts sayactor` lets you hear the voice. With nothing selected, both act on the player.
 
 ### What happens with no voice set up
 

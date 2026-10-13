@@ -138,6 +138,11 @@ bool Function IsBusy() global native
 ; generated or spoken. A script that paces its own lines waits for this, not
 ; for IsBusy. True is no promise: another mod can take the lane a moment
 ; later, so still check what the Speak call returns. (API 3)
+; Neither knows which voice the line will ask for. IsNarrationFree takes it to
+; be the default voice, so it is false while the default model is not
+; installed (a line through a preset on another model is still taken).
+; IsSpeechFree cannot tell whether the speaker's voice has a model: without the
+; default model, SpeakActorFrom returns false for a speaker who has none.
 bool Function IsNarrationFree() global native
 bool Function IsSpeechFree() global native
 
@@ -152,7 +157,11 @@ bool Function IsEnabled() global native
 ; parse and the previous settings were kept.
 bool Function ReloadConfig() global native
 
-; One line of status text: "ready | model ..." or "not ready: <why>".
+; One line of status text, for people to read. It starts with "ready | model
+; ..." when the default model is loaded, with "ready | no default model (<why>)
+; ..." when only other models are installed (since 0.3.1), with "switched off"
+; after SetEnabled(false), or with "not ready: <why>". To test for a working
+; install in a script, use IsReady, not this text.
 string Function GetStatus() global native
 
 ; The AudioUtil channel narration plays on ([playback] channel).

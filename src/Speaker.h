@@ -138,7 +138,11 @@ namespace Speaker
 	bool IsBusy();   // a narration or character line is waiting or being generated
 	// Would a narration / character line sent right now be taken? false while
 	// the plugin is not ready (see IsReady), and in one-at-a-time mode while
-	// another line of that kind is being generated or spoken.
+	// another line of that kind is being generated or spoken. Neither knows the
+	// voice the line will ask for. Narration is taken to be in the default
+	// voice, so IsNarrationFree is false without the default model; a
+	// character's voice depends on the character, so IsSpeechFree leaves that
+	// to the speak call's own answer.
 	bool IsNarrationFree();
 	bool IsSpeechFree();
 	void SetEnabled(bool a_enabled);

@@ -64,9 +64,9 @@ Neither touches dialogue: a dialogue line the game is already saying is the game
 | `int GetAPIVersion()` | API version of the installed plugin |
 | `bool IsReady()` | True when the plugin can speak right now: a voice model is installed (the default one or any other), AudioUtil is present, a playable slot exists and speech is switched on. The default model is optional from 0.3.1 on, so a speak call can still return `false`: the voice the line asks for has no model |
 | `bool IsBusy()` | True while a narration or character line is waiting or being generated. It turns false once the line starts playing, so it does not say whether a new line would be taken |
-| `bool IsNarrationFree()` | Would a narration line sent right now be taken? False while the plugin is not ready and, with the default `max_pending = 0`, while another narration line is being generated or spoken. API 3 |
-| `bool IsSpeechFree()` | The same for a character line. True is no promise: another mod can take the lane a moment later, and neither function knows which voice the line will ask for, so still check what the speak call returns. API 3 |
-| `string GetStatus()` | One line of status text: `ready` followed by the details, or `not ready: <why>` |
+| `bool IsNarrationFree()` | Would a narration line sent right now be taken? False while the plugin is not ready and, with the default `max_pending = 0`, while another narration line is being generated or spoken. It takes the line to be in the default voice, so it is also false while the default model is not installed. API 3 |
+| `bool IsSpeechFree()` | The same for a character line. True is no promise: another mod can take the lane a moment later, and it cannot tell whether the speaker's voice has a model, so still check what the speak call returns. API 3 |
+| `string GetStatus()` | One line of status text for people to read: `ready` followed by the details, or `not ready: <why>`. Its wording changes between versions (0.3.1 added `ready` with `no default model`), so test `IsReady()` in a script, not this text |
 | `bool HasPreset(string asPreset)` | True when `AudioUtilTTS.toml` defines `[preset.<asPreset>]` |
 | `int GetVoiceCount()` | Number of voices in the default model (0 while it is not loaded) |
 | `string GetActorVoice(Actor akSpeaker)` | Which voice the actor speaks with when no preset is named, and why, as one line of text: `MaleNord: preset 'malenord' (model my-voices, voice 12)`. API 2 |

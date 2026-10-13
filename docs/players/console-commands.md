@@ -14,7 +14,7 @@ Text goes in quotes. Commands that act on a character use the reference selected
 | `autts sayfrom "text" MyMod` | Speak a line naming the sender; the name shows up in `AudioUtilTTS.log` |
 | `autts sayactor "text"` | Make the selected actor (or the player) say a line |
 | `autts sayactoras "text" whisper` | The same through the preset `whisper` |
-| `autts free` | Show whether a narration line and a character line would be taken right now |
+| `autts free` | Show whether a narration line and a character line would be taken right now. Narration is never free without the default voice |
 | `autts stop` | Drop waiting lines and cut the current one |
 
 The answer is `queued`, or `not queued` with the reason and the status line. With the plugin ready, the usual reason is a line still being generated or spoken: a second one is dropped, not queued. See [`max_pending`](configuration.md#max_pending). The other reason is a voice whose model is not installed, for example `autts say` without the default voice.
