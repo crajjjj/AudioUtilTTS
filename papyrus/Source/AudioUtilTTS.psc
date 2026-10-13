@@ -18,6 +18,11 @@ Scriptname AudioUtilTTS Hidden
 ; voice too, so a mod can ask for a role without knowing what the user has
 ; installed.
 ;
+; Presets of your own: ship a file Data\SKSE\Plugins\AudioUtilTTS\presets\MyMod.toml
+; holding [preset.mymod_stern] tables like the ones in AudioUtilTTS.toml. Every
+; file there is read (0.3.2 and newer); a preset the user's own config defines
+; under the same name wins.
+;
 ; Those two are narration: flat, with no speaker. To make a CHARACTER say a
 ; line, let that actor send AudioUtilTTS_Say:<preset>:<sender> instead. The
 ; line is positioned at them and their mouth moves:

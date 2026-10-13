@@ -70,6 +70,7 @@ Data\
   SKSE\Plugins\AudioUtilTTS\models\kokoro-en-v0_19\   the default voice (its own archive)
   SKSE\Plugins\AudioUtilTTS\models\<VoiceType>\       one folder per voice archive
   SKSE\Plugins\AudioUtilTTS\voicetypes\               voice type patches
+  SKSE\Plugins\AudioUtilTTS\presets\                  preset files that mods bring
   SKSE\CustomConsole\AudioUtilTTSTest.yaml            the autts console commands
   Scripts\AudioUtilTTS.pex  AudioUtilTTSTest.pex      and their sources under Scripts\Source
   Sound\AudioUtilTTS\                                 placeholder wavs for narration and character speech

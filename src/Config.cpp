@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <optional>
 #include <toml++/toml.hpp>
 
 namespace Config
@@ -99,62 +100,220 @@ namespace Config
 			}
 		}
 
-		// Reads every voicetypes\*.toml (see Settings::patchVoiceTypes), in file
-		// name order: a voice type two patches name goes to the later one.
-		void LoadPatchFiles(Settings& a_settings)
+		// The *.toml files of a folder that mods drop files into, by Normalize(file
+		// name): each one's name as written and its path. A folder that is not
+		// there holds none.
+		using TomlFiles = std::map<std::string, std::pair<std::string, std::filesystem::path>>;
+
+		TomlFiles TomlFilesIn(std::string_view a_dir)
 		{
 			namespace fs = std::filesystem;
-			std::map<std::string, std::pair<std::string, fs::path>> files;  // by Normalize(file name)
-			std::error_code                                         ec;
-			for (const auto& entry : fs::directory_iterator(fs::path(PATCH_DIR), ec)) {
+			TomlFiles       files;
+			std::error_code ec;
+			for (fs::directory_iterator it(fs::path(a_dir), ec), end; !ec && it != end; it.increment(ec)) {
 				std::error_code ignored;
-				if (!entry.is_regular_file(ignored)) {
+				if (!it->is_regular_file(ignored)) {
 					continue;
 				}
 				try {
-					const auto utf8 = entry.path().filename().u8string();
+					const auto utf8 = it->path().filename().u8string();
 					auto       name = std::string(utf8.begin(), utf8.end());
 					if (auto key = Normalize(name); key.ends_with(".toml")) {
-						files.emplace(std::move(key), std::pair{ std::move(name), entry.path() });
+						files.emplace(std::move(key), std::pair{ std::move(name), it->path() });
 					}
 				} catch (const std::exception&) {
 					// a name that is not valid text: skipped
 				}
 			}
+			return files;
+		}
 
-			for (const auto& [key, file] : files) {
+		// Parses one of those files. a_what says what it is, for the log ("the
+		// voice type patch"). false = it could not be read, and the log says why.
+		bool ParseTomlFile(const std::filesystem::path& a_path, std::string_view a_what, const std::string& a_name,
+			toml::table& a_root)
+		{
+			try {
+				// opened by its path object, so any file name works
+				std::ifstream in(a_path, std::ios::binary);
+				if (!in) {
+					throw std::runtime_error("the file could not be opened");
+				}
+				a_root = toml::parse(in);
+				return true;
+			} catch (const toml::parse_error& e) {
+				logger::error("Failed to parse {} {}: {} (line {}), file ignored", a_what, a_name, e.description(),
+					e.source().begin.line);
+			} catch (const std::exception& e) {
+				logger::error("Failed to read {} {}: {}, file ignored", a_what, a_name, e.what());
+			}
+			return false;
+		}
+
+		// Which model folders hold a model, as far as asked: Normalize(folder name).
+		using InstalledModels = std::unordered_map<std::string, bool>;
+
+		// Is the model a patch or a preset file names installed? Only for the note
+		// in the log when it is not: a line that asks for such a voice is dealt
+		// with where it is spoken, since a model can be added later.
+		bool ModelInstalled(const std::string& a_folder, InstalledModels& a_known)
+		{
+			namespace fs = std::filesystem;
+			if (const auto it = a_known.find(a_folder); it != a_known.end()) {
+				return it->second;
+			}
+			bool            found = false;
+			std::error_code ec;
+			const auto      dir = fs::path(MODELS_DIR) / fs::path(std::u8string(a_folder.begin(), a_folder.end()));
+			for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
+				std::error_code ignored;
+				if (it->is_regular_file(ignored) && it->path().extension() == ".onnx") {
+					found = true;
+					break;
+				}
+			}
+			a_known.emplace(a_folder, found);
+			return found;
+		}
+
+		// "a, b and c", and "a, b, c and 4 more" for a long list
+		std::string Listed(const std::vector<std::string>& a_names)
+		{
+			constexpr std::size_t MAX_NAMED = 8;
+			std::string           out;
+			const auto            named = std::min(a_names.size(), MAX_NAMED);
+			for (std::size_t i = 0; i < named; ++i) {
+				const bool last = i + 1 == a_names.size();
+				out += i == 0 ? "" : (last ? " and " : ", ");
+				out += a_names[i];
+			}
+			if (a_names.size() > named) {
+				out += std::format(" and {} more", a_names.size() - named);
+			}
+			return out;
+		}
+
+		// The names as written, in the order of their keys
+		std::vector<std::string> Values(const std::map<std::string, std::string>& a_byKey)
+		{
+			std::vector<std::string> out;
+			for (const auto& [key, written] : a_byKey) {
+				out.push_back(written);
+			}
+			return out;
+		}
+
+		// One [preset.<name>] table, from AudioUtilTTS.toml or from a preset file.
+		// a_label names it in a warning. nullopt = it is no table.
+		std::optional<Preset> ReadPreset(const toml::node& a_node, const std::string& a_label)
+		{
+			const auto* table = a_node.as_table();
+			if (!table) {
+				logger::warn("{} is not a table, ignored", a_label);
+				return std::nullopt;
+			}
+			Preset preset;
+			preset.model = (*table)["model"].value_or(""s);
+			preset.voice = (*table)["voice"].value_or(-1);
+			preset.speed = (*table)["speed"].value_or(0.0f);
+			preset.volume = (*table)["volume"].value_or(-1.0f);
+			if (!preset.model.empty() && !IsFolderName(preset.model)) {
+				logger::warn("{} model = '{}' is not a plain folder name, using the default model", a_label,
+					preset.model);
+				preset.model.clear();
+			}
+			if (preset.speed > 0.0f) {
+				preset.speed = std::clamp(preset.speed, 0.5f, 2.0f);
+			}
+			if (preset.volume > 1.0f) {
+				preset.volume = 1.0f;
+			}
+			return preset;
+		}
+
+		// Reads every presets\*.toml (see Preset), in file name order, on top of
+		// the presets of AudioUtilTTS.toml: a name the user's file defines stays
+		// the user's, a name two preset files define goes to the later one.
+		void LoadPresetFiles(Settings& a_settings, InstalledModels& a_installed)
+		{
+			for (const auto& [fileKey, file] : TomlFilesIn(PRESET_DIR)) {
 				const auto& [name, path] = file;
 				toml::table root;
-				try {
-					// opened by its path object, so any file name works
-					std::ifstream in(path, std::ios::binary);
-					if (!in) {
-						throw std::runtime_error("the file could not be opened");
-					}
-					root = toml::parse(in);
-				} catch (const toml::parse_error& e) {
-					logger::error("Failed to parse the voice type patch {}: {} (line {}), file ignored", name,
-						e.description(), e.source().begin.line);
-					continue;
-				} catch (const std::exception& e) {
-					logger::error("Failed to read the voice type patch {}: {}, file ignored", name, e.what());
+				if (!ParseTomlFile(path, "the preset file", name, root)) {
 					continue;
 				}
 
-				std::size_t given = 0;
+				std::size_t                        added = 0;
+				std::vector<std::string>           overruled;  // AudioUtilTTS.toml has its own
+				std::map<std::string, std::string> missing;    // models nobody installed, as written
+				if (const auto* presets = root["preset"].as_table()) {
+					for (auto&& [presetName, node] : *presets) {
+						const auto id = Normalize(presetName.str());
+						auto       preset = ReadPreset(node, std::format("{}: [preset.{}]", name, presetName.str()));
+						if (id.empty() || !preset) {
+							continue;
+						}
+						if (const auto it = a_settings.presets.find(id); it != a_settings.presets.end()) {
+							if (it->second.source.empty()) {
+								overruled.emplace_back(presetName.str());
+								continue;
+							}
+							if (it->second.source != name) {
+								logger::info("Preset {} is defined by the preset files {} and {}: {} is used",
+									presetName.str(), it->second.source, name, name);
+							}
+						}
+						if (const auto model = Normalize(preset->model);
+							!model.empty() && !ModelInstalled(model, a_installed)) {
+							missing.emplace(model, preset->model);
+						}
+						preset->source = name;
+						a_settings.presets[id] = std::move(*preset);
+						++added;
+					}
+				}
+				std::string notes;
+				if (!overruled.empty()) {
+					notes += std::format(". Not taken, AudioUtilTTS.toml defines its own: {}", Listed(overruled));
+				}
+				if (!missing.empty()) {
+					notes += std::format(". Models that are not installed (their presets speak with the default "
+										 "voice): {}",
+						Listed(Values(missing)));
+				}
+				logger::info("Preset file {}: {} presets{}", name, added, notes);
+			}
+		}
+
+		// Reads every voicetypes\*.toml (see Settings::patchVoiceTypes), in file
+		// name order: a voice type two patches name goes to the later one.
+		void LoadPatchFiles(Settings& a_settings, InstalledModels& a_installed)
+		{
+			for (const auto& [fileKey, file] : TomlFilesIn(PATCH_DIR)) {
+				const auto& [name, path] = file;
+				toml::table root;
+				if (!ParseTomlFile(path, "the voice type patch", name, root)) {
+					continue;
+				}
+
+				std::size_t                        given = 0;
+				std::size_t                        unvoiced = 0;  // of those, lines whose model nobody installed
+				std::map<std::string, std::string> missing;       // those models, as written
 				if (const auto* voiceTypes = root["voicetype"].as_table()) {
 					for (auto&& [type, node] : *voiceTypes) {
 						const auto id = Normalize(type.str());
 						ModelVoice voice;
 						voice.source = name;
+						std::string written;  // the model as the file spells it, for the log
 						if (const auto model = node.value<std::string>()) {
-							voice.model = Normalize(*model);
+							written = *model;
 						} else if (const auto* table = node.as_table()) {
-							voice.model = Normalize((*table)["model"].value_or(std::string{}));
+							written = (*table)["model"].value_or(std::string{});
 							voice.voice = (*table)["voice"].value_or(voice.voice);
 							voice.speed = (*table)["speed"].value_or(voice.speed);
 							voice.volume = (*table)["volume"].value_or(voice.volume);
 						}
+						voice.model = Normalize(written);
 						if (id.empty() || !IsFolderName(voice.model) || voice.voice < 0) {
 							logger::warn("Voice type patch {}: {} must name a model folder, as \"folder\" or as "
 										 "{{ model = \"folder\", voice = 0 }}; ignored",
@@ -172,11 +331,21 @@ namespace Config
 							logger::info("Voice type {} is named by the patches {} and {}: {} is used", type.str(),
 								it->second.source, name, name);
 						}
+						if (!ModelInstalled(voice.model, a_installed)) {
+							++unvoiced;
+							missing.emplace(voice.model, written);
+						}
 						a_settings.patchVoiceTypes[id] = std::move(voice);
 						++given;
 					}
 				}
-				logger::info("Voice type patch {}: {} voice types", name, given);
+				if (missing.empty()) {
+					logger::info("Voice type patch {}: {} voice types", name, given);
+				} else {
+					logger::info("Voice type patch {}: {} voice types; {} of them are skipped, their voices are not "
+								 "installed: {}",
+						name, given, unvoiced, Listed(Values(missing)));
+				}
 			}
 		}
 	}
@@ -302,43 +471,29 @@ namespace Config
 
 		if (const auto* presets = root["preset"].as_table()) {
 			for (auto&& [name, node] : *presets) {
-				const auto  key = Normalize(name.str());
-				const auto* table = node.as_table();
-				if (!table || key.empty()) {
-					logger::warn("[preset.{}] is not a table, ignored", name.str());
+				const auto key = Normalize(name.str());
+				auto       preset = ReadPreset(node, std::format("[preset.{}]", name.str()));
+				if (key.empty() || !preset) {
 					continue;
 				}
-				Preset preset;
-				preset.model = (*table)["model"].value_or(""s);
-				preset.voice = (*table)["voice"].value_or(-1);
-				preset.speed = (*table)["speed"].value_or(0.0f);
-				preset.volume = (*table)["volume"].value_or(-1.0f);
-				if (!preset.model.empty() && !IsFolderName(preset.model)) {
-					logger::warn("[preset.{}] model = '{}' is not a plain folder name, using the default model", key,
-						preset.model);
-					preset.model.clear();
-				}
-				if (preset.speed > 0.0f) {
-					preset.speed = std::clamp(preset.speed, 0.5f, 2.0f);
-				}
-				if (preset.volume > 1.0f) {
-					preset.volume = 1.0f;
-				}
-				settings->presets[key] = std::move(preset);
+				settings->presets[key] = std::move(*preset);
 			}
 		}
+		const auto ownPresets = settings->presets.size();
 
+		InstalledModels installed;
+		LoadPresetFiles(*settings, installed);
 		LoadModelFiles(*settings);
-		LoadPatchFiles(*settings);
+		LoadPatchFiles(*settings, installed);
 
 		logger::info("Config: model '{}' ({}), voice {}, speed {:.2f}, volume {:.2f}, threads {}, max_loaded {}, "
-					 "group '{}', channel '{}', interrupt {}, max_pending {}, slots {}, output_rate {}, {} presets, "
-					 "speech group '{}', channel '{}', slots {}, lipsync {}{}",
+					 "group '{}', channel '{}', interrupt {}, max_pending {}, slots {}, output_rate {}, {} presets "
+					 "({} of them from preset files), speech group '{}', channel '{}', slots {}, lipsync {}{}",
 			settings->model, settings->family, settings->voice, settings->speed, settings->volume,
 			settings->threads, settings->maxLoaded, settings->group, settings->channel, settings->interrupt,
 			settings->maxPending, settings->slots, settings->outputRate, settings->presets.size(),
-			settings->speechGroup, settings->speechChannel, settings->speechSlots, settings->speechLipSync,
-			settings->enable ? "" : " [disabled]");
+			settings->presets.size() - ownPresets, settings->speechGroup, settings->speechChannel,
+			settings->speechSlots, settings->speechLipSync, settings->enable ? "" : " [disabled]");
 		logger::info("Config: dialogue {}, slots {}, lipsync {} (strength {:.2f}), fallback {}, "
 					 "greetings {} (up to {:.1f} s late, in two parts {}), prepare_greetings {}, skip_directions {}, "
 					 "cache {} MB, {} voice types mapped, {} given a voice by patches, {} listed by models",

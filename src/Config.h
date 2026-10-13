@@ -10,15 +10,24 @@ namespace Config
 	inline constexpr std::string_view MODEL_FILE = "model.toml";
 	// Where the voice type patches are (see Settings::patchVoiceTypes).
 	inline constexpr std::string_view PATCH_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\voicetypes\\";
+	// Where the preset files are (see Preset::source).
+	inline constexpr std::string_view PRESET_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\presets\\";
 
 	// A named voice a caller asks for by name: [preset.<name>]. Anything left out
 	// is inherited from the defaults.
+	//
+	// AudioUtilTTS.toml is the user's, so a mod cannot put its presets there.
+	// It brings them as a file of its own instead, presets\<any name>.toml,
+	// holding the same [preset.<name>] tables. Every such file is read, in file
+	// name order: a name two files define goes to the later one, and a name
+	// AudioUtilTTS.toml defines stays the user's.
 	struct Preset
 	{
 		std::string model;           // "" = the [model] dir
 		int         voice = -1;      // < 0 = not set
 		float       speed = 0.0f;    // <= 0 = not set
 		float       volume = -1.0f;  // < 0 = not set
+		std::string source;          // the preset file it comes from, "" = AudioUtilTTS.toml
 	};
 
 	// The voice a model offers for one voice type, from models\<folder>\model.toml:

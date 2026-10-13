@@ -2417,7 +2417,9 @@ namespace Speaker
 				first = g_unknownPresets.insert(a_key).second;
 			}
 			if (first) {
-				logger::warn("Preset '{}' is not defined in AudioUtilTTS.toml, using the default voice", a_key);
+				logger::warn("Preset '{}' is not defined, neither in AudioUtilTTS.toml nor by a preset file, using the "
+							 "default voice",
+					a_key);
 			}
 		}
 
@@ -2471,13 +2473,16 @@ namespace Speaker
 				if (auto found = FromPreset(a_settings, presetKey)) {
 					choice.line = std::move(*found);
 					choice.source = VoiceChoice::kOwn;
-					choice.label += std::format(": preset '{}'", presetKey);
+					// a preset a mod brought is named with its file
+					const auto& from = a_settings.presets.at(presetKey).source;
+					choice.label += from.empty() ? std::format(": preset '{}'", presetKey) :
+												   std::format(": preset '{}' of {}", presetKey, from);
 					return choice;
 				}
 				if (mapped) {
 					// the line is as good as absent: the lookup goes on below
-					LogOnce(std::format("[voicetype] {} names the preset '{}', which AudioUtilTTS.toml does not define: "
-										"that line is ignored",
+					LogOnce(std::format("[voicetype] {} names the preset '{}', which neither AudioUtilTTS.toml nor a "
+										"preset file defines: that line is ignored",
 						name, presetKey));
 				}
 				const auto borrow = [&](const Config::ModelVoice& a_voice) {

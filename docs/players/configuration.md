@@ -52,6 +52,8 @@ A named voice a mod asks for by name. See [Presets](voices.md#presets).
 
 The shipped file defines `narrator` (voice 7), `female` (voice 1), `male` (voice 9) and `whisper` (voice 2).
 
+Mods can add presets through files of their own in `presets\`, which hold the same tables. A preset defined here wins over one of the same name from such a file. See [Preset files](voices.md#preset-files).
+
 ## [speech]
 
 Character speech: a line spoken by an actor, positioned at them, with their mouth moving.

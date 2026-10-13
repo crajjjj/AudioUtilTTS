@@ -51,7 +51,8 @@ Open `AudioUtilTTS.log` and look for the line's moment.
 - **`A narration line was ignored: the default model is not loaded (...)`**. The line asked for a voice on the default model, and that one is not installed. Logged once. Install the default voice archive; see [The default voice is optional](models.md#the-default-voice-is-optional).
 - **`A ... line was ignored: its model '...' is not installed, and there is no default model to fall back on`**. A preset names a model folder that is not there. With the default voice installed such a line is spoken in the default voice instead; without it there is nothing to speak it with.
 - **`Speaker is gone or not loaded, a N-char line was dropped`**. The actor left before the line was ready.
-- **`Preset '...' is not defined in AudioUtilTTS.toml, using the default voice`**. The line was spoken, but not in the voice the mod asked for. Add the preset; see [Presets](voices.md#presets).
+- **`Preset '...' is not defined, neither in AudioUtilTTS.toml nor by a preset file, using the default voice`**. The line was spoken, but not in the voice the mod asked for. Add the preset, or install the [preset file](voices.md#preset-files) the mod comes with; see [Presets](voices.md#presets).
+- **`Preset file ...: N presets. Models that are not installed ...`**. A mod's presets name a voice model you do not have. Those presets speak with the default voice until the model is installed.
 - **`AudioUtilTTS_Say ignored: it must be sent by the actor who speaks`**. A mod sent the character event from something that is not an actor.
 - **`No playable ... slot`**. Restart the game once; see the table above.
 - **Nothing in the log at all.** The mod never asked. Check it with `autts event "Some text"`, which sends the same event a mod would.

@@ -72,7 +72,7 @@ Exactly as through the Papyrus natives, because it is the same code:
 
 - **`sender`** is your plugin's own short name. It is written into `AudioUtilTTS.log` with the line, so a user can see which mod a spoken or dropped line came from. Nothing else depends on it.
 - **`text`** is UTF-8, or the Windows-1252 text the game's own strings use. It is cut at `[playback] max_chars`.
-- **`preset`** names a voice the user defines in the config; see [Presets](../players/voices.md#presets). Empty means the default voice for narration and the speaker's own voice for a character line. An unknown name falls back to the default voice.
+- **`preset`** names a voice the user defines in the config or a mod brings as a [preset file](overview.md#bringing-your-own-presets); see [Presets](../players/voices.md#presets). Empty means the default voice for narration and the speaker's own voice for a character line. An unknown name falls back to the default voice.
 - **The answer is "queued", not "spoken".** `true` means the line was taken. It is generated in the background and starts a moment later.
 - **A line can be dropped.** By default a line that arrives while another of its kind is being generated or spoken is not taken, and the call answers `false`. See [What to design around](overview.md#what-to-design-around).
 
@@ -85,7 +85,7 @@ To learn when a line actually starts, listen for the mod event [`AudioUtilTTS_Sp
 | `bool AudioUtilTTS_IsReady()` | True when the plugin can speak right now: a voice model is installed (the default one or any other), AudioUtil is present, a playable slot exists and speech is switched on. The default model is optional from 0.3.1 on, so a speak call can still return `false`: the voice the line asks for has no model |
 | `bool AudioUtilTTS_IsNarrationFree()` | Would a narration line sent right now be taken? It takes the line to be in the default voice, so it is false while the default model is not installed |
 | `bool AudioUtilTTS_IsSpeechFree()` | The same for a character line. True is no promise: another mod can take the place a moment later, and it cannot tell whether the speaker's voice has a model, so still check what the speak call returns |
-| `bool AudioUtilTTS_HasPreset(const char* preset)` | True when the config defines `[preset.<preset>]` |
+| `bool AudioUtilTTS_HasPreset(const char* preset)` | True when the config or a preset file defines `[preset.<preset>]` |
 | `bool AudioUtilTTS_SpeakFrom(const char* sender, const char* text, const char* preset)` | Queues a narration line: flat, with no speaker |
 | `bool AudioUtilTTS_SpeakActorFrom(const char* sender, RE::Actor* speaker, const char* text, const char* preset, bool lipSync)` | Queues a line the actor says: positioned at them, with their mouth moving when `lipSync` is true and `[speech] lipsync` is on. The line is dropped if the speaker is gone or not loaded by the time it is ready |
 | `void AudioUtilTTS_CancelPending()` | Drops every narration and character line that is waiting or being generated. The line already playing carries on |

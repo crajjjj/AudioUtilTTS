@@ -62,8 +62,31 @@ speed = 1.1
 - **Names ignore case.** Rename, change or add presets freely.
 - **An unknown name falls back to the default voice**, so a mod can ask for a role without knowing what you have installed. The log notes the unknown name once.
 - **A preset may name a different model.** That model is loaded the first time a line asks for it, which delays that one line by about a second, and then stays in memory. See [Voice Models](models.md#how-many-fit-in-memory).
+- **A mod can bring presets of its own**, as a [preset file](#preset-files). Yours win over them.
 
 Try one with `autts sayas "Not so loud." whisper`.
+
+### Preset files
+
+Added in 0.3.2. `AudioUtilTTS.toml` is yours, so a mod cannot put its presets there. It brings them as a file of its own instead, and the plugin reads every such file on top of your config.
+
+`Data\SKSE\Plugins\AudioUtilTTS\presets\<any name>.toml`:
+
+```toml
+[preset.mymod_stern]
+voice = 9
+speed = 0.9
+
+[preset.mymod_witch]
+model = "my-voices"
+voice = 3
+```
+
+- **The same tables as in `AudioUtilTTS.toml`**: `model`, `voice`, `speed` and `volume`, with the same defaults.
+- **Your own config wins.** A preset that `AudioUtilTTS.toml` defines keeps its definition, whatever a file says. To change a mod's preset, copy it into `AudioUtilTTS.toml` under the same name and edit it there.
+- **Files add up.** Every `.toml` file in that folder is read, in file name order. A name that two files define goes to the later one, and `AudioUtilTTS.log` names both.
+- **A missing model is no error.** A preset on a model that is not installed speaks with the default voice, like an unknown name. `AudioUtilTTS.log` lists such models at game start, one line per file.
+- **Read at game start and on `autts reload`.**
 
 ## Voice types
 
@@ -119,7 +142,7 @@ RumarinVoice = { model = "my-voices", voice = 3, speed = 1.0, volume = 1.0 }
 ```
 
 - **Patches add up.** Every `.toml` file in that folder is read, in file name order. A voice type that two patches name goes to the later one, and `AudioUtilTTS.log` names both.
-- **A missing voice is no error.** A line whose model is not installed is ignored, with one line in the log, and the lookup goes on as if the patch did not name that voice type.
+- **A missing voice is no error.** A line whose model is not installed is ignored, and the lookup goes on as if the patch did not name that voice type. At game start `AudioUtilTTS.log` has one line per patch: how many voice types it names, and which of the voices it asks for are not installed.
 - **Your own config wins.** `[voicetype]` and the presets in `AudioUtilTTS.toml` are asked first, so you can overrule a patch or silence a voice type with `Name = ""`.
 - **Read at game start and on `autts reload`.**
 - **Recorded lines stay as they are.** A patch only matters for the lines of that character that have no recording.
@@ -149,7 +172,7 @@ autts voice
 autts sayactor "Some text"
 ```
 
-`autts voice` shows their voice type and the voice it leads to, with the reason: `preset 'malenord'`, `model '...' by the patch ...`, `listed by model ...`, `model folder ...`, `preset 'female' by sex`, or `never spoken for`. When the voice is only the one by sex and `fallback` is off, it adds that unvoiced dialogue stays silent for this NPC. When the voice cannot speak, it says why: `not spoken: the default model is not loaded` for a voice on the default model without that one installed, `its model is not installed` or `its model could not be loaded` for a voice whose own model is the trouble. `autts sayactor` lets you hear the voice. With nothing selected, both act on the player.
+`autts voice` shows their voice type and the voice it leads to, with the reason: `preset 'malenord'` (followed by `of <file>` for a preset from a preset file), `model '...' by the patch ...`, `listed by model ...`, `model folder ...`, `preset 'female' by sex`, or `never spoken for`. When the voice is only the one by sex and `fallback` is off, it adds that unvoiced dialogue stays silent for this NPC. When the voice cannot speak, it says why: `not spoken: the default model is not loaded` for a voice on the default model without that one installed, `its model is not installed` or `its model could not be loaded` for a voice whose own model is the trouble. `autts sayactor` lets you hear the voice. With nothing selected, both act on the player.
 
 ### What happens with no voice set up
 

@@ -24,7 +24,7 @@ SendModEvent("AudioUtilTTS_Speak::MyMod", "The road to Whiterun lay open.")
 SendModEvent("AudioUtilTTS_Speak:whisper:MyMod", "Not so loud.")
 ```
 
-The first is spoken with the configured default voice, the second with the preset `whisper`. A preset is a voice the user defines in the config under one name; see [Presets](../players/voices.md#presets). An unknown name falls back to the default voice, so a mod can ask for a role without knowing what the user has installed.
+The first is spoken with the configured default voice, the second with the preset `whisper`. A preset is a voice under one name, defined by the user in the config or brought by a mod as a [preset file](overview.md#bringing-your-own-presets); see [Presets](../players/voices.md#presets). An unknown name falls back to the default voice, so a mod can ask for a role without knowing what the user has installed.
 
 The sender name is written into `AudioUtilTTS.log` with the line, so a user can see which mod a spoken or dropped line came from. Nothing else depends on it.
 

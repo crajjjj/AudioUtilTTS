@@ -59,6 +59,11 @@ volume = 1.0
 # comes from [model] and [voice] above. A name nobody defined falls back to the
 # default voice, so rename, change or add presets freely. Names ignore case.
 #
+# A mod can bring presets of its own as a file: every presets\*.toml beside
+# this file is read too, holding the same [preset.<name>] tables. A preset
+# defined here wins over one of the same name from such a file, so to change a
+# mod's preset, copy it here under the same name and edit it.
+#
 # The four below all use the default model, so they cost no extra memory.
 
 [preset.narrator]

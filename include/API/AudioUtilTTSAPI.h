@@ -41,7 +41,8 @@ namespace RE
 //   came from. Nothing else depends on it. Null = no name.
 // - `text` is the line. UTF-8, or the Windows-1252 text the game's own strings use: it is
 //   converted, cleaned of control characters and cut at [playback] max_chars.
-// - `preset` names a voice the user defines in AudioUtilTTS.toml as [preset.<name>].
+// - `preset` names a voice the user defines in AudioUtilTTS.toml as [preset.<name>], or
+//   one a mod brings in a file of its own, presets\<any name>.toml (0.3.2 and newer).
 //   Null or "" = the default voice for narration, the speaker's own voice (by voice type)
 //   for a character line. An unknown name falls back to the default voice.
 // - A line is generated in the background and starts a moment later. The speak functions
