@@ -3,10 +3,11 @@ Scriptname AudioUtilTTSTest Hidden
 
 ; Why a line was not taken. With the plugin ready, the usual reason is a line
 ; still being generated or spoken: a second one is dropped, not queued (see
-; [playback] max_pending), and the log says so.
+; [playback] max_pending), and the log says so. The other one is a voice whose
+; model is not installed, which the status line shows ("no default model").
 string Function NotQueued() global
     if AudioUtilTTS.IsReady()
-        return "not queued - another line is probably still being generated or spoken (see AudioUtilTTS.log)"
+        return "not queued - another line is still being generated or spoken, or the voice has no model (see AudioUtilTTS.log) | " + AudioUtilTTS.GetStatus()
     endif
     return "not queued - " + AudioUtilTTS.GetStatus()
 EndFunction

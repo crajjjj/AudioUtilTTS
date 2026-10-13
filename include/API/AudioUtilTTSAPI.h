@@ -92,8 +92,10 @@ std::uint32_t AudioUtilTTS_GetVersion();
 std::uint32_t AudioUtilTTS_GetInterfaceVersion();
 
 // ----------------------------------------------------------------------------- Asking
-// True when a line can be spoken right now: the default model is loaded, AudioUtil is
-// present, a playable slot exists and speech is switched on.
+// True when the plugin can speak right now: a voice model is installed (the default one
+// or any other), AudioUtil is present, a playable slot exists and speech is switched on.
+// The default model is optional since 0.3.1: without it a speak call returns false for a
+// line whose voice has no model of its own, so check what the call returns.
 bool AudioUtilTTS_IsReady();
 // Would a narration line (AudioUtilTTS_SpeakFrom) or a character line
 // (AudioUtilTTS_SpeakActorFrom) sent right now be taken?

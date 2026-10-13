@@ -39,9 +39,15 @@
 // volume. The default model is loaded at start; any other model a preset names
 // is loaded the first time a line asks for it and then kept, up to
 // [model] max_loaded (least recently used goes first, the default never does).
+//
+// The default model is optional. Without it, a line that names no other model
+// is not taken (narration, the presets on the default model, the voices by
+// sex), and a voice with a model of its own (a model folder named like a voice
+// type, a model.toml, a voice type patch, a preset on another model) is spoken
+// as usual.
 namespace Speaker
 {
-	void Start();   // kDataLoaded: slots, AudioUtil lookup, worker (loads the default model)
+	void Start();   // kDataLoaded: slots, AudioUtil lookup, worker (loads the default model, if there is one)
 	bool Reload();  // re-read the config and reload the models; false = config kept
 	void Cancel();  // drop every narration and character line waiting or being generated
 	void Reset();   // Cancel, and drop every dialogue line on its way too: a save is being loaded
@@ -124,11 +130,15 @@ namespace Speaker
 	std::string DescribeVoice(RE::Actor* a_actor);  // which voice this actor speaks with, and why
 	int         ClearDialogueCache();         // files removed
 
-	bool IsReady();  // narration can be spoken right now
+	// The plugin can speak right now: AudioUtil is there, a slot is playable and
+	// a voice model is installed, the default one or any other. Which voice a
+	// line will ask for is not known here, so a speak call can still return
+	// false: its voice is on a model that is not there.
+	bool IsReady();
 	bool IsBusy();   // a narration or character line is waiting or being generated
 	// Would a narration / character line sent right now be taken? false while
-	// the plugin is not ready, and in one-at-a-time mode while another line of
-	// that kind is being generated or spoken.
+	// the plugin is not ready (see IsReady), and in one-at-a-time mode while
+	// another line of that kind is being generated or spoken.
 	bool IsNarrationFree();
 	bool IsSpeechFree();
 	void SetEnabled(bool a_enabled);

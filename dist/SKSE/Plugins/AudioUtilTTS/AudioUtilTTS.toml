@@ -10,6 +10,9 @@ enable = true
 [model]
 # The default model: a folder under Data\SKSE\Plugins\AudioUtilTTS\models\.
 # It is loaded at game start and never unloaded.
+# It is optional. Without it, lines that name no other model stay silent
+# (narration, the presets below, the voices by sex), and a voice with a model
+# of its own, such as a model folder named like a voice type, speaks as usual.
 dir = "kokoro-en-v0_19"
 # "auto" reads the folder: voices.bin present = Kokoro, otherwise VITS (Piper voices).
 family = "auto"

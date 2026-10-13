@@ -166,7 +166,7 @@ namespace Speaker
 		std::deque<Line>                  g_waiting;
 		bool                              g_reloadWanted = false;
 		bool                              g_started = false;
-		std::string                       g_problem;  // why the default model is not loaded
+		std::string                       g_problem;  // why the default model is not loaded, "" = it is
 		std::array<LaneState, kLaneCount> g_lanes;
 		std::unordered_set<std::string>   g_unknownPresets;  // already warned about
 		Clock::time_point                 g_busyUntil{};     // when the line being generated should be done
@@ -309,6 +309,12 @@ namespace Speaker
 		std::atomic<int>  g_defaultVoices{ 0 };
 		std::atomic<int>  g_defaultRate{ 0 };
 		std::atomic<int>  g_modelsLoaded{ 0 };
+		// The default model is optional: a voice with a model of its own speaks
+		// without it. So "the worker has been through its start, or a reload" is a
+		// flag of its own, and so is how many model folders hold a model at all
+		// (the default one included).
+		std::atomic<bool> g_modelsUp{ false };
+		std::atomic<int>  g_modelsInstalled{ 0 };
 
 		// worker thread only
 		struct LoadedModel
@@ -1010,10 +1016,34 @@ namespace Speaker
 			return model;
 		}
 
-		// Drops every loaded model and loads the default one again.
+		// How many folders under models\ hold a model. Counted at start and on a
+		// reload: the game does not see a folder added while it runs anyway.
+		int CountInstalledModels()
+		{
+			int             count = 0;
+			std::error_code ec;
+			for (const auto& entry : fs::directory_iterator(fs::current_path() / MODELS_DIR, ec)) {
+				try {
+					// UTF-8, which is how the rest of the plugin reads a model's name
+					const auto utf8 = entry.path().filename().u8string();
+					const auto folder = Config::Normalize(std::string(utf8.begin(), utf8.end()));
+					if (Config::IsFolderName(folder) && TtsEngine::ModelStamp(std::string(MODELS_DIR) + folder) != 0) {
+						++count;
+					}
+				} catch (const std::exception&) {
+					// a name that is not valid text: that model cannot be loaded either
+				}
+			}
+			return count;
+		}
+
+		// Drops every loaded model and loads the default one again. That one is
+		// optional: without it the lines that name no other model stay silent,
+		// and every voice with a model of its own speaks as usual.
 		void LoadDefaultModel()
 		{
 			const auto settings = Config::Get();
+			g_modelsUp.store(false);
 			g_defaultLoaded.store(false);
 			g_defaultVoices.store(0);
 			g_defaultRate.store(0);
@@ -1036,14 +1066,26 @@ namespace Speaker
 				g_modelsLoaded.store(1);
 				g_defaultLoaded.store(true);
 			} else {
-				logger::error("Model '{}' not loaded: {}", settings->model, problem);
+				logger::warn("Default model '{}' not loaded: {}. Lines that name no other model stay silent: narration, "
+							 "the presets on the default model and the voices by sex. A voice with a model of its own "
+							 "is spoken as usual.",
+					settings->model, problem);
 			}
-			std::scoped_lock lock{ g_lock };
-			g_problem = std::move(problem);
+			const int installed = settings->enable ? CountInstalledModels() : 0;
+			g_modelsInstalled.store(installed);
+			if (settings->enable) {
+				logger::info("Voice models installed: {}", installed);
+			}
+			{
+				std::scoped_lock lock{ g_lock };
+				g_problem = std::move(problem);
+			}
+			g_modelsUp.store(true);
 		}
 
 		// The model a line asked for, loaded on first use. A model that cannot be
-		// loaded falls back to the default one (a_fellBack).
+		// loaded falls back to the default one (a_fellBack); nullptr when that one
+		// is not loaded either.
 		const TtsEngine::Model* ModelFor(const std::string& a_wanted, const Config::Settings& a_settings,
 			bool& a_fellBack)
 		{
@@ -1063,7 +1105,8 @@ namespace Speaker
 				return loaded;
 			}
 			if (key != defaultKey && !g_badModels.contains(key)) {
-				if (a_settings.maxLoaded < 2) {
+				// the one place is the default model's only when there is one
+				if (a_settings.maxLoaded < 2 && g_models.contains(defaultKey)) {
 					logger::warn("Model '{}' not loaded: [model] max_loaded = 1 keeps only the default model", key);
 					g_badModels.insert(key);
 				} else {
@@ -1775,7 +1818,11 @@ namespace Speaker
 				bool        fellBack = false;
 				const auto* model = ModelFor(a_line.model, *settings, fellBack);
 				if (!model) {
-					return;  // no default model either; LoadDefaultModel already said why
+					// Queue takes no line whose model is not there, so this one lost
+					// it on the way: a reload, or a model that would not load
+					LogOnce(std::format("A {} line was dropped: its model is not loaded, and neither is the default one",
+						LANE_NAME[a_line.lane]));
+					return;
 				}
 				if (fellBack) {
 					// the voice number belonged to the model that is not there
@@ -1957,22 +2004,41 @@ namespace Speaker
 
 		// -------------------------------------------------------------------- intake
 
-		std::string NotReadyReason(Lane a_lane)
+		// Which model the one who asks needs. The default model is optional, so
+		// "not ready" is no longer one answer for every line.
+		enum class Needs
+		{
+			kNoModel,       // a line with a model of its own, or with its audio made already
+			kDefaultModel,  // a line that names no other model
+			kAnyModel       // no line in particular: can the plugin speak at all?
+		};
+
+		std::string NotReadyReason(Lane a_lane, Needs a_needs)
 		{
 			if (!ResolvePlayFile()) {
 				return "AudioUtil.dll is not loaded (AudioUtil 0.9.9 or newer is required)";
+			}
+			if (!Config::Get()->enable) {
+				return "disabled in AudioUtilTTS.toml";
 			}
 			{
 				std::scoped_lock lock{ g_lock };
 				if (!g_started) {
 					return "still starting";
 				}
-				if (!g_problem.empty()) {
-					return g_problem;
-				}
+			}
+			if (!g_modelsUp.load()) {
+				return "the model is still loading";
 			}
 			if (!g_defaultLoaded.load()) {
-				return "the model is still loading";
+				std::scoped_lock lock{ g_lock };
+				const auto&      why = g_problem.empty() ? "see AudioUtilTTS.log"s : g_problem;
+				if (a_needs == Needs::kDefaultModel) {
+					return std::format("the default model is not loaded ({})", why);
+				}
+				if (a_needs == Needs::kAnyModel && g_modelsInstalled.load() <= 0) {
+					return why;  // no model at all: why the default one is missing says it best
+				}
 			}
 			if (g_usableSlots[a_lane].load() <= 0) {
 				return std::format("no playable {} slot yet (restart the game once)", LANE_NAME[a_lane]);
@@ -2030,7 +2096,9 @@ namespace Speaker
 		bool LaneFree(Lane a_lane)
 		{
 			const auto settings = Config::Get();
-			if (!g_enabled.load() || !settings->enable || !NotReadyReason(a_lane).empty()) {
+			// which voice the line will ask for is not known here: the speak call's
+			// own answer tells whether that voice has a model
+			if (!g_enabled.load() || !settings->enable || !NotReadyReason(a_lane, Needs::kAnyModel).empty()) {
 				return false;
 			}
 			const auto started = g_laneHandle[a_lane].load();
@@ -2046,7 +2114,10 @@ namespace Speaker
 			if (!g_enabled.load() || !settings->enable) {
 				return false;
 			}
-			if (const auto reason = NotReadyReason(a_line.lane); !reason.empty()) {
+			// A line spoken late brings its audio along and needs no model at all.
+			const bool ownModel = !a_line.model.empty() || a_line.ready || !a_line.cached.empty();
+			if (const auto reason = NotReadyReason(a_line.lane, ownModel ? Needs::kNoModel : Needs::kDefaultModel);
+				!reason.empty()) {
 				if (!g_warnedNotReady.exchange(true)) {
 					logger::warn("A {} line was ignored: {}", LANE_NAME[a_line.lane], reason);
 				}
@@ -2664,7 +2735,7 @@ namespace Speaker
 
 	bool IsReady()
 	{
-		return g_enabled.load() && Config::Get()->enable && NotReadyReason(kNarration).empty();
+		return g_enabled.load() && Config::Get()->enable && NotReadyReason(kNarration, Needs::kAnyModel).empty();
 	}
 
 	bool IsBusy()
@@ -2707,15 +2778,24 @@ namespace Speaker
 	std::string Status()
 	{
 		const auto settings = Config::Get();
-		if (const auto reason = NotReadyReason(kNarration); !reason.empty()) {
+		if (const auto reason = NotReadyReason(kNarration, Needs::kAnyModel); !reason.empty()) {
 			return "not ready: " + reason;
 		}
 		const bool lipSync = settings->speechLipSync && g_playFileLipSync.load() &&
 							 g_audioUtilVersion.load() >= LIPSYNC_FOLLOWS_REWRITES;
-		return std::format("{} | model {} ({} voices, {} Hz) | voice {} | {} presets | {} models loaded | "
+		std::string model;
+		if (g_defaultLoaded.load()) {
+			model = std::format("model {} ({} voices, {} Hz) | voice {}", settings->model, g_defaultVoices.load(),
+				g_defaultRate.load(), settings->voice);
+		} else {
+			std::scoped_lock lock{ g_lock };
+			model = std::format("no default model ({}): only voices with a model of their own speak",
+				g_problem.empty() ? "see AudioUtilTTS.log"s : g_problem);
+		}
+		return std::format("{} | {} | {} presets | {} of {} models loaded | "
 						   "narration slots {} of {} | speech slots {} of {}, lipsync {} | dialogue {} | sherpa-onnx {}",
-			IsEnabled() ? "ready" : "switched off", settings->model, g_defaultVoices.load(), g_defaultRate.load(),
-			settings->voice, settings->presets.size(), g_modelsLoaded.load(), g_usableSlots[kNarration].load(),
+			IsEnabled() ? "ready" : "switched off", model, settings->presets.size(), g_modelsLoaded.load(),
+			g_modelsInstalled.load(), g_usableSlots[kNarration].load(),
 			settings->slots, g_usableSlots[kSpeech].load(), settings->speechSlots,
 			lipSync ? "on" : (settings->speechLipSync ? "off (AudioUtil older than 0.9.26)" : "off"),
 			IsDialogueEnabled() ? "on" : "off", TtsEngine::RuntimeVersion());
@@ -2820,8 +2900,13 @@ namespace Speaker
 		if (choice.source == VoiceChoice::kNone) {
 			return leave(label, "no voice is set up for it and [dialogue] fallback is off", Log::kOnce);
 		}
-		if (!g_defaultLoaded.load()) {
-			return leave("every voice", "the default model is not loaded", Log::kOnce);
+		if (!g_modelsUp.load()) {
+			return leave("every voice", "the models are still loading", Log::kOnce);
+		}
+		// A voice with a model of its own needs no default model. A voice on the
+		// default model (a preset that names no other, the voices by sex) does.
+		if (choice.line.model.empty() && !g_defaultLoaded.load()) {
+			return leave(label, "its voice is on the default model, which is not loaded", Log::kOnce);
 		}
 		if (g_usableSlots[kDialogue].load() <= 0) {
 			return leave("every voice", "no playable dialogue slot yet (restart the game once)", Log::kOnce);
@@ -3034,8 +3119,12 @@ namespace Speaker
 		if (!type) {
 			return nullptr;
 		}
-		const auto source = VoiceForType(*settings, type, female, settings->dialogueFallback).source;
-		return source == VoiceChoice::kOwn || source == VoiceChoice::kBySex ? type : nullptr;
+		const auto choice = VoiceForType(*settings, type, female, settings->dialogueFallback);
+		if (choice.source != VoiceChoice::kOwn && choice.source != VoiceChoice::kBySex) {
+			return nullptr;
+		}
+		// a voice on the default model speaks only while that one is loaded
+		return (!choice.line.model.empty() || g_defaultLoaded.load()) ? type : nullptr;
 	}
 
 	bool CanPrepareDialogue(int a_lines)
@@ -3050,7 +3139,7 @@ namespace Speaker
 	bool PrepareDialogue(std::string_view a_text, const RE::BGSVoiceType* a_voiceType, int a_response,
 		const void* a_info)
 	{
-		if (!a_voiceType || !IsDialogueEnabled() || !g_defaultLoaded.load()) {
+		if (!a_voiceType || !IsDialogueEnabled() || !g_modelsUp.load()) {
 			return false;
 		}
 		const auto settings = Config::Get();
@@ -3062,6 +3151,9 @@ namespace Speaker
 		auto       choice = VoiceForType(*settings, a_voiceType, female, settings->dialogueFallback);
 		if (choice.source != VoiceChoice::kOwn && choice.source != VoiceChoice::kBySex) {
 			return false;
+		}
+		if (choice.line.model.empty() && !g_defaultLoaded.load()) {
+			return false;  // its voice is on the default model, which is not loaded
 		}
 
 		Line line = std::move(choice.line);
@@ -3121,8 +3213,11 @@ namespace Speaker
 			return choice.label;
 		}
 		const auto& line = choice.line;
-		return std::format("{} (model {}, voice {}){}", choice.label, line.model.empty() ? settings->model : line.model,
+		// a voice on the default model, while there is none: nothing speaks it
+		const bool noModel = line.model.empty() && g_modelsUp.load() && !g_defaultLoaded.load();
+		return std::format("{} (model {}, voice {}){}{}", choice.label, line.model.empty() ? settings->model : line.model,
 			line.voice < 0 ? settings->voice : line.voice,
+			noModel ? " | not spoken: the default model is not loaded" : "",
 			choice.source == VoiceChoice::kBySex && !settings->dialogueFallback ?
 				" | unvoiced dialogue stays silent: [dialogue] fallback is off" :
 				"");

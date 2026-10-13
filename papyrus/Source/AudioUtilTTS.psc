@@ -64,8 +64,11 @@ Scriptname AudioUtilTTS Hidden
 ; IsNarrationFree, IsSpeechFree and the sender name in the event names.
 int Function GetAPIVersion() global native
 
-; True when a line can be spoken right now: the default model is loaded,
-; AudioUtil is present, a playable slot exists and speech is switched on.
+; True when the plugin can speak right now: a voice model is installed (the
+; default one or any other), AudioUtil is present, a playable slot exists and
+; speech is switched on. The default model is optional since 0.3.1: without it
+; a Speak call returns false for a line whose voice has no model of its own,
+; so check what the call returns.
 bool Function IsReady() global native
 
 ; Queue a narration line. asSender is your mod's own short name ("MyMod"); it
