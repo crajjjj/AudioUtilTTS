@@ -61,8 +61,10 @@ volume = 1.0
 #
 # A mod can bring presets of its own as a file: every presets\*.toml beside
 # this file is read too, holding the same [preset.<name>] tables. A preset
-# defined here wins over one of the same name from such a file, so to change a
-# mod's preset, copy it here under the same name and edit it.
+# defined here wins over one of the same name from such a file, and it is taken
+# whole: to change a mod's preset, copy all of it here under the same name and
+# edit it. A preset from such a file is for lines that ask for it by name; it
+# does not speak for a voice type by being named like one.
 #
 # The four below all use the default model, so they cost no extra memory.
 
@@ -206,7 +208,8 @@ cache_max_mb = 1024
 #
 # A voice type finds its voice in this order:
 #   1. its line below:  <voice type ID> = "<preset name>"
-#   2. a preset named exactly like the voice type, e.g. [preset.MaleNord]
+#   2. a preset of this file named exactly like the voice type, e.g.
+#      [preset.MaleNord]
 #   3. a voice type patch that names an installed model (see below)
 #   4. a model that lists the voice type in its own model.toml (see below)
 #   5. a model folder named exactly like the voice type, models\MaleNord
@@ -215,13 +218,14 @@ cache_max_mb = 1024
 # The ID is the voice type's editor ID as xEdit shows it; case is ignored.
 # "autts voice" in the console shows which voice the selected actor gets.
 # An empty preset name means that voice type is never spoken for.
+# A preset whose model is not installed is passed over in steps 1 and 2.
 #
 # A patch gives voice types to voices that are already installed, from a file of
 # its own: every voicetypes\*.toml beside this file is read, in file name order,
 #   [voicetype]
 #   HjoromirVoice = "MaleYoungEager"     # voice type ID = the model folder
 #   RumarinVoice = { model = "my-voices", voice = 3 }   # speed, volume too
-# Several patches add up, and a line whose model is not installed is ignored.
+# Several patches add up, and an entry whose model is not installed is skipped.
 #
 # A model can bring its own list, so that installing the model is all it takes:
 # a file models\<folder>\model.toml inside the model's folder,

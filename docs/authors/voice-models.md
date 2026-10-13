@@ -46,7 +46,7 @@ volume = 1.0
 A voice type finds its voice in a fixed order, and the user's own config is asked first:
 
 1. the user's `[voicetype]` line
-2. a preset named exactly like the voice type
+2. a preset of the user's config named exactly like the voice type
 3. a [voice type patch](../players/voices.md#voice-type-patches) the user installed (0.3.0 and newer)
 4. **your `model.toml`**
 5. a model folder named exactly like the voice type

@@ -68,9 +68,9 @@ Try one with `autts sayas "Not so loud." whisper`.
 
 ### Preset files
 
-Added in 0.3.2. `AudioUtilTTS.toml` is yours, so a mod cannot put its presets there. It brings them as a file of its own instead, and the plugin reads every such file on top of your config.
+Added in 0.3.2. There is nothing to set up: a mod that needs voices of its own installs a preset file, and the plugin reads it on top of your config. `AudioUtilTTS.toml` stays yours.
 
-`Data\SKSE\Plugins\AudioUtilTTS\presets\<any name>.toml`:
+Such a file is `Data\SKSE\Plugins\AudioUtilTTS\presets\<any name>.toml` and looks like the presets in your config:
 
 ```toml
 [preset.mymod_stern]
@@ -82,10 +82,11 @@ model = "my-voices"
 voice = 3
 ```
 
-- **The same tables as in `AudioUtilTTS.toml`**: `model`, `voice`, `speed` and `volume`, with the same defaults.
-- **Your own config wins.** A preset that `AudioUtilTTS.toml` defines keeps its definition, whatever a file says. To change a mod's preset, copy it into `AudioUtilTTS.toml` under the same name and edit it there.
-- **Files add up.** Every `.toml` file in that folder is read, in file name order. A name that two files define goes to the later one, and `AudioUtilTTS.log` names both.
-- **A missing model is no error.** A preset on a model that is not installed speaks with the default voice, like an unknown name. `AudioUtilTTS.log` lists such models at game start, one line per file.
+- **Your own config wins.** A preset that `AudioUtilTTS.toml` defines keeps its definition, whatever a file says. To change a mod's preset, copy it into `AudioUtilTTS.toml` under the same name and edit it there. A preset is taken whole: one of yours that sets only `speed` gets its model and voice from the defaults, not from the mod's file.
+- **Files add up.** Every `.toml` file in that folder is read, in the order of their names. A name that two files define goes to the later one, and `AudioUtilTTS.log` names both. The exception: when the later one's model is not installed and the earlier one's is, the earlier one stays.
+- **A missing model does not break the mod.** A line a mod sends through such a preset is spoken with the default voice instead, at the preset's own speed and volume. Without the default voice installed there is nothing to fall back on, and the line is not spoken.
+- **The log says what was read.** At game start `AudioUtilTTS.log` has one line per file: how many presets it added, which names were not taken because your config defines them, and which models it names that are not installed.
+- **A preset from a file is for lines that ask for it by name.** It never speaks for a voice type just because it is named like one; that is what a [voice type patch](#voice-type-patches) is for. A [`[voicetype]`](#voice-types) line of your own can name it.
 - **Read at game start and on `autts reload`.**
 
 ## Voice types
@@ -95,7 +96,7 @@ Every NPC has a voice type, and that is what an unvoiced dialogue line is spoken
 A voice type finds its voice in this order:
 
 1. its line in `[voicetype]`, naming a preset
-2. a preset named exactly like the voice type
+2. a preset of `AudioUtilTTS.toml` named exactly like the voice type
 3. a voice type patch that names an installed model (see [Voice type patches](#voice-type-patches))
 4. a model that lists the voice type in its own `model.toml` (see [Models that bring their own voice types](models.md#models-that-bring-their-own-voice-types))
 5. a model folder named exactly like the voice type (its first voice)
@@ -119,9 +120,10 @@ voice = 4
 - **The name is the voice type's editor ID**, as xEdit shows it. Case is ignored.
 - **An empty preset name silences a voice type.** `CrDogVoice = ""` means that voice type is never spoken for, whatever else is installed: not in dialogue, and not in character speech that names no preset.
 - **The quickest setup is no config at all.** A model folder called `models\MaleNord` speaks for the voice type `MaleNord`.
+- **A preset whose model is not installed is passed over** in steps 1 and 2, with a note in the log, and the lookup goes on with the next step.
 
-!!! info "Added in 0.2.1 and 0.3.0"
-    A model's own `model.toml` (step 4) is new in 0.2.1, voice type patches (step 3) in 0.3.0. In 0.2.0 the order was steps 1, 2, 5 and 6.
+!!! info "Added in 0.2.1 and 0.3.0, changed in 0.3.2"
+    A model's own `model.toml` (step 4) is new in 0.2.1, voice type patches (step 3) in 0.3.0. In 0.2.0 the order was steps 1, 2, 5 and 6. Up to 0.3.1 a preset whose model is not installed ended the lookup: unvoiced dialogue of that voice type stayed silent.
 
 ### Voice type patches
 
@@ -141,8 +143,8 @@ GorrVoice = "MaleBrute"
 RumarinVoice = { model = "my-voices", voice = 3, speed = 1.0, volume = 1.0 }
 ```
 
-- **Patches add up.** Every `.toml` file in that folder is read, in file name order. A voice type that two patches name goes to the later one, and `AudioUtilTTS.log` names both.
-- **A missing voice is no error.** A line whose model is not installed is ignored, and the lookup goes on as if the patch did not name that voice type. At game start `AudioUtilTTS.log` has one line per patch: how many voice types it names, and which of the voices it asks for are not installed.
+- **Patches add up.** Every `.toml` file in that folder is read, in the order of their names. A voice type that two patches name goes to the later one, and `AudioUtilTTS.log` names both. The exception: when the later one's voice is not installed and the earlier one's is, the earlier one stays.
+- **A missing voice is no error.** An entry whose model is not installed is skipped: the lookup goes on as if the patch did not name that voice type. At game start `AudioUtilTTS.log` has one line per patch: how many voice types it names, and which of the voices it asks for are not installed.
 - **Your own config wins.** `[voicetype]` and the presets in `AudioUtilTTS.toml` are asked first, so you can overrule a patch or silence a voice type with `Name = ""`.
 - **Read at game start and on `autts reload`.**
 - **Recorded lines stay as they are.** A patch only matters for the lines of that character that have no recording.

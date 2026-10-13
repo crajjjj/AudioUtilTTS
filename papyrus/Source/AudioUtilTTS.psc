@@ -20,8 +20,8 @@ Scriptname AudioUtilTTS Hidden
 ;
 ; Presets of your own: ship a file Data\SKSE\Plugins\AudioUtilTTS\presets\MyMod.toml
 ; holding [preset.mymod_stern] tables like the ones in AudioUtilTTS.toml. Every
-; file there is read (0.3.2 and newer); a preset the user's own config defines
-; under the same name wins.
+; .toml file there is read (0.3.2 and newer); a preset the user's own config
+; defines under the same name wins.
 ;
 ; Those two are narration: flat, with no speaker. To make a CHARACTER say a
 ; line, let that actor send AudioUtilTTS_Say:<preset>:<sender> instead. The
@@ -79,7 +79,8 @@ bool Function IsReady() global native
 ; Queue a narration line. asSender is your mod's own short name ("MyMod"); it
 ; is written into AudioUtilTTS.log with the line, so a user can see which mod a
 ; spoken or dropped line came from. Nothing else depends on it. asPreset names
-; a preset from AudioUtilTTS.toml; empty or unknown means the default voice. A
+; a preset (of AudioUtilTTS.toml or of a preset file); empty or unknown means
+; the default voice. A
 ; preset can name a different model: that model is loaded the first time a line
 ; asks for it (the line is about a second later that once) and then stays in
 ; memory.
@@ -123,7 +124,9 @@ bool Function SpeakActor(Actor akSpeaker, string asText, string asPreset = "", b
 ; (API 2)
 string Function GetActorVoice(Actor akSpeaker) global native
 
-; True when AudioUtilTTS.toml defines [preset.<asPreset>].
+; True when AudioUtilTTS.toml or a preset file (presets\*.toml, 0.3.2 and newer)
+; defines [preset.<asPreset>]. It does not tell whether the preset's model is
+; installed.
 bool Function HasPreset(string asPreset) global native
 
 ; Drop every narration and character line that is waiting or being generated.
@@ -158,7 +161,8 @@ int Function GetVoiceCount() global native
 Function SetEnabled(bool abEnabled) global native
 bool Function IsEnabled() global native
 
-; Re-read AudioUtilTTS.toml and reload the models. False = the file did not
+; Re-read AudioUtilTTS.toml, the preset files, the model.toml files and the
+; voice type patches, and reload the models. False = AudioUtilTTS.toml did not
 ; parse and the previous settings were kept.
 bool Function ReloadConfig() global native
 

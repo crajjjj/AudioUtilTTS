@@ -19,8 +19,12 @@ namespace Config
 	// AudioUtilTTS.toml is the user's, so a mod cannot put its presets there.
 	// It brings them as a file of its own instead, presets\<any name>.toml,
 	// holding the same [preset.<name>] tables. Every such file is read, in file
-	// name order: a name two files define goes to the later one, and a name
-	// AudioUtilTTS.toml defines stays the user's.
+	// name order: a name two files define goes to the later one (unless only
+	// the earlier one's model is installed), and a name AudioUtilTTS.toml
+	// defines stays the user's, whole.
+	// Such a preset is for lines that ask for it by name. It does not speak for
+	// a voice type by being named like one (Speaker's VoiceForType): that is
+	// what a voice type patch is for.
 	struct Preset
 	{
 		std::string model;           // "" = the [model] dir

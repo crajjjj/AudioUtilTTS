@@ -26,7 +26,7 @@ In both, `asSender` is your mod's own short name (`"MyMod"`). It is written into
 bool Function SpeakFrom(string asSender, string asText, string asPreset = "") global native
 ```
 
-Narration. `asPreset` names a preset from the config; empty or unknown means the default voice. A preset can name a different model; that model is loaded the first time a line asks for it (the line is about a second later that once) and then stays in memory. API 3.
+Narration. `asPreset` names a preset; empty or unknown means the default voice. A preset can name a different model; that model is loaded the first time a line asks for it (the line is about a second later that once) and then stays in memory. API 3.
 
 ```papyrus
 bool Function SpeakActorFrom(string asSender, Actor akSpeaker, string asText, string asPreset = "", bool abLipSync = true) global native
@@ -67,7 +67,7 @@ Neither touches dialogue: a dialogue line the game is already saying is the game
 | `bool IsNarrationFree()` | Would a narration line sent right now be taken? False while the plugin is not ready and, with the default `max_pending = 0`, while another narration line is being generated or spoken. It takes the line to be in the default voice, so it is also false while the default model is not installed. API 3 |
 | `bool IsSpeechFree()` | The same for a character line. True is no promise: another mod can take the lane a moment later, and it cannot tell whether the speaker's voice has a model, so still check what the speak call returns. API 3 |
 | `string GetStatus()` | One line of status text for people to read: `ready` followed by the details, or `not ready: <why>`. Its wording changes between versions (0.3.1 added `ready` with `no default model`), so test `IsReady()` in a script, not this text |
-| `bool HasPreset(string asPreset)` | True when `AudioUtilTTS.toml` or a [preset file](overview.md#bringing-your-own-presets) defines `[preset.<asPreset>]` |
+| `bool HasPreset(string asPreset)` | True when `AudioUtilTTS.toml` or a [preset file](overview.md#bringing-your-own-presets) defines `[preset.<asPreset>]`. It does not tell whether the preset's model is installed |
 | `int GetVoiceCount()` | Number of voices in the default model (0 while it is not loaded) |
 | `string GetActorVoice(Actor akSpeaker)` | Which voice the actor speaks with when no preset is named, and why, as one line of text: `MaleNord: preset 'malenord' (model my-voices, voice 12)`. API 2 |
 | `string GetChannel()` | The AudioUtil channel narration plays on (`[playback] channel`) |
@@ -88,7 +88,7 @@ A session switch on top of `[general] enable`. Switching off drops waiting lines
 bool Function ReloadConfig() global native
 ```
 
-Re-reads `AudioUtilTTS.toml` and reloads the models. `false` means the file did not parse and the previous settings were kept.
+Re-reads `AudioUtilTTS.toml`, the preset files, the `model.toml` files and the voice type patches, and reloads the models. `false` means `AudioUtilTTS.toml` did not parse and the previous settings were kept.
 
 ## Dialogue
 

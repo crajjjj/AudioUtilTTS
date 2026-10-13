@@ -1189,14 +1189,17 @@ namespace Speaker
 						g_modelsLoaded.store(static_cast<int>(g_models.size()));
 						return raw;
 					}
-					if (hasDefault) {
-						logger::error("Model '{}' not loaded: {}. Narration and character lines asking for it use the "
-									  "default model; dialogue lines in that voice stay unvoiced.",
-							key, error);
+					// A model nobody installed is no fault of the plugin: a preset
+					// file or a patch may name a voice the user does not have. A
+					// model that is there and will not load is an error.
+					const auto* consequence =
+						hasDefault ? "Narration and character lines asking for it use the default model; dialogue "
+									 "lines in that voice stay unvoiced." :
+									 "Lines asking for it are not spoken: there is no default model to fall back on.";
+					if (ModelStampFor(key) == 0) {
+						logger::warn("Model '{}' not loaded: {}. {}", key, error, consequence);
 					} else {
-						logger::error("Model '{}' not loaded: {}. Lines asking for it are not spoken: there is no "
-									  "default model to fall back on.",
-							key, error);
+						logger::error("Model '{}' not loaded: {}. {}", key, error, consequence);
 					}
 					markBad();
 					g_modelsLoaded.store(static_cast<int>(g_models.size()));
@@ -2388,25 +2391,41 @@ namespace Speaker
 			g_lateGreetings.erase(a_key);
 		}
 
-		// The voice fields of a preset, ready to drop into a Line. nullopt = no such preset.
-		std::optional<Line> FromPreset(const Config::Settings& a_settings, const std::string& a_key)
+		// nullptr = no such preset, in AudioUtilTTS.toml or in a preset file
+		const Config::Preset* FindPreset(const Config::Settings& a_settings, const std::string& a_key)
 		{
 			const auto it = a_settings.presets.find(a_key);
-			if (it == a_settings.presets.end()) {
-				return std::nullopt;
-			}
-			const auto& preset = it->second;
-			Line        line;
-			line.model = Config::Normalize(preset.model);
+			return it == a_settings.presets.end() ? nullptr : &it->second;
+		}
+
+		// The voice fields of a preset, ready to drop into a Line.
+		Line LineOf(const Config::Settings& a_settings, const Config::Preset& a_preset)
+		{
+			Line line;
+			line.model = Config::Normalize(a_preset.model);
 			if (line.model == Config::Normalize(a_settings.model)) {
 				line.model.clear();
 			}
 			// a voice number means something only inside its own model, so a preset
 			// on another model that names no voice gets that model's first one
-			line.voice = preset.voice >= 0 ? preset.voice : (line.model.empty() ? a_settings.voice : 0);
-			line.volume = preset.volume;
-			line.speed = preset.speed;
+			line.voice = a_preset.voice >= 0 ? a_preset.voice : (line.model.empty() ? a_settings.voice : 0);
+			line.volume = a_preset.volume;
+			line.speed = a_preset.speed;
 			return line;
+		}
+
+		// nullopt = no such preset
+		std::optional<Line> FromPreset(const Config::Settings& a_settings, const std::string& a_key)
+		{
+			const auto* preset = FindPreset(a_settings, a_key);
+			return preset ? std::optional<Line>(LineOf(a_settings, *preset)) : std::nullopt;
+		}
+
+		// "preset 'x'", and "preset 'x' of MyMod.toml" for one a mod brought in a file
+		std::string PresetLabel(const std::string& a_key, const Config::Preset& a_preset)
+		{
+			return a_preset.source.empty() ? std::format("preset '{}'", a_key) :
+											 std::format("preset '{}' of {}", a_key, a_preset.source);
 		}
 
 		void WarnUnknownPreset(const std::string& a_key)
@@ -2470,20 +2489,35 @@ namespace Speaker
 					presetKey = it->second;
 					mapped = true;
 				}
-				if (auto found = FromPreset(a_settings, presetKey)) {
-					choice.line = std::move(*found);
-					choice.source = VoiceChoice::kOwn;
-					// a preset a mod brought is named with its file
-					const auto& from = a_settings.presets.at(presetKey).source;
-					choice.label += from.empty() ? std::format(": preset '{}'", presetKey) :
-												   std::format(": preset '{}' of {}", presetKey, from);
-					return choice;
-				}
-				if (mapped) {
+				const auto* preset = FindPreset(a_settings, presetKey);
+				if (preset && !mapped && !preset->source.empty()) {
+					// Named like the voice type, a preset speaks for it only when it
+					// is the user's own. One from a mod's file shares the name by
+					// chance, or should have been a voice type patch: it must not
+					// take a voice type away from the voices installed for it.
+					LogOnce(std::format("The {} is named like a voice type. It does not speak for that voice type: "
+										"only a preset of AudioUtilTTS.toml does so by its name. A voice type patch, or "
+										"a [voicetype] line that names the preset, gives a voice type its voice.",
+						PresetLabel(presetKey, *preset)));
+					preset = nullptr;
+				} else if (!preset && mapped) {
 					// the line is as good as absent: the lookup goes on below
 					LogOnce(std::format("[voicetype] {} names the preset '{}', which neither AudioUtilTTS.toml nor a "
 										"preset file defines: that line is ignored",
 						name, presetKey));
+				}
+				if (preset) {
+					auto line = LineOf(a_settings, *preset);
+					if (line.model.empty() || ModelStampFor(line.model) != 0) {
+						choice.line = std::move(line);
+						choice.source = VoiceChoice::kOwn;
+						choice.label += ": " + PresetLabel(presetKey, *preset);
+						return choice;
+					}
+					// like a patch on a model nobody installed: it says nothing, and
+					// the lookup goes on
+					LogOnce(std::format("{} would get the {}, whose model '{}' is not installed: that is ignored", name,
+						PresetLabel(presetKey, *preset), line.model));
 				}
 				const auto borrow = [&](const Config::ModelVoice& a_voice) {
 					choice.line.model = a_voice.model == Config::Normalize(a_settings.model) ? std::string{} : a_voice.model;
@@ -2521,9 +2555,9 @@ namespace Speaker
 			}
 			if (a_fallback) {
 				const auto key = a_female ? "female"s : "male"s;
-				if (auto found = FromPreset(a_settings, key)) {
-					choice.line = std::move(*found);
-					choice.label += std::format(": preset '{}' by sex", key);
+				if (const auto* preset = FindPreset(a_settings, key)) {
+					choice.line = LineOf(a_settings, *preset);
+					choice.label += std::format(": {} by sex", PresetLabel(key, *preset));
 				} else {
 					choice.label += ": the default voice";
 				}

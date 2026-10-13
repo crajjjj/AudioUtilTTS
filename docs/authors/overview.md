@@ -47,7 +47,7 @@ The two run on separate lanes with their own channel and files, so a character a
 
 ## Bringing your own presets
 
-Added in 0.3.2. The four shipped presets are lines in the user's `AudioUtilTTS.toml`, and that file is the user's: a mod that shipped its own copy would replace their whole config. Ship a preset file instead, under a name of your own:
+Added in 0.3.2. The four shipped presets are lines in the user's `AudioUtilTTS.toml`, and that file is the user's: a mod that shipped its own copy would replace their whole config. Ship a preset file instead, in a file named after your mod:
 
 `Data\SKSE\Plugins\AudioUtilTTS\presets\MyMod.toml`:
 
@@ -61,18 +61,21 @@ model = "my-voices"
 voice = 3
 ```
 
+Then ask for them by name:
+
 ```papyrus
 SendModEvent("AudioUtilTTS_Speak:mymod_stern:MyMod", "You were told to leave.")
 akSpeaker.SendModEvent("AudioUtilTTS_Say:mymod_witch:MyMod", "Not so loud.")
 ```
 
-- **Prefix the names with your mod's name.** Presets share one list. A name two preset files define goes to the file later in name order, and a name the user's config defines stays the user's.
+- **Prefix the names with your mod's name.** Presets share one list. A name two preset files define goes to the file later in name order, and a name the user's config defines stays the user's. Use letters, digits, `_` and `-` only: a dot makes a nested table (`[preset.mymod.stern]` is not a preset called `mymod.stern`), and a colon is what separates preset and sender in the event name.
 - **The user can change your preset** by defining one of the same name in `AudioUtilTTS.toml`. That is by design: you name the role, they have the last word on its voice.
-- **A preset can set a model, a voice number, a speed and a volume**, nothing else. There are no tags for tone or emotion: how a line sounds is the voice you pick. See [Presets](../players/voices.md#presets) for the voices of the default model.
-- **A model your preset names does not have to be installed.** Without it the preset speaks with the default voice, and `AudioUtilTTS.log` lists the missing model at game start. Say on your download page which voices your presets are made for.
-- **With a plugin older than 0.3.2 the file is not read**, and your names fall back to the default voice like any unknown name. `HasPreset` tells whether a name is known.
+- **A preset can set a model, a voice number, a speed and a volume**, nothing else. There are no tags for tone or emotion: how a line sounds is the voice you pick. A preset that names no model speaks on the user's default model, and a voice number means something only inside one model: the numbers of the stock default model are listed under [Voices](../players/voices.md#voices). A number the model does not have becomes its last voice.
+- **A model your preset names does not have to be installed.** Without it your line is spoken with the user's default voice, at your preset's speed and volume, and `AudioUtilTTS.log` lists the missing model at game start. A user who has no default voice installed either hears nothing: the natives return `false` for that line, an event gives no answer. Say on your download page which voices your presets are made for.
+- **A preset is for lines that ask for it by name.** It does not become the voice of a voice type by being named like one. For a character of your own who should always sound the same, give them a voice type of their own and ship a [voice type patch](../players/voices.md#voice-type-patches): character speech that names no preset, and that character's unvoiced dialogue, then find the voice by themselves.
+- **With a plugin older than 0.3.2 the file is not read**, and your names fall back to the default voice like any unknown name. [`AudioUtilTTS.HasPreset("mymod_stern")`](papyrus-api.md#asking) tells whether the installed plugin knows the name, so a script can ask for a shipped role such as `male` instead. It does not tell whether the preset's model is installed.
 
-For a character of your own who should always sound the same, a preset is not needed: give them a voice type of their own and ship a [voice type patch](../players/voices.md#voice-type-patches). Character speech that names no preset then finds that voice by itself.
+**Checking it.** The file is read at game start and again on `autts reload`. `AudioUtilTTS.log` then has one line for it, `Preset file MyMod.toml: 2 new presets`, followed by the names the user's config overruled and the models that are not installed. A file that does not parse is skipped whole, with `Failed to parse the preset file MyMod.toml: ... (line N), file ignored`, and a key a preset does not have is named in a warning. In the console, `autts sayas "Some text" mymod_stern` speaks through the preset and says so when the name is unknown. With Mod Organizer 2, create the file before starting the game: a file added while the game runs is not seen.
 
 ## Making and releasing a voice
 

@@ -105,7 +105,8 @@ bool AudioUtilTTS_IsReady();
 // speaker's voice has a model: check what AudioUtilTTS_SpeakActorFrom returns.
 bool AudioUtilTTS_IsNarrationFree();
 bool AudioUtilTTS_IsSpeechFree();
-// True when AudioUtilTTS.toml defines [preset.<preset>].
+// True when AudioUtilTTS.toml or a preset file (presets\*.toml, 0.3.2 and newer) defines
+// [preset.<preset>]. It does not tell whether the preset's model is installed.
 bool AudioUtilTTS_HasPreset(const char* preset);
 
 // --------------------------------------------------------------------------- Speaking
