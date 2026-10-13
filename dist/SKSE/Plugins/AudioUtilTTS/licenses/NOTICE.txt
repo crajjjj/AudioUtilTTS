@@ -35,7 +35,7 @@ CommonLibSSE-NG
 toml++
     Reads the config file.
     Copyright (c) Mark Gillard
-    MIT License
+    MIT License (MIT-tomlplusplus.txt in this folder)
     https://github.com/marzer/tomlplusplus
 
 sherpa-onnx and ONNX Runtime bundle further libraries of their own (among them
