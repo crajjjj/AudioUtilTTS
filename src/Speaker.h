@@ -25,6 +25,11 @@
 // response's voice file. The game then plays the line itself, like any
 // recorded one: its timing, subtitles, volume slider and lipsync all apply.
 // Generated lines are kept in a disk cache, so each is generated once.
+// A model can also bring lines along that were generated beforehand, in a
+// "lines" folder inside its own: those are used like cached ones, so they are
+// in place the first time they are said. [dialogue] collect_lines writes the
+// lines that were not in place in time out in that form, to be handed out with
+// the model (see Speaker.cpp, ModelLineFor and CollectLine).
 //
 // Lines arrive through the AudioUtilTTS natives or through mod events, which
 // need no dependency on this mod:

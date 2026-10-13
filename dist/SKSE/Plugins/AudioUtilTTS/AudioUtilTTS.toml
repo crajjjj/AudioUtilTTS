@@ -188,6 +188,17 @@ slots = 128
 # A line is cached per model file, so a retrained model starts afresh by itself
 # after "autts reload".
 cache_max_mb = 1024
+# Ready-made lines. A voice model can bring lines along that were generated
+# beforehand, in a folder called "lines" inside its own. They are used like
+# cached ones: in place the first time they are said, with nothing generated.
+# Nothing has to be set for that. This setting is for whoever MAKES such a
+# folder: with it on, every line that could not be in place in time (it stayed
+# unvoiced that once, or was spoken late) and every greeting made ahead is also
+# written to Data\SKSE\Plugins\AudioUtilTTS\collected\<model folder>\lines,
+# and its text into lines.txt beside that folder. Copy "lines" into the
+# model's own folder to hand it out with the model. Collect with
+# [playback] output_rate = 0.
+collect_lines = false
 
 # Voice types: which voice speaks for which of the game's voice types. This is
 # what makes an NPC's generated lines sound like that NPC. Used for unvoiced

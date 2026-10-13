@@ -1,7 +1,9 @@
 #include "TtsEngine.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <system_error>
@@ -358,6 +360,115 @@ namespace TtsEngine
 		return text;
 	}
 
+	std::string CleanLine(std::string_view a_text, int a_maxChars)
+	{
+		const auto  text = ToSpeakable(a_text);
+		std::string out;
+		out.reserve(text.size());
+		bool space = false;
+		for (const char c : text) {
+			const auto u = static_cast<unsigned char>(c);
+			if (u <= 0x20 || u == 0x7F) {
+				space = !out.empty();
+				continue;
+			}
+			if (space) {
+				out += ' ';
+				space = false;
+			}
+			out += c;
+		}
+
+		const auto cap = static_cast<std::size_t>(a_maxChars);
+		if (out.size() <= cap) {
+			return out;
+		}
+		auto cut = out.find_last_of(".!?", cap - 1);
+		if (cut != std::string::npos && cut >= cap / 2) {
+			return out.substr(0, cut + 1);
+		}
+		cut = out.rfind(' ', cap - 1);
+		if (cut != std::string::npos && cut >= cap / 2) {
+			return out.substr(0, cut);
+		}
+		cut = cap;
+		while (cut > 0 && (static_cast<unsigned char>(out[cut]) & 0xC0) == 0x80) {
+			--cut;  // never split a UTF-8 sequence
+		}
+		return out.substr(0, cut);
+	}
+
+	namespace
+	{
+		// A line with nothing in it to say. Mods write lines that are not speech:
+		// "..." for a silent beat, "(...)" or "[...]" as a stand-in, a lone dash, a
+		// row of asterisks. A voice model handed one of those makes a noise where
+		// the game means silence, so they are told apart here: true when the text
+		// holds no letter and no digit, only punctuation, brackets, symbols and
+		// spaces, plain or not. a_text is UTF-8.
+		bool IsPlaceholder(std::string_view a_text)
+		{
+			for (std::size_t i = 0; i < a_text.size();) {
+				const auto lead = static_cast<unsigned char>(a_text[i]);
+				if (lead < 0x80) {
+					if (std::isalnum(lead) != 0) {
+						return false;
+					}
+					++i;
+					continue;
+				}
+				// one UTF-8 sequence; a broken one is not a letter
+				const std::size_t extra = lead >= 0xF0 ? 3 : lead >= 0xE0 ? 2 : lead >= 0xC0 ? 1 : 0;
+				char32_t          point = extra == 3 ? lead & 0x07 : extra == 2 ? lead & 0x0F : extra == 1 ? lead & 0x1F : 0xFFFD;
+				std::size_t       k = 1;
+				for (; k <= extra && i + k < a_text.size() && (static_cast<unsigned char>(a_text[i + k]) & 0xC0) == 0x80;
+					 ++k) {
+					point = (point << 6) | (static_cast<unsigned char>(a_text[i + k]) & 0x3F);
+				}
+				if (k <= extra) {
+					point = 0xFFFD;
+				}
+				i += k;
+				// the blocks that hold marks, not letters: Latin-1 signs, general
+				// punctuation, arrows / maths / boxes / dingbats, CJK punctuation,
+				// small and full-width forms of ASCII punctuation
+				const bool mark = (point >= 0x00A0 && point <= 0x00BF) || point == 0x00D7 || point == 0x00F7 ||
+								  (point >= 0x2000 && point <= 0x2BFF) || (point >= 0x3000 && point <= 0x303F) ||
+								  (point >= 0xFE30 && point <= 0xFE6F) || (point >= 0xFF00 && point <= 0xFF0F) ||
+								  point == 0xFFFD;
+				if (!mark) {
+					return false;
+				}
+			}
+			return true;
+		}
+	}
+
+	std::string CleanDialogue(std::string_view a_text, bool a_skipDirections, int a_maxChars)
+	{
+		std::string spoken;
+		spoken.reserve(a_text.size());
+		for (std::size_t i = 0; i < a_text.size(); ++i) {
+			const char c = a_text[i];
+			char       closer = 0;
+			if (c == '<') {
+				closer = '>';
+			} else if (a_skipDirections) {
+				closer = c == '(' ? ')' : c == '[' ? ']' : c == '*' ? '*' : 0;
+			}
+			// an opener with nothing closing it is ordinary text
+			if (const auto end = closer ? a_text.find(closer, i + 1) : std::string_view::npos;
+				end != std::string_view::npos) {
+				spoken += ' ';
+				i = end;
+				continue;
+			}
+			spoken += c;
+		}
+		auto out = CleanLine(spoken, a_maxChars);
+		return IsPlaceholder(out) ? std::string{} : out;
+	}
+
 	std::uint64_t Hash64(std::string_view a_text)
 	{
 		std::uint64_t hash = 0xCBF29CE484222325ull;
@@ -366,6 +477,19 @@ namespace TtsEngine
 			hash *= 0x100000001B3ull;
 		}
 		return hash;
+	}
+
+	std::string LineFileName(std::string_view a_cleanText, int a_voice, float a_speed)
+	{
+		// The speed in thousandths, as a whole number: printing a fraction would
+		// follow the process locale, and the name has to be the same everywhere.
+		char head[48];
+		std::snprintf(head, sizeof(head), "%d|%ld|", a_voice, std::lround(static_cast<double>(a_speed) * 1000.0));
+		std::string key(head);
+		key += a_cleanText;
+		char name[32];
+		std::snprintf(name, sizeof(name), "%016llx.wav", static_cast<unsigned long long>(Hash64(key)));
+		return name;
 	}
 
 	bool WriteBytes(const std::filesystem::path& a_path, const void* a_data, std::size_t a_size, std::string& a_error)

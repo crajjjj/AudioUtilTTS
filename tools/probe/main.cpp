@@ -13,6 +13,17 @@
 // Speaks a whole list with the model loaded once. The list is UTF-8, one line
 // each: a file name, a tab, the text. Writes <out dir>\<file name>.wav and
 // .lip. A line whose wav is already there is skipped, so a stopped run resumes.
+//   probe --lines <model dir> <list file> [threads]
+// Makes ready-made lines for a model: the dialogue lines it brings along in
+// <model dir>\lines, which the plugin uses like cached ones. The list is
+// UTF-8, one line each, in one of three forms: the text alone (voice 0, speed
+// 1); voice, speed and text, tab separated; or file name, voice, speed and
+// text, which is a row of the lines.txt the plugin writes when it collects
+// lines ([dialogue] collect_lines). The file name of such a row is not read:
+// it follows from the rest. Each line is cleaned the way the plugin cleans
+// dialogue and written under the name the plugin looks for. A line that is
+// there already is skipped, so a stopped run resumes, and a model trained
+// anew gets its lines again from the same list.
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -111,6 +122,120 @@ namespace
 			skipped, failed);
 		return failed > 0 && spoken == 0 ? 1 : 0;
 	}
+
+	int Lines(int argc, char** argv)
+	{
+		namespace fs = std::filesystem;
+		using clock = std::chrono::steady_clock;
+		// The plugin's defaults for [dialogue] skip_directions and [playback]
+		// max_chars. A game set up otherwise cleans a line differently, looks for
+		// another name and simply generates that line itself.
+		constexpr bool SKIP_DIRECTIONS = true;
+		constexpr int  MAX_CHARS = 400;
+
+		TtsEngine::ModelSpec spec;
+		spec.dir = argv[2];
+		spec.threads = argc > 4 ? std::atoi(argv[4]) : 2;
+		const fs::path outDir = fs::path(argv[2]) / "lines";
+
+		std::ifstream list(argv[3], std::ios::binary);
+		if (!list) {
+			std::printf("cannot read the list: %s\n", argv[3]);
+			return 1;
+		}
+		std::string error;
+		const auto  model = TtsEngine::Model::Load(spec, error);
+		if (!model) {
+			std::printf("load failed: %s\n", error.c_str());
+			return 1;
+		}
+		std::printf("sherpa-onnx %s, %d voices, %d Hz, %d threads\n", TtsEngine::RuntimeVersion().c_str(),
+			model->VoiceCount(), model->SampleRate(), spec.threads);
+		std::error_code ec;
+		fs::create_directories(outDir, ec);
+
+		const auto     start = clock::now();
+		int            spoken = 0, skipped = 0, empty = 0, failed = 0;
+		double         seconds = 0.0;
+		std::uintmax_t bytes = 0;
+		std::string    row;
+		bool           first = true;
+		while (std::getline(list, row)) {
+			if (first && row.rfind("\xEF\xBB\xBF", 0) == 0) {
+				row.erase(0, 3);  // a byte order mark
+			}
+			first = false;
+			if (!row.empty() && row.back() == '\r') {
+				row.pop_back();
+			}
+			// Three tabs: file name, voice, speed, text (the name is not read). Two:
+			// voice, speed, text. Fewer: all of it is text.
+			int         voice = 0;
+			float       speed = 1.0f;
+			std::string text = row;
+			if (const auto one = row.find('\t'); one != std::string::npos) {
+				if (auto two = row.find('\t', one + 1); two != std::string::npos) {
+					auto from = std::size_t{ 0 };
+					auto mid = one;
+					if (const auto three = row.find('\t', two + 1); three != std::string::npos) {
+						from = one + 1;
+						mid = two;
+						two = three;
+					}
+					voice = std::atoi(row.substr(from, mid - from).c_str());
+					speed = static_cast<float>(std::atof(row.substr(mid + 1, two - mid - 1).c_str()));
+					text = row.substr(two + 1);
+				}
+			}
+			const auto clean = TtsEngine::CleanDialogue(text, SKIP_DIRECTIONS, MAX_CHARS);
+			if (clean.empty()) {
+				if (!row.empty()) {
+					++empty;  // nothing to say: the plugin leaves such a line alone too
+				}
+				continue;
+			}
+			if (voice < 0 || voice >= model->VoiceCount() || speed <= 0.0f) {
+				std::printf("skipped, no voice %d or speed %.3f: %s\n", voice, static_cast<double>(speed), clean.c_str());
+				++failed;
+				continue;
+			}
+			const auto wav = outDir / TtsEngine::LineFileName(clean, voice, speed);
+			if (fs::exists(wav, ec)) {
+				++skipped;
+				continue;
+			}
+
+			// at the model's own rate: the plugin brings a line to its output rate
+			TtsEngine::Audio audio;
+			if (model->Synthesize(clean, voice, speed, {}, audio, error) != TtsEngine::Result::Ok || audio.samples.empty()) {
+				std::printf("failed: %s (%s)\n", clean.c_str(), error.c_str());
+				++failed;
+				continue;
+			}
+			// under its final name only when whole: that is what marks a line as done
+			auto part = wav;
+			part += ".part";
+			if (!TtsEngine::WriteWav(part, audio, error)) {
+				std::printf("write failed: %s (%s)\n", clean.c_str(), error.c_str());
+				++failed;
+				continue;
+			}
+			fs::rename(part, wav, ec);
+			seconds += static_cast<double>(audio.Seconds());
+			bytes += fs::file_size(wav, ec);
+			if (++spoken % 100 == 0) {
+				const auto took = std::chrono::duration<double>(clock::now() - start).count();
+				std::printf("%d lines, %.0f s of speech in %.0f s\n", spoken, seconds, took);
+				std::fflush(stdout);
+			}
+		}
+		const auto took = std::chrono::duration<double>(clock::now() - start).count();
+		std::printf("done: %d lines made (%.0f s of speech in %.0f s, %.1f MB), %d already there, %d with nothing to "
+					"say, %d failed, in %s\n",
+			spoken, seconds, took, static_cast<double>(bytes) / (1024.0 * 1024.0), skipped, empty, failed,
+			outDir.string().c_str());
+		return failed > 0 && spoken == 0 ? 1 : 0;
+	}
 }
 
 int main(int argc, char** argv)
@@ -118,6 +243,9 @@ int main(int argc, char** argv)
 	std::string error;
 	if (argc >= 5 && std::strcmp(argv[1], "--batch") == 0) {
 		return Batch(argc, argv);
+	}
+	if (argc >= 4 && std::strcmp(argv[1], "--lines") == 0) {
+		return Lines(argc, argv);
 	}
 	if (argc == 3 && std::strcmp(argv[1], "--rest") == 0) {
 		if (!Lip::Write(argv[2], Lip::Rest(), error)) {
@@ -141,7 +269,8 @@ int main(int argc, char** argv)
 		std::printf("usage: probe <model dir> \"text\" [voice] [out.wav] [threads] [output rate]\n"
 					"       probe --rest out.lip\n"
 					"       probe --text file\n"
-					"       probe --batch <model dir> <list file> <out dir> [voice] [threads] [output rate] [lip strength]\n");
+					"       probe --batch <model dir> <list file> <out dir> [voice] [threads] [output rate] [lip strength]\n"
+					"       probe --lines <model dir> <list file> [threads]\n");
 		return 2;
 	}
 	TtsEngine::ModelSpec spec;
