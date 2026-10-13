@@ -8,9 +8,6 @@ namespace Config
 	inline constexpr std::string_view MODELS_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\models\\";
 	// What a model says about itself, inside its own folder (see ModelVoice).
 	inline constexpr std::string_view MODEL_FILE = "model.toml";
-	// The lines a model brings along, generated beforehand: a folder inside its
-	// own (see Speaker.cpp, ModelLineFor).
-	inline constexpr std::string_view LINES_DIR = "lines";
 	// Where the voice type patches are (see Settings::patchVoiceTypes).
 	inline constexpr std::string_view PATCH_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\voicetypes\\";
 
@@ -86,9 +83,6 @@ namespace Config
 		bool  dialogueLateSplit = true;  // greetings_split: a long line spoken late starts with its first sentence
 		bool  dialogueSkipDirections = true;
 		int   dialogueCacheMb = 1024;
-		// collect_lines: lines that were not in place in time are also written out
-		// as ready-made lines, to be handed out with their model
-		bool  dialogueCollect = false;
 
 		// [preset.<name>], keyed by Normalize(name)
 		std::unordered_map<std::string, Preset> presets;

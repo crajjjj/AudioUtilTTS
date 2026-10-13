@@ -262,7 +262,6 @@ namespace Config
 			settings->dialogueSkipDirections =
 				(*dialogue)["skip_directions"].value_or(settings->dialogueSkipDirections);
 			settings->dialogueCacheMb = (*dialogue)["cache_max_mb"].value_or(settings->dialogueCacheMb);
-			settings->dialogueCollect = (*dialogue)["collect_lines"].value_or(settings->dialogueCollect);
 		}
 		settings->dialogueSlots = std::clamp(settings->dialogueSlots, 64, 256);
 		settings->dialogueLipStrength = std::clamp(settings->dialogueLipStrength, 0.0f, 1.5f);
@@ -342,14 +341,12 @@ namespace Config
 			settings->enable ? "" : " [disabled]");
 		logger::info("Config: dialogue {}, slots {}, lipsync {} (strength {:.2f}), fallback {}, "
 					 "greetings {} (up to {:.1f} s late, in two parts {}), prepare_greetings {}, skip_directions {}, "
-					 "cache {} MB, collect_lines {}, {} voice types mapped, {} given a voice by patches, {} listed by "
-					 "models",
+					 "cache {} MB, {} voice types mapped, {} given a voice by patches, {} listed by models",
 			settings->dialogue, settings->dialogueSlots, settings->dialogueLip, settings->dialogueLipStrength,
 			settings->dialogueFallback, settings->dialogueGreetings, settings->dialogueLateMax,
 			settings->dialogueLateSplit, settings->dialoguePrepare,
 			settings->dialogueSkipDirections,
-			settings->dialogueCacheMb, settings->dialogueCollect, settings->voiceTypes.size(),
-			settings->patchVoiceTypes.size(),
+			settings->dialogueCacheMb, settings->voiceTypes.size(), settings->patchVoiceTypes.size(),
 			settings->modelVoiceTypes.size());
 
 		std::scoped_lock lock{ g_lock };

@@ -86,29 +86,9 @@ namespace TtsEngine
 	// becomes the plain kind, which every model's pronunciation rules know.
 	std::string ToSpeakable(std::string_view a_text);
 
-	// One line of plain text: ToSpeakable, then control characters and runs of
-	// whitespace become single spaces, and anything past a_maxChars is cut at a
-	// sentence end.
-	std::string CleanLine(std::string_view a_text, int a_maxChars);
-
-	// What a dialogue line says aloud. Markup in <angle brackets> is dropped,
-	// and so are stage directions such as (sighs), [laughs] and *coughs* when
-	// a_skipDirections. "" when nothing is left to say: no letter and no digit,
-	// only punctuation, brackets, symbols and spaces, as in "..." or "(...)".
-	// Cleaning a cleaned line gives the same line.
-	std::string CleanDialogue(std::string_view a_text, bool a_skipDirections, int a_maxChars);
-
 	// FNV-1a over the bytes of a_text. Names cache files and seeds mouth shapes,
 	// so it must not change between versions.
 	std::uint64_t Hash64(std::string_view a_text);
-
-	// The file name of a ready-made line: a line a model brings along in its own
-	// "lines" folder, generated beforehand (see Speaker.h). It names what shapes
-	// the audio inside one model: the voice number, the speed and the cleaned
-	// text. Unlike a cache file's name it holds nothing of the machine it was
-	// made on, so the file can be handed out with the model. It must not change
-	// between versions either.
-	std::string LineFileName(std::string_view a_cleanText, int a_voice, float a_speed);
 
 	// A whole file, written in one go.
 	bool WriteBytes(const std::filesystem::path& a_path, const void* a_data, std::size_t a_size, std::string& a_error);

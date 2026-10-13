@@ -80,7 +80,6 @@ Game dialogue that has no recorded voice. See [Unvoiced Dialogue](unvoiced-dialo
 | `skip_directions` | `true` | Leave out stage directions: text in `(parentheses)`, `[brackets]` or `*asterisks*` |
 | `slots` | `128` | Placeholder voice files (`Data\Sound\Voice\AudioUtilTTS`), 64 to 256. A line that finds none free stays unvoiced. A slot added by raising this starts working after the next restart |
 | `cache_max_mb` | `1024` | Size limit of the cache of generated lines, in MB. The lines used longest ago are dropped first. `0` = no limit |
-| `collect_lines` | `false` | For whoever makes [ready-made lines](../authors/voice-models.md#ready-made-lines) for a voice: every line that could not be in place in time, and every greeting made ahead, is also written to `Data\SKSE\Plugins\AudioUtilTTS\collected`. Using ready-made lines needs no setting. Added in 0.3.2 |
 
 `wait_ms`, a key of 0.2.0, is gone in 0.2.1: the game is no longer made to wait for a line.
 

@@ -40,23 +40,6 @@ probe --batch <model dir> <list file> <out dir> [voice] [threads] [output rate] 
 
 Speaks a list with the model loaded once. The list is UTF-8, one line each: a file name, a tab, the text. It writes `<out dir>\<file name>.wav` and `.lip`. A line whose wav is already there is skipped, so a stopped run resumes.
 
-### Make ready-made lines
-
-```
-probe --lines <model dir> <list file> [threads]
-```
-
-Added in 0.3.2. Makes the [ready-made lines](voice-models.md#ready-made-lines) of a model: the dialogue lines it brings along in `<model dir>\lines`, which the plugin uses like cached ones.
-
-- **The list** is UTF-8, one line each, in one of three forms: the text alone (voice 0, speed 1); voice, speed and text, tab separated; or file name, voice, speed and text, which is a row of the `lines.txt` the plugin writes when it collects lines. The file name of such a row is not read: it follows from the rest.
-- **Each line is cleaned the way the plugin cleans dialogue**, with the plugin's default settings: markup and stage directions go, a line with nothing to say is left out, a line past 400 characters is cut.
-- **A line that is there already is skipped**, so a stopped run resumes, and a list with a few lines added makes only those.
-- **The audio stays at the model's own rate.** The plugin brings it to the user's `output_rate`.
-
-```
-xmake run probe dist\SKSE\Plugins\AudioUtilTTS\models\my-voice greetings.txt 4
-```
-
 ### Other modes
 
 | Command | Does |

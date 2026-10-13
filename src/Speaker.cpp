@@ -9,10 +9,10 @@
 #include <Windows.h>
 
 #include <array>
+#include <cctype>
 #include <condition_variable>
 #include <cstring>
 #include <deque>
-#include <fstream>
 #include <optional>
 #include <thread>
 #include <tuple>
@@ -27,8 +27,6 @@ namespace Speaker
 
 		constexpr auto MODELS_DIR = Config::MODELS_DIR;
 		constexpr auto CACHE_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\cache"sv;
-		constexpr auto COLLECT_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\collected"sv;  // see CollectLine
-		constexpr auto COLLECT_LIST = "lines.txt"sv;
 		constexpr auto SPOKEN_EVENT = "AudioUtilTTS_Spoken"sv;  // sent when a line starts playing
 		constexpr auto SPEAK_EVENT = "AudioUtilTTS_Speak"sv;    // received: narrate strArg
 		constexpr auto SAY_EVENT = "AudioUtilTTS_Say"sv;        // received: the sending actor says strArg
@@ -100,13 +98,6 @@ namespace Speaker
 			std::shared_ptr<LateSplit>              split;
 			long long                               headMs = 0;
 			std::size_t                             fullChars = 0;
-			// [dialogue] collect_lines (see CollectLine): the name the whole line has
-			// as a ready-made line, its whole text, and whether it is one to collect:
-			// it was not in place when the game wanted it. Like prepared, collect may
-			// still be set under g_lock while the job waits.
-			std::string lineName;
-			std::string lineText;  // only while lines are collected
-			bool        collect = false;
 		};
 
 		struct Line
@@ -167,9 +158,6 @@ namespace Speaker
 			fs::path      cacheFile;
 			float         volume = 1.0f;
 			std::string   text;  // seeds the mouth shapes
-			// "<model>/<name>" when the file is a ready-made line of that model, not
-			// a cache file: read as it is, and never removed (see ModelLineFor)
-			std::string   modelLine;
 		};
 
 		std::mutex                        g_lock;  // guards the block below
@@ -196,8 +184,6 @@ namespace Speaker
 		// per model (normalized folder name), all cleared by a reload:
 		std::unordered_map<std::string, float>         g_msPerChar;    // measured generation time per character
 		std::unordered_map<std::string, std::uint64_t> g_modelStamps;  // TtsEngine::ModelStamp, 0 = no such model
-		std::unordered_map<std::string, fs::path>      g_modelLines;   // its folder of ready-made lines, {} = none
-		std::unordered_set<std::string>                g_badModelLines;  // "<model>/<name>": unreadable, not asked for again
 		std::unordered_set<std::string>                g_loggedOnce;   // see LogOnce
 
 		std::atomic<std::uint64_t> g_epoch{ 1 };  // bumped by Cancel: lines from an older epoch are dropped
@@ -213,10 +199,8 @@ namespace Speaker
 		std::atomic<std::uint32_t> g_dialogueUnvoiced{ 0 };   // responses left as the game built them
 		std::atomic<std::uint32_t> g_dialogueGenerated{ 0 };  // lines generated
 		std::atomic<std::uint32_t> g_dialoguePrepared{ 0 };   // of those, greetings made ahead
-		std::atomic<std::uint32_t> g_dialogueNothing{ 0 };    // responses with nothing to say (see CleanDialogue)
+		std::atomic<std::uint32_t> g_dialogueNothing{ 0 };    // responses with nothing to say (see IsPlaceholder)
 		std::atomic<std::uint32_t> g_dialogueLate{ 0 };       // greetings spoken late
-		std::atomic<std::uint32_t> g_dialogueFromModel{ 0 };  // of those given a voice file: ready-made lines
-		std::atomic<std::uint32_t> g_dialogueCollected{ 0 };  // lines written out by [dialogue] collect_lines
 
 		// A greeting the game said before its voice existed ([dialogue]
 		// greetings). The game cannot be handed the line any more, so it is
@@ -732,17 +716,115 @@ namespace Speaker
 
 		// --------------------------------------------------------------------- text
 
-		// The cleaning itself is TtsEngine's, where tools\probe shares it: a
-		// ready-made line is found by its cleaned text (see ModelLineFor).
+		// One line of plain text: control characters and runs of whitespace become
+		// single spaces, and anything past a_maxChars is cut at a sentence end.
 		std::string Clean(std::string_view a_text, int a_maxChars)
 		{
-			return TtsEngine::CleanLine(a_text, a_maxChars);
+			const auto  text = TtsEngine::ToSpeakable(a_text);
+			std::string out;
+			out.reserve(text.size());
+			bool space = false;
+			for (const char c : text) {
+				const auto u = static_cast<unsigned char>(c);
+				if (u <= 0x20 || u == 0x7F) {
+					space = !out.empty();
+					continue;
+				}
+				if (space) {
+					out += ' ';
+					space = false;
+				}
+				out += c;
+			}
+
+			const auto cap = static_cast<std::size_t>(a_maxChars);
+			if (out.size() <= cap) {
+				return out;
+			}
+			auto cut = out.find_last_of(".!?", cap - 1);
+			if (cut != std::string::npos && cut >= cap / 2) {
+				return out.substr(0, cut + 1);
+			}
+			cut = out.rfind(' ', cap - 1);
+			if (cut != std::string::npos && cut >= cap / 2) {
+				return out.substr(0, cut);
+			}
+			cut = cap;
+			while (cut > 0 && (static_cast<unsigned char>(out[cut]) & 0xC0) == 0x80) {
+				--cut;  // never split a UTF-8 sequence
+			}
+			return out.substr(0, cut);
 		}
 
-		// What a dialogue line says aloud, "" when there is nothing to say.
+		// A line with nothing in it to say. Mods write lines that are not speech:
+		// "..." for a silent beat, "(...)" or "[...]" as a stand-in, a lone dash, a
+		// row of asterisks. A voice model handed one of those makes a noise where
+		// the game means silence, so they are told apart here: true when the text
+		// holds no letter and no digit, only punctuation, brackets, symbols and
+		// spaces, plain or not. a_text is UTF-8.
+		bool IsPlaceholder(std::string_view a_text)
+		{
+			for (std::size_t i = 0; i < a_text.size();) {
+				const auto lead = static_cast<unsigned char>(a_text[i]);
+				if (lead < 0x80) {
+					if (std::isalnum(lead) != 0) {
+						return false;
+					}
+					++i;
+					continue;
+				}
+				// one UTF-8 sequence; a broken one is not a letter
+				const std::size_t extra = lead >= 0xF0 ? 3 : lead >= 0xE0 ? 2 : lead >= 0xC0 ? 1 : 0;
+				char32_t          point = extra == 3 ? lead & 0x07 : extra == 2 ? lead & 0x0F : extra == 1 ? lead & 0x1F : 0xFFFD;
+				std::size_t       k = 1;
+				for (; k <= extra && i + k < a_text.size() && (static_cast<unsigned char>(a_text[i + k]) & 0xC0) == 0x80;
+					 ++k) {
+					point = (point << 6) | (static_cast<unsigned char>(a_text[i + k]) & 0x3F);
+				}
+				if (k <= extra) {
+					point = 0xFFFD;
+				}
+				i += k;
+				// the blocks that hold marks, not letters: Latin-1 signs, general
+				// punctuation, arrows / maths / boxes / dingbats, CJK punctuation,
+				// small and full-width forms of ASCII punctuation
+				const bool mark = (point >= 0x00A0 && point <= 0x00BF) || point == 0x00D7 || point == 0x00F7 ||
+								  (point >= 0x2000 && point <= 0x2BFF) || (point >= 0x3000 && point <= 0x303F) ||
+								  (point >= 0xFE30 && point <= 0xFE6F) || (point >= 0xFF00 && point <= 0xFF0F) ||
+								  point == 0xFFFD;
+				if (!mark) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		// What a dialogue line says aloud. Markup in <angle brackets> is dropped,
+		// and so are stage directions such as (sighs), [laughs] and *coughs* when
+		// the config says so. "" when nothing is left to say (see IsPlaceholder).
 		std::string CleanDialogue(std::string_view a_text, const Config::Settings& a_settings)
 		{
-			return TtsEngine::CleanDialogue(a_text, a_settings.dialogueSkipDirections, a_settings.maxChars);
+			std::string spoken;
+			spoken.reserve(a_text.size());
+			for (std::size_t i = 0; i < a_text.size(); ++i) {
+				const char c = a_text[i];
+				char       closer = 0;
+				if (c == '<') {
+					closer = '>';
+				} else if (a_settings.dialogueSkipDirections) {
+					closer = c == '(' ? ')' : c == '[' ? ']' : c == '*' ? '*' : 0;
+				}
+				// an opener with nothing closing it is ordinary text
+				if (const auto end = closer ? a_text.find(closer, i + 1) : std::string_view::npos;
+					end != std::string_view::npos) {
+					spoken += ' ';
+					i = end;
+					continue;
+				}
+				spoken += c;
+			}
+			auto out = Clean(spoken, a_settings.maxChars);
+			return IsPlaceholder(out) ? std::string{} : out;
 		}
 
 		// Roughly how long a line takes to say: 15 characters a second.
@@ -864,138 +946,6 @@ namespace Speaker
 			if (ec) {
 				fs::remove(part, ec);
 			}
-		}
-
-		// ---------------------------------------------------------- ready-made lines
-
-		// A model can bring lines along that were generated beforehand:
-		// models\<folder>\lines\<name>.wav, the name from TtsEngine::LineFileName.
-		// Such a line is used like a cached one: it is in place the first time it
-		// is said, nothing is generated, and its model is not even loaded for it.
-		// Its name holds the voice number, the speed and the cleaned text and
-		// nothing of the machine it was made on (a cache file's name holds the
-		// model files' write time), so the files can be handed out with the model.
-		// They are somebody's mod files: read as they are, never written, touched
-		// or removed here.
-		//
-		// The folder of a_modelKey's lines, {} when it has none. Looked at once per
-		// model, until a reload.
-		fs::path ModelLinesDir(const std::string& a_modelKey)
-		{
-			{
-				std::scoped_lock lock{ g_lock };
-				if (const auto it = g_modelLines.find(a_modelKey); it != g_modelLines.end()) {
-					return it->second;
-				}
-			}
-			fs::path dir;
-			if (Config::IsFolderName(a_modelKey)) {
-				// UTF-8, like every model name
-				dir = fs::current_path() / MODELS_DIR / fs::path(std::u8string(a_modelKey.begin(), a_modelKey.end())) /
-					  Config::LINES_DIR;
-				std::error_code ec;
-				if (!fs::is_directory(dir, ec)) {
-					dir.clear();
-				}
-			}
-			bool fresh = false;
-			{
-				std::scoped_lock lock{ g_lock };
-				fresh = g_modelLines.try_emplace(a_modelKey, dir).second;
-			}
-			if (fresh && !dir.empty()) {
-				logger::info("Model '{}' brings ready-made lines (its {} folder): they are used like cached ones",
-					a_modelKey, Config::LINES_DIR);
-			}
-			return dir;
-		}
-
-		// What a ready-made line is known by in g_badModelLines and in a FillJob.
-		std::string ModelLineKey(const std::string& a_modelKey, const std::string& a_name)
-		{
-			return a_modelKey + '/' + a_name;
-		}
-
-		// The file of the ready-made line a_name of that model, {} when the model
-		// brings none by that name or the one it brings could not be read.
-		fs::path ModelLineFor(const std::string& a_modelKey, const std::string& a_name)
-		{
-			const auto dir = ModelLinesDir(a_modelKey);
-			if (dir.empty()) {
-				return {};
-			}
-			{
-				std::scoped_lock lock{ g_lock };
-				if (g_badModelLines.contains(ModelLineKey(a_modelKey, a_name))) {
-					return {};
-				}
-			}
-			auto            file = dir / a_name;
-			std::error_code ec;
-			return fs::is_regular_file(file, ec) ? file : fs::path{};
-		}
-
-		// A ready-made line is kept at the rate its model speaks at; lines are
-		// played at [playback] output_rate here.
-		bool LoadModelLine(const fs::path& a_file, const Config::Settings& a_settings, TtsEngine::Audio& a_out)
-		{
-			if (!TtsEngine::ReadWav(a_file, a_out) || a_out.samples.empty()) {
-				return false;
-			}
-			TtsEngine::Resample(a_out, a_settings.outputRate);
-			return true;
-		}
-
-		// One that could not be read is not asked for again until a reload: the
-		// line is generated like any other from then on. a_key from ModelLineKey.
-		void ForgetModelLine(const std::string& a_key)
-		{
-			logger::warn("The ready-made line {} could not be read: that line is generated instead", a_key);
-			std::scoped_lock lock{ g_lock };
-			g_badModelLines.insert(a_key);
-		}
-
-		// [dialogue] collect_lines: how ready-made lines come to be. A line that
-		// was generated because it could not be in place in time (it stayed
-		// unvoiced that once, or was spoken late), or as a greeting made ahead, is
-		// also written to collected\<model folder>\lines\<name>.wav, laid out like
-		// the models folder itself, so that folder can be handed out with the
-		// model. Its text goes into collected\<model folder>\lines.txt, one line
-		// each (file name, voice, speed and text, tab separated): what was
-		// collected can be read there and sorted out by file, and tools\probe
-		// --lines makes the lines again from it for a model that was trained anew.
-		// Worker thread only.
-		void CollectLine(const std::string& a_modelKey, const DialogueJob& a_job, int a_voice, float a_speed,
-			const TtsEngine::Audio& a_audio)
-		{
-			if (a_job.lineName.empty() || a_job.lineText.empty() || !Config::IsFolderName(a_modelKey)) {
-				return;
-			}
-			const auto root =
-				fs::current_path() / COLLECT_DIR / fs::path(std::u8string(a_modelKey.begin(), a_modelKey.end()));
-			const auto file = root / Config::LINES_DIR / a_job.lineName;
-			std::error_code ec;
-			if (fs::exists(file, ec)) {
-				return;  // collected before
-			}
-			fs::create_directories(file.parent_path(), ec);
-			auto part = file;
-			part += ".part";
-			std::string error;
-			if (!TtsEngine::WriteWav(part, a_audio, error)) {
-				LogOnce(std::format("Could not collect a dialogue line of model '{}': {}", a_modelKey, error), true);
-				return;
-			}
-			fs::rename(part, file, ec);
-			if (ec) {
-				fs::remove(part, ec);
-				return;
-			}
-			const auto row = std::format("{}\t{}\t{:.3f}\t{}\n", a_job.lineName, a_voice, a_speed, a_job.lineText);
-			if (std::ofstream list(root / COLLECT_LIST, std::ios::binary | std::ios::app); list) {
-				list.write(row.data(), static_cast<std::streamsize>(row.size()));
-			}
-			g_dialogueCollected.fetch_add(1);
 		}
 
 		// Keeps the cache under [dialogue] cache_max_mb by dropping the lines used
@@ -1739,9 +1689,6 @@ namespace Speaker
 				}
 				StoreCached(job->cacheFile, audio);
 				g_dialogueGenerated.fetch_add(1);
-				if (settings->dialogueCollect && (job->collect || job->prepared)) {
-					CollectLine(modelKey, *job, a_line.voice, a_line.speed, audio);
-				}
 			}
 
 			const bool inSlot = job->slot >= 0 && current() && DialogueSlotWritable(job->slot, job->slotStamp) &&
@@ -1894,24 +1841,15 @@ namespace Speaker
 				const auto       settings = Config::Get();
 				TtsEngine::Audio audio;
 				bool             inSlot = false;
-				const bool       readyMade = !fill.modelLine.empty();
-				if (!(readyMade ? LoadModelLine(fill.cacheFile, *settings, audio) : LoadCached(fill.cacheFile, audio))) {
-					// unreadable: the next request generates the line again. A cache
-					// file is removed for that, a ready-made line only passed over.
-					if (readyMade) {
-						ForgetModelLine(fill.modelLine);
-					} else {
-						std::error_code ec;
-						fs::remove(fill.cacheFile, ec);
-					}
+				if (!LoadCached(fill.cacheFile, audio)) {
+					// unreadable: removed, so the next request generates the line again
+					std::error_code ec;
+					fs::remove(fill.cacheFile, ec);
 				} else if (DialogueSlotWritable(fill.slot, fill.slotStamp)) {
 					inSlot = FillDialogueSlot(fill.slot, audio, fill.volume, *settings, fill.text);
 				}
 				if (inSlot) {
 					g_dialogueGiven.fetch_add(1);
-					if (readyMade) {
-						g_dialogueFromModel.fetch_add(1);
-					}
 				} else {
 					ForgetDialogueSlot(fill.slot, fill.slotStamp);
 				}
@@ -2787,8 +2725,6 @@ namespace Speaker
 			// models may have been swapped on disk: measure and stamp them afresh
 			g_msPerChar.clear();
 			g_modelStamps.clear();
-			g_modelLines.clear();
-			g_badModelLines.clear();
 			g_unusableModels.clear();
 			g_failedLines.clear();
 			g_loggedOnce.clear();
@@ -3114,18 +3050,8 @@ namespace Speaker
 			}
 		}
 
-		// 2. said before: it is in the cache. Or its model brought it along,
-		// ready-made (see ModelLineFor): that is used the same way.
-		const auto      lineName = TtsEngine::LineFileName(line.text, line.voice, line.speed);
-		std::error_code ec;
-		auto            have = fs::exists(cacheFile, ec) ? cacheFile : fs::path{};
-		bool            readyMade = false;
-		if (have.empty()) {
-			have = ModelLineFor(modelKey, lineName);
-			readyMade = !have.empty();
-		}
-		if (!have.empty()) {
-			const auto    modelLine = readyMade ? ModelLineKey(modelKey, lineName) : std::string{};
+		// 2. said before: it is in the cache
+		if (std::error_code ec; fs::exists(cacheFile, ec)) {
 			std::uint64_t stamp = 0;
 			const int     slot = TakeDialogueSlot(key, stamp);
 			if (slot < 0) {
@@ -3140,34 +3066,25 @@ namespace Speaker
 				}
 				{
 					std::scoped_lock lock{ g_lock };
-					g_fills.push_back(FillJob{ slot, stamp, have, line.volume, line.text, modelLine });
+					g_fills.push_back(FillJob{ slot, stamp, cacheFile, line.volume, line.text });
 				}
 				g_fillWake.notify_one();
 				t_leadMs += speechMs;
 				return slotPath(slot);
 			}
 			// about to be said: it has to be in place before the game is told
-			if (TtsEngine::Audio cached;
-				readyMade ? LoadModelLine(have, *settings, cached) : LoadCached(have, cached)) {
+			if (TtsEngine::Audio cached; LoadCached(cacheFile, cached)) {
 				if (!FillDialogueSlot(slot, cached, line.volume, *settings, line.text)) {
 					ForgetDialogueSlot(slot, stamp);
 					return leave(label, "its placeholder file could not be written");
 				}
 				t_leadMs += cached.Seconds() * 1000.0f;
 				g_dialogueGiven.fetch_add(1);
-				if (readyMade) {
-					g_dialogueFromModel.fetch_add(1);
-				}
 				return slotPath(slot);
 			}
-			// unreadable: generated again below. A cache file is removed for that,
-			// a ready-made line only passed over.
+			// unreadable: generated again below
 			ForgetDialogueSlot(slot, stamp);
-			if (readyMade) {
-				ForgetModelLine(modelLine);
-			} else {
-				fs::remove(cacheFile, ec);
-			}
+			fs::remove(cacheFile, ec);
 		}
 
 		// 3. new: can it be in place before the game gets to it? The game is never
@@ -3225,12 +3142,6 @@ namespace Speaker
 			job->slot = -1;
 		}
 		const int slot = job->slot;
-		// not in place this time: one to collect (see CollectLine)
-		job->collect = slot < 0;
-		job->lineName = lineName;
-		if (settings->dialogueCollect) {
-			job->lineText = line.text;
-		}
 		line.job = job;
 		line.estimateMs = estimate;
 
@@ -3247,7 +3158,6 @@ namespace Speaker
 					if (waiting.job->cacheKey == cacheKey) {
 						waiting.job->prepared = false;
 						waiting.job->greeting = waiting.job->greeting || lateGreeting;
-						waiting.job->collect = true;
 					}
 				}
 			} else {
@@ -3356,19 +3266,11 @@ namespace Speaker
 		if (std::error_code ec; fs::exists(cacheFile, ec)) {
 			return false;  // said or made before
 		}
-		const auto lineName = TtsEngine::LineFileName(line.text, line.voice, line.speed);
-		if (!ModelLineFor(modelKey, lineName).empty()) {
-			return false;  // its model brings it along, ready-made
-		}
 		const auto cacheKey = cacheFile.filename().string();
 
 		auto job = std::make_shared<DialogueJob>();
 		job->cacheFile = cacheFile;
 		job->cacheKey = cacheKey;
-		job->lineName = lineName;
-		if (settings->dialogueCollect) {
-			job->lineText = line.text;
-		}
 		job->label = choice.label;
 		job->info = a_info;
 		job->response = a_response;
@@ -3461,15 +3363,13 @@ namespace Speaker
 						   "nothing to say, {} lines spoken late (which is {}), {} lines generated ({} of them "
 						   "greetings made ahead, which is {}) | "
 						   "slots {} of {} | lipsync {} | {} voice types mapped, {} given a voice by patches, {} listed "
-						   "by models | cache {} lines, {:.1f} MB | ready-made lines: {} used, {} collected (collecting "
-						   "is {})",
+						   "by models | cache {} lines, {:.1f} MB",
 			state, g_dialogueGiven.load(), g_dialogueUnvoiced.load(), g_dialogueNothing.load(), g_dialogueLate.load(),
 			settings->dialogueGreetings ? "on" : "off", g_dialogueGenerated.load(), g_dialoguePrepared.load(),
 			settings->dialoguePrepare ? "on" : "off",
 			g_usableSlots[kDialogue].load(), settings->dialogueSlots, settings->dialogueLip ? "on" : "off",
 			settings->voiceTypes.size(), settings->patchVoiceTypes.size(), settings->modelVoiceTypes.size(), lines,
-			static_cast<double>(bytes) / (1024.0 * 1024.0), g_dialogueFromModel.load(), g_dialogueCollected.load(),
-			settings->dialogueCollect ? "on" : "off");
+			static_cast<double>(bytes) / (1024.0 * 1024.0));
 	}
 
 	int ClearDialogueCache()
