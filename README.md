@@ -86,6 +86,8 @@ Needs VS 2022 (v143, C++23) and xmake 3.0 or newer. The details are in
 ## Licenses
 
 AudioUtilTTS is GPLv3 (see `LICENSE`). It links
+[CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG) (GPLv3 or
+later, with a modding and a linking exception),
 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache 2.0),
 [ONNX Runtime](https://github.com/microsoft/onnxruntime) (MIT) and, through
 sherpa-onnx, [espeak-ng](https://github.com/espeak-ng/espeak-ng) (GPLv3). The

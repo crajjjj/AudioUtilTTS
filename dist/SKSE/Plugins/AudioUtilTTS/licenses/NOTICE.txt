@@ -25,7 +25,11 @@ espeak-ng
 
 CommonLibSSE-NG
     Skyrim engine bindings.
-    MIT License
+    GNU General Public License v3.0 or later (GPL-3.0.txt in this folder), with
+    its authors' Modding Exception and GPL-3.0 Linking Exception
+    (CommonLibSSE-NG-EXCEPTIONS.txt in this folder).
+    Originally based on CommonLibSSE, Copyright (c) 2018 Ryan-rsm-McKenzie,
+    MIT License (MIT-CommonLibSSE.txt in this folder).
     https://github.com/alandtse/CommonLibSSE-NG
 
 toml++
