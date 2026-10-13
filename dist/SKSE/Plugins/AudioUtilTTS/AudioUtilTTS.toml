@@ -163,10 +163,16 @@ greetings_split = true
 # every 2 seconds), works out which greetings each would say right now, and
 # generates the unvoiced ones in the background, behind every line the game
 # actually asked for. When the NPC then greets you, the line is ready.
-# The cost: up to 3 lines of CPU work for every NPC you come near whose voice
-# type has a voice, whether or not they ever greet you. Only NPCs whose lines
-# would be spoken anyway are looked at, and nothing happens while the game is
-# paused, in a menu or in combat. Can be switched with "autts reload".
+# WARNING: this is heavy, most of all in towns. Up to 3 lines are generated
+# for every NPC you come near whose voice type has a voice, whether or not
+# they ever greet you, and each one is a full line's work for the speech
+# threads ([model] threads). The voice of each such NPC is loaded into memory
+# for it: among more voices than [model] max_loaded allows, voices are loaded
+# and dropped over and over. It eases off as the cache fills, since a line is
+# made once. Leave it off when the game is short of CPU or memory.
+# Only NPCs whose lines would be spoken anyway are looked at, and nothing
+# happens while the game is paused, in a menu or in combat. Can be switched
+# with "autts reload".
 prepare_greetings = false
 # Move the speaker's mouth. The mouth shapes are guessed from the loudness of
 # the line, as the speech model gives no timing: it reads as talking, it does
