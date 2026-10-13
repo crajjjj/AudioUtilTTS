@@ -17,7 +17,7 @@ Text goes in quotes. Commands that act on a character use the reference selected
 | `autts free` | Show whether a narration line and a character line would be taken right now |
 | `autts stop` | Drop waiting lines and cut the current one |
 
-The answer is `queued`, or `not queued` with the reason. With the plugin ready, the usual reason is a line still being generated or spoken: a second one is dropped, not queued. See [`max_pending`](configuration.md#max_pending).
+The answer is `queued`, or `not queued` with the reason and the status line. With the plugin ready, the usual reason is a line still being generated or spoken: a second one is dropped, not queued. See [`max_pending`](configuration.md#max_pending). The other reason is a voice whose model is not installed, for example `autts say` without the default voice.
 
 ## The way other mods do it
 
@@ -49,7 +49,13 @@ These send the same mod events a mod would, so you can check that path.
 `autts status` on a working install reads like this:
 
 ```
-ready | model kokoro-en-v0_19 (11 voices, 24000 Hz) | voice 7 | 4 presets | 1 models loaded | narration slots 4 of 4 | speech slots 4 of 4, lipsync on | dialogue on | sherpa-onnx ...
+ready | model kokoro-en-v0_19 (11 voices, 24000 Hz) | voice 7 | 4 presets | 1 of 12 models loaded | narration slots 4 of 4 | speech slots 4 of 4, lipsync on | dialogue on | sherpa-onnx ...
+```
+
+`1 of 12 models loaded` counts the voice models in memory against the ones installed. Without the default voice the line reads:
+
+```
+ready | no default model (model folder not found: ...): only voices with a model of their own speak | 4 presets | 0 of 11 models loaded | ...
 ```
 
 What the `not ready:` answers mean is listed in [Troubleshooting & Logs](troubleshooting.md#what-autts-status-says).

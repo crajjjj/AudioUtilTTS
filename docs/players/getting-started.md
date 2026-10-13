@@ -3,20 +3,62 @@
 ## Requirements
 
 - **Skyrim SE / AE** with **SKSE64** and **Address Library for SKSE Plugins**. Start the game through the SKSE loader (or the SKSE entry in your mod manager), not the vanilla launcher.
-- **[AudioUtil](https://github.com/crajjjj/AudioUtil) 0.9.9 or newer.** It plays narration and character speech. Use 0.9.26 or newer for the mouth to move on character speech, 0.9.28 or newer for a line that was cut short to make room for the next one at once, and 0.9.29 or newer for a line spoken late to stop when its speaker goes on to another one. Dialogue is played by the game itself and does not need it.
-- **[ConsoleUtil Extended](https://www.nexusmods.com/skyrimspecialedition/mods/133569)**, only for the `autts` console commands.
+- **[AudioUtil](https://github.com/crajjjj/AudioUtil) 0.9.29 or newer.** It plays narration, character speech and the lines that are spoken late.
+- **[ConsoleUtil Extended](https://www.nexusmods.com/skyrimspecialedition/mods/133569)** for the `autts` console commands. The plugin speaks without it, but the commands are how you check an install and find out which voice an NPC gets.
 
-## Installing
+??? note "With an older AudioUtil"
+    The plugin runs with AudioUtil 0.9.9 or newer, with less:
 
-Take both archives from the [latest release](https://github.com/crajjjj/AudioUtilTTS/releases/latest) and install them like any mod:
+    - before 0.9.26 the mouth stays still on character speech,
+    - before 0.9.28 a line that was cut short keeps its place until it would have ended,
+    - before 0.9.29 a line spoken late is not stopped when its speaker goes on to the next one, so the two overlap.
 
-- `AudioUtilTTS-<version>.zip`: the plugin, its config, scripts and console commands.
-- `AudioUtilTTS-Voice-kokoro-en-v0_19.zip`: the default voice model. It is a separate download because it is large and does not change with the plugin.
+    Dialogue that the game plays itself does not go through AudioUtil.
 
-Without a voice model the plugin loads but stays silent; `autts status` says why.
+## What to install
+
+| Archive | What it is | What it is for |
+|---|---|---|
+| `AudioUtilTTS-<version>.zip` | The plugin, its config, scripts and console commands | Everything |
+| `AudioUtilTTS-Voice-kokoro-en-v0_19.zip` | The default voice model: 11 English voices | Narration, lines a mod sends without a voice of its own, and the generic voices for dialogue |
+| A voice archive named after a voice type, such as `AudioUtilTTS-Voice-MaleNord.zip` | One voice, made for one voice type | Unvoiced dialogue and character lines of the NPCs of that voice type |
+| A voice type patch | One small text file | The characters of a mod who have a voice type of their own |
+
+The first two are on the [latest release](https://github.com/crajjjj/AudioUtilTTS/releases/latest). Install every archive like any mod; none of them has a plugin file to enable.
+
+**Nothing but the plugin is required.** Each of the other archives adds what the table says, and without any voice the plugin loads and stays silent; `autts status` says why.
+
+!!! info "The default voice is optional from 0.3.1 on"
+    Voice archives named after voice types work without it. With 0.3.0 and older the default voice has to be installed for dialogue too.
 
 !!! tip "Updating"
-    A new plugin version is the small archive only. The voice archive stays as it is unless the release notes say otherwise.
+    A new plugin version is the small archive only. The voice archives stay as they are unless the release notes say otherwise.
+
+## What you hear
+
+| Installed | Dialogue without voice files | Narration and character lines from mods |
+|---|---|---|
+| The plugin alone | Nothing | Nothing |
+| The plugin and the default voice | Nothing out of the box. With `[dialogue] fallback = true`: every such line, in one generic female or male voice | Spoken, in the default model's voices |
+| The plugin and voice archives named after voice types | The NPCs of those voice types, each kind in its own voice. Nothing to configure | Character lines of those NPCs, in their voice. Narration needs the default voice |
+| A voice type patch on top | Also the characters the patch names, in the voice it lends them | The same for their character lines |
+
+The rows add up: install the default voice, voice archives and patches in any combination.
+
+### A voice archive named after a voice type
+
+It unpacks to one folder, `Data\SKSE\Plugins\AudioUtilTTS\models\<VoiceType>\`, and the folder name is all the plugin needs: `models\MaleNord` speaks for every NPC whose voice type is `MaleNord`.
+
+- **There is nothing to configure.** No line in `AudioUtilTTS.toml`, no `model.toml` inside the folder, no plugin file.
+- **Only lines without a recording are spoken.** A line that has a voice file is never touched.
+- **A voice type with no voice stays as it was**, unless you turn `fallback` on.
+- **A voice costs disk space and memory.** A Kokoro voice is about 0.3 GB on disk and about 0.6 GB of memory while it is loaded. Up to four voice models are kept loaded at once by default, the default voice included; see [How many fit in memory](models.md#how-many-fit-in-memory).
+
+Characters from mods often have a voice type of their own, which no voice archive is named after. That is what a [voice type patch](voices.md#voice-type-patches) is for.
+
+### Language
+
+The default voice speaks English. Voices for other languages are among the Piper voices; see [Voice Models](models.md).
 
 ## What gets installed
 
@@ -25,7 +67,9 @@ Data\
   SKSE\Plugins\AudioUtilTTS.dll
   SKSE\Plugins\AudioUtilTTS\AudioUtilTTS.toml         settings, every key commented
   SKSE\Plugins\AudioUtilTTS\licenses\                 third-party notices
-  SKSE\Plugins\AudioUtilTTS\models\kokoro-en-v0_19\   the voice model (second archive)
+  SKSE\Plugins\AudioUtilTTS\models\kokoro-en-v0_19\   the default voice (its own archive)
+  SKSE\Plugins\AudioUtilTTS\models\<VoiceType>\       one folder per voice archive
+  SKSE\Plugins\AudioUtilTTS\voicetypes\               voice type patches
   SKSE\CustomConsole\AudioUtilTTSTest.yaml            the autts console commands
   Scripts\AudioUtilTTS.pex  AudioUtilTTSTest.pex      and their sources under Scripts\Source
   Sound\AudioUtilTTS\                                 placeholder wavs for narration and character speech
@@ -45,15 +89,23 @@ Open the console and run:
 autts status
 ```
 
-A working install answers with a line that starts `ready | model kokoro-en-v0_19 (11 voices, 24000 Hz)`. Anything else starts with `not ready:` and names the reason; [Troubleshooting & Logs](troubleshooting.md) lists them.
+The answer starts in one of three ways:
 
-Then make it talk:
+- **`ready | model kokoro-en-v0_19 (11 voices, 24000 Hz)`**: the default voice is loaded.
+- **`ready | no default model (...)`**: there is no default voice, but other voices are installed. Those speak; narration and the generic voices do not.
+- **`not ready:`**: nothing can be spoken, and the rest of the line names the reason. [Troubleshooting & Logs](troubleshooting.md#what-autts-status-says) lists them.
+
+Further along, the line says how many voice models are installed: `1 of 12 models loaded`.
+
+With the default voice installed, make it talk:
 
 ```
 autts say "The road to Whiterun lay open."
 ```
 
-The console answers `queued` and the line is spoken about two seconds later. To hear a character, click an NPC in the console first:
+The console answers `queued` and the line is spoken about two seconds later.
+
+To check an NPC, click them in the console first:
 
 ```
 autts voice
@@ -65,6 +117,6 @@ autts sayactor "Not so loud."
 ## Where to next?
 
 - Curious about delays, dropped lines and memory? Read [What to Expect](what-to-expect.md).
-- Want mod dialogue without voice files spoken? Read [Unvoiced Dialogue](unvoiced-dialogue.md).
-- Want a different voice, or one voice per kind of NPC? Read [Voices, Presets & Voice Types](voices.md).
+- Want to know which dialogue lines get a voice, and when? Read [Unvoiced Dialogue](unvoiced-dialogue.md).
+- An NPC has no voice, or the wrong one? Read [Voices, Presets & Voice Types](voices.md).
 - Something not working? See [Troubleshooting & Logs](troubleshooting.md).

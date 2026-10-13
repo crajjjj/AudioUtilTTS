@@ -61,4 +61,4 @@ The runtime exits the process on some malformed model files. The plugin checks a
 
 ## The load pipeline
 
-On the game's data-loaded message the plugin reads `AudioUtilTTS.toml`, the `model.toml` files and the voice type patches, makes sure the placeholder files exist, finds AudioUtil, starts the worker (which loads the default model in the background), and, when dialogue is enabled, installs the patch and starts the greeting look. On a new game or a load it drops every line still on the way.
+On the game's data-loaded message the plugin reads `AudioUtilTTS.toml`, the `model.toml` files and the voice type patches, makes sure the placeholder files exist, finds AudioUtil, starts the worker (which loads the default model in the background, when one is installed), and, when dialogue is enabled, installs the patch and starts the greeting look. On a new game or a load it drops every line still on the way.

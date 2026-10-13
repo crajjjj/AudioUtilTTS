@@ -5,6 +5,7 @@ Two things answer most questions: `autts status` in the console, and the plugin'
 !!! tip "Quick links"
     - Nothing is spoken at all? Start with [What `autts status` says](#what-autts-status-says).
     - Some lines are skipped? See [A line was not spoken](#a-line-was-not-spoken).
+    - An NPC stays silent although voices are installed? See [An NPC stays silent](#an-npc-stays-silent).
     - Mod dialogue stays silent? See [A dialogue line stays unvoiced](#a-dialogue-line-stays-unvoiced).
     - The mouth does not move? See [The mouth stays still](#the-mouth-stays-still).
 
@@ -23,15 +24,19 @@ Logs live under your **My Games** folder: `Documents\My Games\Skyrim Special Edi
 
 ## What `autts status` says
 
-A working install answers with a line that starts `ready`. Otherwise:
+A working install answers with a line that starts `ready`.
+
+**It starts with `ready | no default model (...)`.** The default voice is not installed, or could not be loaded; the brackets say which. Voices with a model of their own speak. Narration, the shipped presets and the generic voices of `fallback` do not: install the default voice archive if you want those. Before 0.3.1 this state read `not ready`, and no dialogue was spoken in it.
+
+**It starts with `not ready:`.** Nothing can be spoken:
 
 | Answer | Meaning | What to do |
 |---|---|---|
 | `not ready: AudioUtil.dll is not loaded` | AudioUtil is missing or failed to load | Install AudioUtil 0.9.9 or newer |
 | `not ready: disabled in AudioUtilTTS.toml` | `[general] enable = false` | Set it to `true`, then `autts reload` |
 | `not ready: still starting` or `the model is still loading` | The model loads in the background at game start | Wait a second and ask again |
-| `not ready: model folder not found: ...` | The voice model is not installed, or `[model] dir` names a folder that is not there | Install the voice archive, or fix the name |
-| `not ready: no .onnx model in ...`, `tokens.txt missing in ...`, `voices.bin missing in ...`, `neither espeak-ng-data nor a lexicon in ...` | The model folder is incomplete | Install the model again |
+| `not ready: model folder not found: ...` | No voice model is installed at all: the default one is missing, and so is every other | Install a voice archive, or fix the name in `[model] dir` |
+| `not ready: no .onnx model in ...`, `tokens.txt missing in ...`, `voices.bin missing in ...`, `neither espeak-ng-data nor a lexicon in ...` | The default model's folder is incomplete, and no other model is installed | Install the model again |
 | `not ready: the speech runtime rejected the model in ...` | The files are not a model the runtime reads | Use a supported model; see [Voice Models](models.md) |
 | `not ready: no playable narration slot yet (restart the game once)` | The placeholder files were created this session | Restart the game. The game only plays files it saw at launch |
 | An answer that starts with `switched off` | Speech was switched off with `autts enable 0` | `autts enable 1` |
@@ -43,6 +48,7 @@ The command `autts` itself is unknown? ConsoleUtil Extended is missing, or `SKSE
 Open `AudioUtilTTS.log` and look for the line's moment.
 
 - **`A N-char narration line was dropped: another one is being generated`** or **`... another one is being spoken, N s to go`**. This is by design: one line at a time. When the sending mod gave its name, the line reads `... narration line from 'ModName' was dropped ...`, which tells you whose lines they are. Raise [`[playback] max_pending`](configuration.md#max_pending) to let lines wait, or set `interrupt = true` to let a new line cut in.
+- **`A narration line was ignored: the default model is not loaded (...)`**. The line asked for a voice on the default model, and that one is not installed. Logged once. Install the default voice archive; see [The default voice is optional](models.md#the-default-voice-is-optional).
 - **`Speaker is gone or not loaded, a N-char line was dropped`**. The actor left before the line was ready.
 - **`Preset '...' is not defined in AudioUtilTTS.toml, using the default voice`**. The line was spoken, but not in the voice the mod asked for. Add the preset; see [Presets](voices.md#presets).
 - **`AudioUtilTTS_Say ignored: it must be sent by the actor who speaks`**. A mod sent the character event from something that is not an actor.
@@ -56,6 +62,19 @@ A line is generated when it is asked for: about two seconds per sentence with th
 - Raise `[model] threads` to get a line sooner at the cost of more cores for that moment.
 - A Piper voice generates several times faster than Kokoro; see [Cost](what-to-expect.md#cost).
 - The first line of a model that was not in memory is later by about a second. If lines keep being delayed with several models in use, raise `[model] max_loaded`; see [How many fit in memory](models.md#how-many-fit-in-memory).
+
+## An NPC stays silent
+
+Voices are installed, and still one NPC says a line without a voice. Three checks, in this order:
+
+1. **Does the line have a recording?** A line with a voice file is the game's, and the plugin never touches it. That includes a silent or placeholder voice file another mod ships.
+2. **Which voice does the NPC get?** Click them in the console and run `autts voice`. The first word after their name is their voice type.
+    - A stock voice type such as `MaleNord` with `model folder 'malenord'` behind it: the voice is found.
+    - `preset 'female' by sex` or `preset 'male' by sex`, with `unvoiced dialogue stays silent` at the end: no voice is installed for that voice type. Install a voice archive named after it, or turn `fallback` on.
+    - A voice type you have never seen, such as `SomeFollowerVoice`: the character has a voice type of their own. Give it a voice with a [voice type patch](voices.md#voice-type-patches).
+3. **Was it the first time the line was said?** A new line that is said right away can be unvoiced or late that once; see [When a line is ready](unvoiced-dialogue.md#when-a-line-is-ready).
+
+If none of these explains it, the log names the reason; read on.
 
 ## A dialogue line stays unvoiced
 
@@ -71,6 +90,7 @@ First run `autts dialogue`. It says whether the feature is on, and counts the li
 With the feature on, the log gives the reason per line, or once for a reason that holds line after line:
 
 - **`no voice is set up for it and [dialogue] fallback is off`**. The speaker's voice type has no voice. Click the NPC and run `autts voice`, then set one up ([Voice Types](voices.md#voice-types)) or turn `fallback` on.
+- **`its voice is on the default model, which is not loaded`**. The voice type leads to a preset on the default model, or to the generic voice by sex, and the default voice is not installed. Install it, or give the voice type a voice of its own.
 - **`the config says so`**. The voice type has an empty line in `[voicetype]`.
 - **The line was unvoiced the first time only.** That is by design for a line said right away; see [When a line is ready](unvoiced-dialogue.md#when-a-line-is-ready).
 - **A greeting is heard a moment after its subtitle.** Also by design, the first time an NPC says a greeting the plugin has not generated before: it is spoken as soon as it is ready. From the second time on it is on time. `[dialogue] greetings = false` leaves it unvoiced that first time instead, and `prepare_greetings = true` tries to have it ready; see [Greetings spoken late](unvoiced-dialogue.md#greetings-spoken-late).
@@ -103,6 +123,7 @@ Attach:
 
 1. `SKSE\AudioUtilTTS.log` (or `SKSE\skse64.log` if it is missing).
 2. What `autts status` answers, and `autts dialogue` for a dialogue problem.
-3. The plugin version, the AudioUtil version, and which voice models are installed.
+3. For an NPC without a voice, what `autts voice` answers with that NPC selected.
+4. The plugin version, the AudioUtil version, and which voice models are installed.
 
 A clear "what I did, what happened, what I expected" plus the log is usually enough to find the cause. Issues go to the [GitHub issue tracker](https://github.com/crajjjj/AudioUtilTTS/issues).

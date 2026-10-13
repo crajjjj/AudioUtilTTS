@@ -82,9 +82,9 @@ To learn when a line actually starts, listen for the mod event [`AudioUtilTTS_Sp
 
 | Export | Does |
 |---|---|
-| `bool AudioUtilTTS_IsReady()` | True when a line can be spoken right now: the default model is loaded, AudioUtil is present, a playable slot exists and speech is switched on |
+| `bool AudioUtilTTS_IsReady()` | True when the plugin can speak right now: a voice model is installed (the default one or any other), AudioUtil is present, a playable slot exists and speech is switched on. The default model is optional from 0.3.1 on, so a speak call can still return `false`: the voice the line asks for has no model |
 | `bool AudioUtilTTS_IsNarrationFree()` | Would a narration line sent right now be taken? |
-| `bool AudioUtilTTS_IsSpeechFree()` | The same for a character line. True is no promise: another mod can take the place a moment later, so still check what the speak call returns |
+| `bool AudioUtilTTS_IsSpeechFree()` | The same for a character line. True is no promise: another mod can take the place a moment later, and neither function knows which voice the line will ask for, so still check what the speak call returns |
 | `bool AudioUtilTTS_HasPreset(const char* preset)` | True when the config defines `[preset.<preset>]` |
 | `bool AudioUtilTTS_SpeakFrom(const char* sender, const char* text, const char* preset)` | Queues a narration line: flat, with no speaker |
 | `bool AudioUtilTTS_SpeakActorFrom(const char* sender, RE::Actor* speaker, const char* text, const char* preset, bool lipSync)` | Queues a line the actor says: positioned at them, with their mouth moving when `lipSync` is true and `[speech] lipsync` is on. The line is dropped if the speaker is gone or not loaded by the time it is ready |

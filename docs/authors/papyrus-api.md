@@ -62,10 +62,10 @@ Neither touches dialogue: a dialogue line the game is already saying is the game
 | Function | Returns |
 |---|---|
 | `int GetAPIVersion()` | API version of the installed plugin |
-| `bool IsReady()` | True when a line can be spoken right now: the default model is loaded, AudioUtil is present, a playable slot exists and speech is switched on |
+| `bool IsReady()` | True when the plugin can speak right now: a voice model is installed (the default one or any other), AudioUtil is present, a playable slot exists and speech is switched on. The default model is optional from 0.3.1 on, so a speak call can still return `false`: the voice the line asks for has no model |
 | `bool IsBusy()` | True while a narration or character line is waiting or being generated. It turns false once the line starts playing, so it does not say whether a new line would be taken |
 | `bool IsNarrationFree()` | Would a narration line sent right now be taken? False while the plugin is not ready and, with the default `max_pending = 0`, while another narration line is being generated or spoken. API 3 |
-| `bool IsSpeechFree()` | The same for a character line. True is no promise: another mod can take the lane a moment later, so still check what the speak call returns. API 3 |
+| `bool IsSpeechFree()` | The same for a character line. True is no promise: another mod can take the lane a moment later, and neither function knows which voice the line will ask for, so still check what the speak call returns. API 3 |
 | `string GetStatus()` | One line of status text: `ready` followed by the details, or `not ready: <why>` |
 | `bool HasPreset(string asPreset)` | True when `AudioUtilTTS.toml` defines `[preset.<asPreset>]` |
 | `int GetVoiceCount()` | Number of voices in the default model (0 while it is not loaded) |

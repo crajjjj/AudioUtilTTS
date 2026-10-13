@@ -1,12 +1,26 @@
 # Voices, Presets & Voice Types
 
-Three layers decide who speaks a line:
+## The short version
+
+Every NPC has a **voice type**: the game's own label for whose recordings they use, such as `MaleNord`, `FemaleEvenToned` or `MaleGuard`. The plugin picks a voice by that label. Click an NPC in the console and run `autts voice` to see their voice type and the voice it leads to.
+
+| You have | What to do |
+|---|---|
+| A voice archive named after a voice type | Install it. `models\MaleNord` speaks for `MaleNord`, with nothing to configure |
+| A character with a voice type of their own, such as a follower from a mod | Install or write a [voice type patch](#voice-type-patches) that lends them an installed voice |
+| Voice types with no voice, and any voice is better than none | Set `[dialogue] fallback = true`: they get the preset `female` or `male`, which needs the default voice |
+| A voice type that should never be spoken for | Add `Name = ""` under [`[voicetype]`](#voice-types) |
+| Your own idea of who sounds like what | [Presets](#presets) and [`[voicetype]`](#voice-types) |
+
+The rest of this page is the detail behind that table.
+
+## The three layers
 
 - A **voice** is a number inside a model.
 - A **preset** gives a model, a voice number, a speed and a volume one name that mods ask for.
 - A **voice type** is the game's own label on every NPC. Mapping voice types to voices is what makes an NPC's generated lines sound like that NPC.
 
-All of it lives in `Data\SKSE\Plugins\AudioUtilTTS\AudioUtilTTS.toml`. After editing the file, run `autts reload` in the console.
+Presets and your own voice type lines live in `Data\SKSE\Plugins\AudioUtilTTS\AudioUtilTTS.toml`. After editing the file, run `autts reload` in the console.
 
 ## Voices
 
@@ -90,6 +104,8 @@ voice = 4
 
 Added in 0.3.0. A patch gives voice types to voices that are already installed. It is one small file of its own, so the characters of a mod can be given voices by dropping a file in, with no line in `AudioUtilTTS.toml` and nothing added to a model's folder.
 
+**What it is for.** A mod that brings its own recordings usually gives each of its characters a voice type of their own. Those recordings stay as they are. But other mods add dialogue for every NPC, and for such a character those lines have no recording and no voice either: no voice archive is named after a voice type that exists in one mod only. A patch lends the character an installed voice, usually the one of the stock voice type closest to them.
+
 `Data\SKSE\Plugins\AudioUtilTTS\voicetypes\<any name>.toml`:
 
 ```toml
@@ -108,6 +124,22 @@ RumarinVoice = { model = "my-voices", voice = 3, speed = 1.0, volume = 1.0 }
 - **Read at game start and on `autts reload`.**
 - **Recorded lines stay as they are.** A patch only matters for the lines of that character that have no recording.
 
+#### Writing one yourself
+
+1. Click the character in the console and run `autts voice`. The answer names their voice type first, for example `HjoromirVoice`.
+2. Pick an installed voice for them: the name of a folder under `models\`, such as `MaleYoungEager`.
+3. Put the line into a file of your own, `Data\SKSE\Plugins\AudioUtilTTS\voicetypes\MyPatch.toml`:
+
+    ```toml
+    [voicetype]
+    HjoromirVoice = "MaleYoungEager"
+    ```
+
+4. Run `autts reload`, then `autts voice` again. It now answers with `model 'maleyoungeager' by the patch MyPatch.toml`.
+
+!!! note "Mod Organizer 2"
+    A file added to a mod folder while the game runs is not seen by the game. Create the file before starting the game; after that, edits to it are picked up by `autts reload`.
+
 ### Finding out who gets which voice
 
 Click an NPC in the console, then:
@@ -117,7 +149,7 @@ autts voice
 autts sayactor "Some text"
 ```
 
-`autts voice` shows their voice type and the voice it leads to, with the reason: `preset 'malenord'`, `model '...' by the patch ...`, `listed by model ...`, `model folder ...`, `preset 'female' by sex`, or `never spoken for`. When the voice is only the one by sex and `fallback` is off, it adds that unvoiced dialogue stays silent for this NPC. `autts sayactor` lets you hear the voice. With nothing selected, both act on the player.
+`autts voice` shows their voice type and the voice it leads to, with the reason: `preset 'malenord'`, `model '...' by the patch ...`, `listed by model ...`, `model folder ...`, `preset 'female' by sex`, or `never spoken for`. When the voice is only the one by sex and `fallback` is off, it adds that unvoiced dialogue stays silent for this NPC. When the voice is on the default model and that one is not installed, it adds `not spoken: the default model is not loaded`. `autts sayactor` lets you hear the voice. With nothing selected, both act on the player.
 
 ### What happens with no voice set up
 
@@ -127,3 +159,5 @@ autts sayactor "Some text"
 | `[dialogue] fallback = true` | The preset `female` or `male` by sex, else the default voice | The same |
 
 The setting only governs dialogue. A character line a mod asks for is spoken either way, unless the voice type is silenced with an empty `[voicetype]` line and the mod named no preset.
+
+The presets `female` and `male` and the default voice are all on the default model. Without that one installed, both columns of the table read "not spoken": only a voice with a model of its own speaks.

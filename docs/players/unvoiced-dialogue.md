@@ -1,15 +1,24 @@
 # Unvoiced Dialogue
 
-Plenty of mod dialogue ships without voice files. With `[dialogue] enable = true` (the default) the plugin speaks those lines: when the game builds a dialogue line and no voice file exists for it, the line is generated in the voice of the speaker's voice type and handed to the game as that line's voice file.
+Plenty of mod dialogue ships without voice files. When the game builds a dialogue line and no voice file exists for it, the plugin generates the line in the voice of the speaker's voice type and hands it to the game as that line's voice file.
 
-Added in 0.2.0. Nothing has to be called or patched by the dialogue mod.
+It does so **for the voice types that have a voice**. Nothing has to be called or patched by the dialogue mod.
+
+## What gives a voice type its voice
+
+Any one of these:
+
+- **A voice archive named after the voice type.** `models\MaleNord` speaks for every `MaleNord` NPC, with nothing to configure.
+- **A voice type patch**, for a character who has a voice type of their own; see [Voice type patches](voices.md#voice-type-patches).
+- **`[dialogue] fallback = true`**, which gives every voice type that has no voice a generic one, picked by sex. It needs the default voice installed.
+- **Your own choice** in `AudioUtilTTS.toml`; see [Voice Types](voices.md#voice-types).
+
+A voice type with none of these stays as it was: unvoiced. To see what an NPC gets, click them in the console and run `autts voice`.
+
+!!! info "Changed in 0.2.1 and 0.3.1"
+    `fallback` is off by default since 0.2.1. In 0.2.0 it was on, so every unvoiced line was spoken with the preset `female` or `male`. From 0.3.1 on a voice of its own needs no default voice installed; before that, no dialogue was spoken without it.
 
 ## Which lines are spoken
-
-Out of the box the plugin speaks for the voice types you have set a voice up for; see [Voice Types](voices.md#voice-types). Every other voice type stays as it was. `[dialogue] fallback = true` extends it to all of them with a generic voice, picked by sex.
-
-!!! info "Changed in 0.2.1"
-    `fallback` is off by default. In 0.2.0 it was on, so every unvoiced line was spoken with the preset `female` or `male`.
 
 - **Only lines with no recorded voice.** The plugin asks the game whether a voice file exists (loose or in an archive, `.fuz`, `.wav` or `.xwm`). If one does, nothing happens.
 - **Placeholder lines are left alone.** A line with nothing to say, such as `...`, `(...)`, `[...]` or a lone dash, stays silent: it holds no letter and no digit once markup and directions are gone. `autts dialogue` counts them.
@@ -89,3 +98,4 @@ shows whether it is running, how many lines this session were given a voice, lef
 - Lives in `Data\SKSE\Plugins\AudioUtilTTS\cache`, limited by `[dialogue] cache_max_mb` (1024 by default, `0` = no limit). The lines used longest ago are dropped first.
 - A line is cached per model file. After replacing a model's files, run `autts reload`: the lines of the old model are not played again, and nothing has to be cleared by hand.
 - The folder can be deleted freely. Every line is simply generated again the next time it comes up.
+- Under Mod Organizer 2 the folder is created where your profile puts files the game writes: Overwrite, or the mod you set for that.

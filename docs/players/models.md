@@ -1,6 +1,6 @@
 # Voice Models
 
-A model is a folder of files the speech runtime reads. The default one, `kokoro-en-v0_19`, comes as the second release archive. You can add more.
+A model is a folder of files the speech runtime reads. The default one, `kokoro-en-v0_19`, comes as the second release archive. You can add more, and a voice archive is nothing else: one such folder, ready to install.
 
 ## Adding a model
 
@@ -9,6 +9,29 @@ Models go into their own folder under:
 ```
 Data\SKSE\Plugins\AudioUtilTTS\models\<folder>
 ```
+
+**A folder named like a voice type needs nothing else.** `models\MaleNord` speaks for the voice type `MaleNord` as soon as it is installed: no line in `AudioUtilTTS.toml`, and no file inside the folder. That is how a voice archive named after a voice type works, and why such an archive holds no `model.toml`.
+
+A folder under any other name does nothing until something names it:
+
+- make it the default with `[model] dir = "<folder>"`,
+- or give it a [preset](voices.md#presets) with `model = "<folder>"`,
+- or let it speak for voice types, through its own [`model.toml`](#models-that-bring-their-own-voice-types), a [voice type patch](voices.md#voice-type-patches) or a [`[voicetype]`](voices.md#voice-types) line.
+
+Then run `autts reload`.
+
+## The default voice is optional
+
+From 0.3.1 on the default model does not have to be installed. Without it:
+
+- **Every voice with a model of its own speaks as usual**: the unvoiced dialogue and the character lines of the voice types you have voices for.
+- **Lines that name no other model are not spoken**: narration, the shipped presets (`narrator`, `female`, `male`, `whisper`) and with them the generic voices of `[dialogue] fallback`.
+- **`autts status` starts with `ready | no default model`** and names the reason.
+- **It saves memory.** The default model takes about 0.6 GB and one of the `max_loaded` places; without it all of them go to your voices.
+
+With 0.3.0 and older, no dialogue is spoken without the default model.
+
+## Which models work
 
 Two families are supported:
 
@@ -19,20 +42,18 @@ Two families are supported:
 
 A voice does not have to come from that list. For making one of your own, see [Training a Voice](../authors/training-voices.md).
 
-A model does nothing until something names it:
-
-- make it the default with `[model] dir = "<folder>"`,
-- or give it a [preset](voices.md#presets) with `model = "<folder>"`,
-- or let it speak for a [voice type](voices.md#voice-types).
-
-Then run `autts reload`.
-
 !!! warning "Check a new model outside the game first"
     A model that the runtime cannot read can close the game while loading, because the runtime exits on some malformed files. Try a new model with the probe before putting it in a load order; see [Tools](../authors/tools.md#the-probe).
 
 ## Models that bring their own voice types
 
-Added in 0.2.1. A model can say which voice types it speaks for, in a file inside its own folder. Installing the model is then all it takes, and removing the model removes its voice types with it: nothing has to be written into `AudioUtilTTS.toml`. A voice released as a mod of its own works this way.
+Added in 0.2.1. A model can say which voice types it speaks for, in a file inside its own folder, `model.toml`. Installing the model is then all it takes, and removing the model removes its voice types with it: nothing has to be written into `AudioUtilTTS.toml`.
+
+**Most voice archives have no such file and need none.** A folder named like a voice type already speaks for that voice type. The file is for the cases the folder name cannot cover:
+
+- the folder is not named like a voice type,
+- one voice should speak for several voice types, such as `MaleNord` for `MaleNordCommander` too,
+- the model holds several voices, each for voice types of its own.
 
 The file is `models\<folder>\model.toml`:
 
@@ -60,9 +81,9 @@ What matters as a user:
 
 A model takes memory only while it is loaded. An installed model that no line has asked for takes none.
 
-- The **default model** is loaded at game start and never unloaded.
+- The **default model**, when it is installed, is loaded at game start and never unloaded.
 - **Any other model** is loaded the first time a line asks for it. Loading takes about a second, so that one line is later by that much.
-- `[model] max_loaded` caps how many are kept, the default one included (4 by default, 1 to 32). Past the limit the least recently used one is unloaded, never the default.
+- `[model] max_loaded` caps how many are kept, the default one included (4 by default, 1 to 32). Past the limit the least recently used one is unloaded, never the default. So with the default model installed, three other voices fit at once; without it, four.
 
 Measured per loaded model: a Kokoro model 450 to 500 MB after its first lines and about 625 MB once settled; a Piper voice about 350 MB.
 

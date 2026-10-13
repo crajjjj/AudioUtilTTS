@@ -1,16 +1,22 @@
 # AudioUtilTTS
 
-Live text-to-speech for Skyrim SE. A mod hands it a line of text and the line is spoken in game a moment later, through [AudioUtil](https://github.com/crajjjj/AudioUtil). It also speaks game dialogue that has no recorded voice, in a voice you choose per voice type.
+Live text-to-speech for Skyrim SE. It gives a voice to lines that have none:
+
+- **Dialogue without voice files.** Plenty of mod dialogue ships as text only. The plugin speaks those lines while you play. With a voice installed for the speaker's voice type, they sound like that kind of NPC.
+- **Lines a mod hands it.** A mod sends a line of text and it is spoken a moment later, as narration or by a character, through [AudioUtil](https://github.com/crajjjj/AudioUtil).
 
 The voice model runs inside the plugin, on the CPU, with no internet connection and no helper program. Speech is generated on background threads, not on the game's own.
 
+!!! info "What a voice type is"
+    Every NPC in Skyrim has a voice type, such as `MaleNord`, `FemaleEvenToned` or `MaleGuard`. It decides whose recordings the game plays for them, and it is what this plugin picks a voice by. A voice installed for `MaleNord` speaks for every NPC of that voice type.
+
 ## What it speaks
 
-| | What it is | Who asks for it |
+| | What it is | What it needs |
 |---|---|---|
-| **Narration** | A line with no speaker, played flat | A mod, with one mod event or one Papyrus call |
+| **Unvoiced dialogue** | Game dialogue that has no voice file, spoken in the voice of the speaker's voice type | A voice for that voice type. Nothing has to be called or patched |
+| **Narration** | A line with no speaker, played flat | A mod that sends it, with one mod event or one Papyrus call |
 | **Character speech** | A line said by an actor: positioned at them, with their mouth moving | A mod, the same way |
-| **Unvoiced dialogue** | Game dialogue that has no voice file, spoken in the voice of the speaker's voice type | Nobody. The plugin does it by itself |
 
 These docs are split into two tracks. Pick the one that fits you:
 
@@ -18,11 +24,11 @@ These docs are split into two tracks. Pick the one that fits you:
 
 Install it, hear it, set it up. Start here if you just want to use the mod.
 
-- [Getting Started](players/getting-started.md): requirements, the two archives, and a first check in the console
+- [Getting Started](players/getting-started.md): what to install, what each archive gives you, and a first check in the console
 - [What to Expect](players/what-to-expect.md): how soon a line is spoken, what happens to lines that arrive too fast, and what it costs in memory and CPU
 - [Unvoiced Dialogue](players/unvoiced-dialogue.md): how dialogue without voice files gets a voice, what happens to greetings, and the cache
-- [Voices, Presets & Voice Types](players/voices.md): the voices of the default model, naming your own, and giving each voice type its voice
-- [Voice Models](players/models.md): adding models, models that bring their own voice types, and how many fit in memory
+- [Voices, Presets & Voice Types](players/voices.md): which NPC gets which voice, voice type patches, and naming voices of your own
+- [Voice Models](players/models.md): adding voices, when a model needs a file of its own, and how many fit in memory
 - [Configuration Reference](players/configuration.md): every key of `AudioUtilTTS.toml` in one place
 - [Console Commands](players/console-commands.md): the `autts` commands
 - [Troubleshooting & Logs](players/troubleshooting.md): what `autts status` and the log say, and what to do about it

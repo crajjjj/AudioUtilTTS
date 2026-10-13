@@ -18,11 +18,11 @@ If the file does not parse, the previous settings are kept and `AudioUtilTTS.log
 
 ## [model]
 
-The default model. See [Voice Models](models.md).
+The default model. It is optional from 0.3.1 on: see [The default voice is optional](models.md#the-default-voice-is-optional) and [Voice Models](models.md).
 
 | Key | Default | Meaning |
 |---|---|---|
-| `dir` | `"kokoro-en-v0_19"` | A folder under `Data\SKSE\Plugins\AudioUtilTTS\models\`. Loaded at game start and never unloaded |
+| `dir` | `"kokoro-en-v0_19"` | A folder under `Data\SKSE\Plugins\AudioUtilTTS\models\`. Loaded at game start and never unloaded. When the folder is not there, only voices with a model of their own speak |
 | `family` | `"auto"` | `"auto"` reads the folder: `voices.bin` present = Kokoro, otherwise VITS (Piper voices). Or `"kokoro"` / `"vits"` |
 | `threads` | `2` | CPU threads used while a line is being generated, 1 to 16. More threads = the line is ready sooner, but the game loses those cores for that moment |
 | `lexicon` | `""` | Only for models that need it (multi-language Kokoro builds). File names inside the model folder, comma separated |
@@ -70,7 +70,7 @@ Game dialogue that has no recorded voice. See [Unvoiced Dialogue](unvoiced-dialo
 | Key | Default | Meaning |
 |---|---|---|
 | `enable` | `true` | `false` = the game is not patched at all. **A change needs a game restart**; `autts dialogue 0` switches it off for the session |
-| `fallback` | `false` | `false` = a voice type with no voice of its own stays unvoiced. `true` = it is spoken with the preset `female` or `male` by its sex. Was `true` in 0.2.0 |
+| `fallback` | `false` | `false` = a voice type with no voice of its own stays unvoiced. `true` = it is spoken with the preset `female` or `male` by its sex, which needs the default model. Was `true` in 0.2.0 |
 | `greetings` | `true` | Speak a new greeting as soon as it is generated, a moment after the NPC said it, instead of leaving it unvoiced the first time. Added in 0.2.1. From 0.3.0 on the same goes for every line of one response that is said right away, such as the line that opens a conversation. See [Greetings spoken late](unvoiced-dialogue.md#greetings-spoken-late) |
 | `greetings_max_late` | `3.0` | The longest a line may be late and still be spoken, in seconds, 0.5 to 10. A line that is not ready by then stays unvoiced that once. Added in 0.3.0 |
 | `greetings_split` | `true` | Speak a long line that is late in two parts: its first sentence as soon as that is generated, the rest right behind it. Only that first time; the cache gets the whole line. Added in 0.3.0 |
