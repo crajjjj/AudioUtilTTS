@@ -4,6 +4,7 @@
 #include "DialogueHook.h"
 #include "Speaker.h"
 
+#include <algorithm>
 #include <thread>
 
 namespace Greetings
@@ -133,6 +134,13 @@ namespace Greetings
 			g_scan.queued += preparing.Queued();
 		}
 
+		// Greeting topics that have topic infos to check right now.
+		std::size_t WithInfos()
+		{
+			return static_cast<std::size_t>(std::count_if(g_topics.begin(), g_topics.end(),
+				[](const RE::TESTopic* a_topic) { return a_topic->topicInfos && a_topic->numTopicInfos > 0; }));
+		}
+
 		void Finish()
 		{
 			// An NPC with nothing to make is the common case and not worth a line,
@@ -145,8 +153,9 @@ namespace Greetings
 				const auto  actor = g_scan.actor.get();
 				const char* name = actor ? actor->GetDisplayFullName() : nullptr;
 				logger::info("Greetings made ahead for {}: {} lines queued ({} greetings would be said, {} unvoiced "
-							 "responses, {} topic infos checked)",
-					name && *name ? name : "an NPC", g_scan.queued, g_scan.found, g_scan.unvoiced, g_scan.checked);
+							 "responses, {} topic infos checked; {} of {} greeting topics have topic infos)",
+					name && *name ? name : "an NPC", g_scan.queued, g_scan.found, g_scan.unvoiced, g_scan.checked,
+					WithInfos(), g_topics.size());
 			}
 			g_scan = Scan{};
 		}
@@ -267,8 +276,13 @@ namespace Greetings
 		if (!data) {
 			return;
 		}
+		// Every greeting topic is kept, also one with no topic infos at this
+		// point. In a large load order 776 of 1,391 had some here, about as many
+		// as have infos in a master file (775, counted from the plugins), so the
+		// game seems to read those of other plugins later. The list is made once,
+		// and the check passes over a topic for as long as it has none.
 		for (auto* topic : data->GetFormArray<RE::TESTopic>()) {
-			if (topic && topic->numTopicInfos > 0 && topic->data.subtype.get() == RE::DIALOGUE_DATA::Subtype::kHello) {
+			if (topic && topic->data.subtype.get() == RE::DIALOGUE_DATA::Subtype::kHello) {
 				g_topics.push_back(topic);
 			}
 		}
@@ -277,8 +291,9 @@ namespace Greetings
 		};
 		std::stable_sort(g_topics.begin(), g_topics.end(),
 			[&](const RE::TESTopic* a_left, const RE::TESTopic* a_right) { return priority(a_left) > priority(a_right); });
-		logger::info("Greetings: {} greeting topics known; making greetings ahead is {} ([dialogue] prepare_greetings)",
-			g_topics.size(), Config::Get()->dialoguePrepare ? "on" : "off");
+		logger::info("Greetings: {} greeting topics known, {} of them with topic infos at this point; making greetings "
+					 "ahead is {} ([dialogue] prepare_greetings)",
+			g_topics.size(), WithInfos(), Config::Get()->dialoguePrepare ? "on" : "off");
 		std::thread(Ticker).detach();
 	}
 
