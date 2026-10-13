@@ -42,7 +42,7 @@ Make your mod talk, or release a voice of your own.
 - [Papyrus API](authors/papyrus-api.md): every function of `AudioUtilTTS.psc`
 - [C++ API](authors/cpp-api.md): the same calls for SKSE plugins, with no link dependency
 - [Training a Voice](authors/training-voices.md): making a voice of your own from recordings, with the training kit
-- [Shipping a Voice Model](authors/voice-models.md): what a model folder holds and how it names the voice types it speaks for
+- [Shipping a Voice Model](authors/voice-models.md): what a model folder holds, how it names the voice types it speaks for, and the ready-made lines it can bring
 - [How It Works](authors/how-it-works.md): placeholder files, the dialogue patch, and the statically linked speech runtime
 - [Tools](authors/tools.md): the offline probe, the voice training kit and the voice pack gap filler
 - [Building from Source](authors/building.md): xmake, the fetched dependencies, and the repo layout

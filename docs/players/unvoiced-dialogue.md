@@ -82,7 +82,7 @@ One gap: a line the plugin expected to have ready, picked before it is, plays as
 autts dialogue
 ```
 
-shows whether it is running, how many lines this session were given a voice, left unvoiced, had nothing to say or were generated, how many greetings were spoken late or made ahead, and the size of the cache. `AudioUtilTTS.log` says what was done about a line that stays unvoiced and why; see [Troubleshooting & Logs](troubleshooting.md#a-dialogue-line-stays-unvoiced).
+shows whether it is running, how many lines this session were given a voice, left unvoiced, had nothing to say or were generated, how many greetings were spoken late or made ahead, the size of the cache, and how many [ready-made lines](#ready-made-lines) were used. `AudioUtilTTS.log` says what was done about a line that stays unvoiced and why; see [Troubleshooting & Logs](troubleshooting.md#a-dialogue-line-stays-unvoiced).
 
 | Command | Does |
 |---|---|
@@ -99,3 +99,23 @@ shows whether it is running, how many lines this session were given a voice, lef
 - A line is cached per model file. After replacing a model's files, run `autts reload`: the lines of the old model are not played again, and nothing has to be cleared by hand.
 - The folder can be deleted freely. Every line is simply generated again the next time it comes up.
 - Under Mod Organizer 2 the folder is created where your profile puts files the game writes: Overwrite, or the mod you set for that.
+
+## Ready-made lines
+
+Added in 0.3.2. A voice can bring lines along that were generated beforehand, in a folder called `lines` inside its own:
+
+```
+Data\SKSE\Plugins\AudioUtilTTS\models\<voice>\lines\
+```
+
+The plugin uses such a line like one from its own cache.
+
+- **On time the first time.** A line the voice brings along is in place the first time an NPC says it: no delay, no line left unvoiced that once, nothing generated on your machine.
+- **Nothing to set up.** Install the archive that holds the lines like any mod. They may come inside the voice archive or as an archive of their own; either way they land in the voice's folder.
+- **Only for the voice they were made with.** A ready-made line belongs to one voice and one text. Every other line is generated as before.
+- **Your settings can pass them over.** A line was made for one speed and for the plugin's default text settings. With another `speed` for that voice every line is generated on your machine instead, and with `[dialogue] skip_directions` or `[playback] max_chars` changed, the lines those settings shape are. Nothing breaks.
+- **They take no memory.** A voice whose line is ready-made is not even loaded for it.
+
+`autts dialogue` counts the ready-made lines used this session, and `AudioUtilTTS.log` notes each voice that brings some: `Model '<voice>' brings ready-made lines`.
+
+To make such lines for a voice, see [Ready-made lines](../authors/voice-models.md#ready-made-lines) in the mod authors' part.

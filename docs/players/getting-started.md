@@ -52,6 +52,7 @@ It unpacks to one folder, `Data\SKSE\Plugins\AudioUtilTTS\models\<VoiceType>\`, 
 - **There is nothing to configure.** No line in `AudioUtilTTS.toml`, no `model.toml` inside the folder, no plugin file.
 - **Only lines without a recording are spoken.** A line that has a voice file is never touched.
 - **A voice type with no voice stays as it was**, unless you turn `fallback` on.
+- **A voice can bring ready-made lines.** Lines that were generated beforehand and come with the voice are spoken on time the first time, with nothing generated on your machine; see [Ready-made lines](unvoiced-dialogue.md#ready-made-lines).
 - **A voice costs disk space and memory.** A Kokoro voice is about 0.3 GB on disk and about 0.6 GB of memory while it is loaded. Up to four voice models are kept loaded at once by default, the default voice included; see [How many fit in memory](models.md#how-many-fit-in-memory).
 
 Characters from mods often have a voice type of their own, which no voice archive is named after. That is what a [voice type patch](voices.md#voice-type-patches) is for.
