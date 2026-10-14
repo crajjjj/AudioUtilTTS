@@ -43,7 +43,7 @@ The speech model returns audio and no timing, so there are no real phonemes to a
 
 ### Greetings spoken late
 
-A new greeting cannot be handed to the game in time, and the patch above is not told who speaks. The same goes for any line of one response that is said right away, and from 0.3.0 on all of those are treated alike. With `[dialogue] greetings` on, the plugin remembers such a line by its topic info, waits for the game's own report of that topic info being said (which names the speaker), and plays the generated audio as a character line at that actor. Such a line is generated ahead of every other waiting dialogue line. The same reports tell when its speaker has begun another line, which is when a late greeting is dropped; an open dialogue menu alone does not drop it.
+A new greeting cannot be handed to the game in time, and the patch above is not told who speaks. The same goes for any line of one response that is said right away. With `[dialogue] greetings` on, the plugin remembers such a line by its topic info, waits for the game's own report of that topic info being said (which names the speaker), and plays the generated audio as a character line at that actor. Such a line is generated ahead of every other waiting dialogue line. The same reports tell when its speaker has begun another line, which is when a late greeting is dropped; an open dialogue menu alone does not drop it.
 
 ### Greetings made ahead
 

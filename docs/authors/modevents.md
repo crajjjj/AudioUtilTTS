@@ -71,20 +71,7 @@ The handle works with AudioUtil's handle functions: `AudioUtil.StopHandle`, `IsH
 
 Dialogue lines do not raise it. The game plays those itself, like recorded lines.
 
-## Examples
-
-Speaking, with no dependency:
-
-```papyrus
-; narration
-SendModEvent("AudioUtilTTS_Speak::MyMod", "The road to Whiterun lay open.")
-SendModEvent("AudioUtilTTS_Speak:narrator:MyMod", "Night fell over the hold.")
-
-; a character
-akSpeaker.SendModEvent("AudioUtilTTS_Say::MyMod", "Not so loud.")
-```
-
-Listening for the moment a line starts:
+## Listening for the moment a line starts
 
 ```papyrus
 Event OnInit()

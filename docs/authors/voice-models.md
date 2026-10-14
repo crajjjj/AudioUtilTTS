@@ -1,6 +1,6 @@
 # Shipping a Voice Model
 
-A voice model can be released as a mod of its own. It is one folder; with a small file inside, installing it is all a user has to do, and removing it removes its voice types with it. Nothing has to be written into `AudioUtilTTS.toml`.
+A voice model can be released as a mod of its own: one folder that a user installs, and nothing to configure.
 
 ## What a model folder holds
 
@@ -13,15 +13,15 @@ Data\SKSE\Plugins\AudioUtilTTS\models\<folder>\
   model.toml            optional: the voice types this model speaks for
 ```
 
-- **The family is read off the folder.** `voices.bin` present means Kokoro, otherwise VITS (the Piper voices).
-- **The folder name is the model's name.** It is what a preset's `model = "..."` refers to. Keep it one plain folder name; case is ignored.
-- **A folder named exactly like a voice type speaks for that voice type** with no further file: `models\MaleNord` speaks for `MaleNord` with its first voice.
+- **A folder named exactly like a voice type speaks for it** with no further file: `models\MaleNord` speaks for `MaleNord` with its first voice. For one voice and one voice type, that is all.
+- **The folder name is the model's name**, what a preset's `model = "..."` refers to. One plain folder name; case is ignored.
+- **The family is read off the folder**: `voices.bin` means Kokoro, otherwise VITS (Piper voices).
 
-Kokoro (`kokoro-en-v0_19`, the default) and VITS models such as the Piper voices from the [sherpa-onnx model list](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models) are supported. To make a model of your own, see [Training a Voice](training-voices.md).
+To make a model of your own, see [Training a Voice](training-voices.md).
 
 ## model.toml
 
-Added in 0.2.1. The file names the voice types the model speaks for:
+For a folder not named like a voice type, one voice for several voice types, or a model with several voices, the file names the voice types the model speaks for:
 
 ```toml
 # voice type editor ID = voice number inside this model
@@ -36,25 +36,10 @@ speed = 1.0
 volume = 1.0
 ```
 
-- **The key is the voice type's editor ID**, as xEdit shows it. Case is ignored.
-- **The value is a voice number inside this model**, 0 or more. A model with one voice uses `0` everywhere. A model holding many voices gives each voice type its number.
-- **`[voice]` is optional** and applies to every voice type the file lists.
-- **The file is read at game start and on `autts reload`.** The log notes it: `Model '<folder>' lists N voice types in its model.toml`.
-
-### Who wins
-
-A voice type finds its voice in a fixed order, and the user's own config is asked first:
-
-1. the user's `[voicetype]` line
-2. a preset of the user's config named exactly like the voice type
-3. a [voice type patch](../players/voices.md#voice-type-patches) the user installed (0.3.0 and newer)
-4. **your `model.toml`**
-5. a model folder named exactly like the voice type
-6. the generic voice by sex, when the user has `[dialogue] fallback` on
-
-So a user can always overrule a model, or silence a voice type with `Name = ""`. A patch is the way to give further voice types to a voice you did not make: it is a file outside the model's folder, so it does not replace the model's own `model.toml`.
-
-When two installed models list the same voice type, the one later in folder name order is used, and `AudioUtilTTS.log` names both. Pick a folder name of your own, and list only the voice types your voice is meant for.
+- **The key is the voice type's editor ID** (as xEdit shows it, any case); **the value a voice number inside this model**: `0` for a model with one voice.
+- **`[voice]` is optional** and applies to every voice type listed.
+- **Read at game start and on `autts reload`**; the log says `Model '<folder>' lists N voice types in its model.toml`.
+- **The user's config and voice type patches come first** in [the lookup order](../players/voices.md#voice-types), so a user can always overrule your file. When two models list the same voice type, the later folder name wins: pick a folder name of your own, and list only the voice types your voice is meant for.
 
 ## Checking it
 
@@ -90,7 +75,6 @@ It writes one `Release\AudioUtilTTS-Voice-<folder>.zip` per model folder, `model
 
 ## What to tell your users
 
-- **It needs AudioUtilTTS 0.2.1 or newer** for `model.toml`. With an older plugin only a folder named like a voice type is picked up.
-- **The default voice.** From 0.3.1 on your voice speaks without the default model installed. With 0.3.0 and older the user needs that one too.
-- **Memory.** Each loaded model costs memory, and `[model] max_loaded` (4 by default) caps how many are kept. A pack of many single-voice models should say so; see [How many fit in memory](../players/models.md#how-many-fit-in-memory). One model holding many voices costs the memory once.
-- **The license.** Voice models carry their own license. Put it in the model folder.
+- **Versions**: `model.toml` needs AudioUtilTTS 0.2.1 or newer; speaking without the default model installed, 0.3.1 or newer.
+- **Memory**: each loaded model costs memory, and `[model] max_loaded` (4) caps how many are kept; see [How many fit in memory](../players/models.md#how-many-fit-in-memory). One model holding many voices costs it once.
+- **The license**: put the voice's license in the model folder.

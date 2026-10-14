@@ -2,7 +2,7 @@
 
 For SKSE plugins. The DLL exports a small set of C functions that mirror the [Papyrus API](papyrus-api.md), so a plugin can have a line spoken straight from C++, with no script and no mod event in between.
 
-Added in 0.2.2. The reference header is [`include/API/AudioUtilTTSAPI.h`](https://github.com/crajjjj/AudioUtilTTS/blob/main/include/API/AudioUtilTTSAPI.h).
+The reference header is [`include/API/AudioUtilTTSAPI.h`](https://github.com/crajjjj/AudioUtilTTS/blob/main/include/API/AudioUtilTTSAPI.h).
 
 ## No link dependency
 
@@ -82,7 +82,7 @@ To learn when a line actually starts, listen for the mod event [`AudioUtilTTS_Sp
 
 | Export | Does |
 |---|---|
-| `bool AudioUtilTTS_IsReady()` | True when the plugin can speak right now: a voice model is installed (the default one or any other), AudioUtil is present, a playable slot exists and speech is switched on. The default model is optional from 0.3.1 on, so a speak call can still return `false`: the voice the line asks for has no model |
+| `bool AudioUtilTTS_IsReady()` | True when the plugin can speak right now: a voice model is installed (the default one or any other), AudioUtil is present, a playable slot exists and speech is switched on. A speak call can still return `false` when the voice the line asks for has no model |
 | `bool AudioUtilTTS_IsNarrationFree()` | Would a narration line sent right now be taken? It takes the line to be in the default voice, so it is false while the default model is not installed |
 | `bool AudioUtilTTS_IsSpeechFree()` | The same for a character line. True is no promise: another mod can take the place a moment later, and it cannot tell whether the speaker's voice has a model, so still check what the speak call returns |
 | `bool AudioUtilTTS_HasPreset(const char* preset)` | True when the config or a preset file defines `[preset.<preset>]` |

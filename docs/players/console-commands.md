@@ -1,64 +1,48 @@
 # Console Commands
 
-The `autts` commands need [ConsoleUtil Extended](https://www.nexusmods.com/skyrimspecialedition/mods/133569). Open the console, type a command, and read the answer in the console.
-
-Text goes in quotes. Commands that act on a character use the reference selected in the console (click the NPC first), or the player when nothing is selected. Switch to third person to see your own mouth move.
+The `autts` commands need [ConsoleUtil Extended](https://www.nexusmods.com/skyrimspecialedition/mods/133569). Text goes in quotes. Commands about a character act on the actor selected in the console (click them first), or on you when nothing is selected.
 
 ## Speaking
 
 | Command | Does |
 |---|---|
-| `autts say "text"` | Speak a line with the configured voice |
-| `autts sayv "text" 9` | Speak a line with voice number 9 of the default model |
+| `autts say "text"` | Speak a line in the default voice |
+| `autts sayv "text" 9` | Speak a line in voice 9 of the default model |
 | `autts sayas "text" whisper` | Speak a line through the preset `whisper` |
-| `autts sayfrom "text" MyMod` | Speak a line naming the sender; the name shows up in `AudioUtilTTS.log` |
-| `autts sayactor "text"` | Make the selected actor (or the player) say a line |
+| `autts sayfrom "text" MyMod` | Speak a line with a sender name, which the log shows |
+| `autts sayactor "text"` | Have the selected actor say a line |
 | `autts sayactoras "text" whisper` | The same through the preset `whisper` |
-| `autts free` | Show whether a narration line and a character line would be taken right now. Narration is never free without the default voice |
+| `autts free` | Whether a narration line and a character line would be taken right now |
 | `autts stop` | Drop waiting lines and cut the current one |
 
-The answer is `queued`, or `not queued` with the reason and the status line. With the plugin ready, the usual reason is a line still being generated or spoken: a second one is dropped, not queued. See [`max_pending`](configuration.md#max_pending). The other reason is a voice whose model is not installed, for example `autts say` without the default voice.
+The answer is `queued`, or `not queued` and why: usually a line still on its way (see [`max_pending`](configuration.md#max_pending)), or a voice whose model is not installed.
 
 ## The way other mods do it
 
-These send the same mod events a mod would, so you can check that path.
+These send the mod events a mod would.
 
 | Command | Does |
 |---|---|
-| `autts event "text"` | Speak a line through the `AudioUtilTTS_Speak` mod event |
+| `autts event "text"` | Narration through the `AudioUtilTTS_Speak` event |
 | `autts eventas "text" whisper` | The same with the preset `whisper` |
-| `autts sayevent "text"` | Make the selected actor say a line through the `AudioUtilTTS_Say` mod event |
+| `autts sayevent "text"` | The selected actor speaks through the `AudioUtilTTS_Say` event |
 
-## Voices and dialogue
+## Voices, dialogue, status
 
 | Command | Does |
 |---|---|
-| `autts voice` | Show the voice type of the selected actor (or the player) and the voice it leads to |
-| `autts dialogue` | Show the status of unvoiced-dialogue speech |
-| `autts dialogue 0` | Switch unvoiced-dialogue speech off for this session (`1` = on) |
+| `autts voice` | The selected actor's voice type and the voice it gets |
+| `autts dialogue` | The state of unvoiced dialogue and this session's counts |
+| `autts dialogue 0` | Switch unvoiced dialogue off for this session (`1` = on) |
 | `autts clearcache` | Delete the cached dialogue lines |
+| `autts status` | Whether speech is ready, and why not |
+| `autts reload` | Read the config again and reload the models |
+| `autts enable 0` | Switch all speech off for this session (`1` = on) |
 
-## Status and settings
-
-| Command | Does |
-|---|---|
-| `autts status` | Show whether speech is ready, and why not |
-| `autts reload` | Re-read the config and reload the models |
-| `autts enable 0` | Switch speech off for this session (`1` = on) |
-
-`autts status` on a working install reads like this:
+`autts status` on a working install:
 
 ```
-ready | model kokoro-en-v0_19 (11 voices, 24000 Hz) | voice 7 | 4 presets | 1 of 12 models loaded | narration slots 4 of 4 | speech slots 4 of 4, lipsync on | dialogue on | sherpa-onnx ...
+ready | model kokoro-en-v0_19 (11 voices, 24000 Hz) | voice 7 | 4 presets | 1 of 12 models loaded | ...
 ```
 
-`1 of 12 models loaded` counts the voice models in memory against the ones installed. Without the default voice the line reads:
-
-```
-ready | no default model (model folder not found: ...): only voices with a model of their own speak | 4 presets | 0 of 11 models loaded | ...
-```
-
-What the `not ready:` answers mean is listed in [Troubleshooting & Logs](troubleshooting.md#what-autts-status-says).
-
-!!! note "The long form"
-    `autts` is an alias. The full command name is `AudioUtilTTSTest`, so `AudioUtilTTSTest say "text"` does the same.
+`1 of 12` counts the voice models in memory against those installed. The `not ready:` answers are listed in [Troubleshooting & Logs](troubleshooting.md#what-autts-status-says). `autts` is short for `AudioUtilTTSTest`, which works too.
