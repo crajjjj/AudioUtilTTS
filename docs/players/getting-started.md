@@ -5,6 +5,7 @@
 - **Skyrim SE / AE** with **SKSE64** and **Address Library for SKSE Plugins**. Start the game through the SKSE loader (or the SKSE entry in your mod manager), not the vanilla launcher.
 - **[AudioUtil](https://github.com/crajjjj/AudioUtil) 0.9.29 or newer.** It plays narration, character speech and the lines that are spoken late.
 - **[ConsoleUtil Extended](https://www.nexusmods.com/skyrimspecialedition/mods/133569)** for the `autts` console commands. The plugin speaks without it, but the commands are how you check an install and find out which voice an NPC gets.
+- **[SKSE Menu Framework](https://www.nexusmods.com/skyrimspecialedition/mods/120352)**, optional, for the [in-game menu](settings-menu.md): every setting, the status and a voice to try, without editing a file.
 
 ??? note "With an older AudioUtil"
     The plugin runs with AudioUtil 0.9.9 or newer, with less:
@@ -66,6 +67,7 @@ The default voice speaks English. Voices for other languages are among the Piper
 Data\
   SKSE\Plugins\AudioUtilTTS.dll
   SKSE\Plugins\AudioUtilTTS\AudioUtilTTS.toml         settings, every key commented
+  SKSE\Plugins\AudioUtilTTS\AudioUtilTTS.defaults.toml the same as shipped, for the in-game menu's reset
   SKSE\Plugins\AudioUtilTTS\licenses\                 third-party notices
   SKSE\Plugins\AudioUtilTTS\models\kokoro-en-v0_19\   the default voice (its own archive)
   SKSE\Plugins\AudioUtilTTS\models\<VoiceType>\       one folder per voice archive
@@ -120,4 +122,5 @@ autts sayactor "Not so loud."
 - Curious about delays, dropped lines and memory? Read [What to Expect](what-to-expect.md).
 - Want to know which dialogue lines get a voice, and when? Read [Unvoiced Dialogue](unvoiced-dialogue.md).
 - An NPC has no voice, or the wrong one? Read [Voices, Presets & Voice Types](voices.md).
+- Rather change settings in game? See the [In-Game Menu](settings-menu.md).
 - Something not working? See [Troubleshooting & Logs](troubleshooting.md).

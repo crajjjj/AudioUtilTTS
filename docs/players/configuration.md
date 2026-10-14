@@ -8,6 +8,8 @@ Data\SKSE\Plugins\AudioUtilTTS\AudioUtilTTS.toml
 
 Every key is optional and commented in the file itself. The defaults below are the shipped file. After editing, run `autts reload` in the console; the few keys that need a game restart say so.
 
+With SKSE Menu Framework installed, the [In-Game Menu](settings-menu.md) edits this file for you and applies each change at once.
+
 If the file does not parse, the previous settings are kept and `AudioUtilTTS.log` names the line.
 
 ## [general]

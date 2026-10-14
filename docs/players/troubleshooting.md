@@ -8,6 +8,7 @@ Two things answer most questions: `autts status` in the console, and the plugin'
     - An NPC stays silent although voices are installed? See [An NPC stays silent](#an-npc-stays-silent).
     - Mod dialogue stays silent? See [A dialogue line stays unvoiced](#a-dialogue-line-stays-unvoiced).
     - The mouth does not move? See [The mouth stays still](#the-mouth-stays-still).
+    - No AudioUtilTTS pages in SKSE Menu Framework? See [The in-game menu is not there](#the-in-game-menu-is-not-there).
 
 ## Where the logs are
 
@@ -110,6 +111,12 @@ With the feature on, the log gives the reason per line, or once for a reason tha
 - `[speech] lipsync` and `[dialogue] lipsync` must be `true`.
 - Narration never moves a mouth: it has no speaker.
 - On your own character, switch to third person to see it.
+
+## The in-game menu is not there
+
+`AudioUtilTTS.log` says at game start whether the menu was registered: `Menu: off, SKSE Menu Framework is not installed`, `Menu: off, this SKSE Menu Framework lacks: ...` (update the framework), or `Menu: registered`. See [In-Game Menu](settings-menu.md#when-the-menu-is-not-there).
+
+A change made in the menu that seems to have no effect: hover over the setting. One marked "(after a restart)" takes effect at the next game start. When a voice pack ships its own `AudioUtilTTS.toml`, the menu edits that copy, and reinstalling the pack puts its own values back.
 
 ## Speech plays at the wrong pitch or speed
 

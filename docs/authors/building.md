@@ -23,7 +23,7 @@ xmake build package        # release archives -> Release\
 - **`fetch-deps.ps1`** downloads the prebuilt runtime libraries (about 1 GB unpacked, into `extern\`) and the default voice model (about 350 MB, into `dist\`). Neither is tracked in git. It is safe to re-run: anything already present is skipped. `-SkipModel` leaves the model out.
 - **`AudioUtilTTS.ppj`** holds machine-local paths (the game, AudioUtil's sources) and is not tracked either.
 - **Both build modes link the release static CRT**, because the prebuilt runtime libraries do. A debug build is an unoptimized build against the release CRT.
-- **The build also writes the placeholder files** into `dist\Sound`, so they ship with the mod and the game indexes them at the first launch.
+- **The build also writes the placeholder files** into `dist\Sound`, so they ship with the mod and the game indexes them at the first launch, and `AudioUtilTTS.defaults.toml`, a copy of the shipped config for the in-game menu's defaults and reset.
 
 ## Targets
 
@@ -34,6 +34,7 @@ xmake build package        # release archives -> Release\
 | `xmake build package` | `Release\AudioUtilTTS-<version>.zip` and one `AudioUtilTTS-Voice-<model>.zip` per model folder in `dist`. Build the plugin and the scripts first |
 | `xmake build probe` | The offline probe; see [Tools](tools.md#the-probe) |
 | `xmake build voicetrain` | `Release\AudioUtilTTS-VoiceTraining-<version>.zip`: the [voice training kit](tools.md#the-voice-training-kit) as a download of its own |
+| `xmake build menu-tests` | Checks for the in-game menu, run with `xmake run menu-tests` from the repo root: the schema describes every key of the shipped config, a change touches one line, a hand edit survives a write, and every framework function the menu calls is probed at load |
 
 `xmake f --copy_to_mod=y` with the environment variable `XSE_TES5_MODS_PATH` set also copies `dist\*` into `<mods>\AudioUtilTTS` after each build.
 
@@ -47,6 +48,9 @@ xmake build package        # release archives -> Release\
 
 ```
 src/                              C++ SKSE plugin (CommonLibSSE-NG)
+  menu/                           the in-game menu: the config writer (from SLO VE's menu), the schema, the pages
+vendor/SKSEMenuFramework/         SKSE Menu Framework's client header, vendored verbatim (hash in its README)
+tests/                            menu_tests.cpp, the menu's checks
 include/API/AudioUtilAPI.h        AudioUtil's C API header (resolved at run time)
 papyrus/Source/                   Papyrus sources (.psc)
 dist/                             the mod as installed; maps onto Data\

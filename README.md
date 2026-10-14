@@ -24,6 +24,7 @@ Everything is on the docs site: **https://crajjjj.github.io/AudioUtilTTS/**
 | Have dialogue without voice files spoken | [Unvoiced Dialogue](https://crajjjj.github.io/AudioUtilTTS/players/unvoiced-dialogue/) |
 | Decide which NPC gets which voice | [Voices, Presets & Voice Types](https://crajjjj.github.io/AudioUtilTTS/players/voices/) |
 | Add voices | [Voice Models](https://crajjjj.github.io/AudioUtilTTS/players/models/) |
+| Change settings in game | [In-Game Menu](https://crajjjj.github.io/AudioUtilTTS/players/settings-menu/) |
 | Look up a setting or a console command | [Configuration Reference](https://crajjjj.github.io/AudioUtilTTS/players/configuration/), [Console Commands](https://crajjjj.github.io/AudioUtilTTS/players/console-commands/) |
 | Find out why something is silent | [Troubleshooting & Logs](https://crajjjj.github.io/AudioUtilTTS/players/troubleshooting/) |
 | Make my mod talk | [Overview](https://crajjjj.github.io/AudioUtilTTS/authors/overview/), [Mod Events](https://crajjjj.github.io/AudioUtilTTS/authors/modevents/), [Papyrus API](https://crajjjj.github.io/AudioUtilTTS/authors/papyrus-api/), [C++ API](https://crajjjj.github.io/AudioUtilTTS/authors/cpp-api/) |
@@ -37,7 +38,9 @@ The changelog is on the [releases page](https://github.com/crajjjj/AudioUtilTTS/
 Requirements: Skyrim SE / AE with SKSE64 and Address Library,
 [AudioUtil](https://github.com/crajjjj/AudioUtil) 0.9.29 or newer, and
 [ConsoleUtil Extended](https://www.nexusmods.com/skyrimspecialedition/mods/133569)
-for the `autts` console commands.
+for the `autts` console commands, and optionally
+[SKSE Menu Framework](https://www.nexusmods.com/skyrimspecialedition/mods/120352)
+for the in-game menu.
 
 From the [latest release](https://github.com/crajjjj/AudioUtilTTS/releases/latest),
 installed like any mod:

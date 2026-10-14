@@ -43,6 +43,7 @@ nav:
     - Unvoiced Dialogue: players/unvoiced-dialogue.md
     - Voices, Presets & Voice Types: players/voices.md
     - Voice Models: players/models.md
+    - In-Game Menu: players/settings-menu.md
     - Configuration Reference: players/configuration.md
     - Console Commands: players/console-commands.md
     - Troubleshooting & Logs: players/troubleshooting.md

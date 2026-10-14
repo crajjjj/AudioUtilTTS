@@ -29,6 +29,7 @@ Install it, hear it, set it up. Start here if you just want to use the mod.
 - [Unvoiced Dialogue](players/unvoiced-dialogue.md): how dialogue without voice files gets a voice, what happens to greetings, and the cache
 - [Voices, Presets & Voice Types](players/voices.md): which NPC gets which voice, voice type patches, and naming voices of your own
 - [Voice Models](players/models.md): adding voices, when a model needs a file of its own, and how many fit in memory
+- [In-Game Menu](players/settings-menu.md): every setting in SKSE Menu Framework's Mod Control Panel, and a voice to try
 - [Configuration Reference](players/configuration.md): every key of `AudioUtilTTS.toml` in one place
 - [Console Commands](players/console-commands.md): the `autts` commands
 - [Troubleshooting & Logs](players/troubleshooting.md): what `autts status` and the log say, and what to do about it
