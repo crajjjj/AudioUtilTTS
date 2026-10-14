@@ -19,7 +19,7 @@
 | A voice archive named after a voice type, such as `AudioUtilTTS-Voice-MaleNord.zip` | A voice for the NPCs of that voice type |
 | A voice type patch | Voices for a mod's characters who have voice types of their own |
 
-The first two are on the [latest release](https://github.com/crajjjj/AudioUtilTTS/releases/latest). Install each like any mod; none has a plugin file. An update is the plugin archive only.
+The first two are on the [latest release](https://github.com/crajjjj/AudioUtilTTS/releases/latest). Voice archives for the vanilla voice types are shared outside this site, on LoversLab. Install each like any mod; none has a plugin file. An update is the plugin archive only.
 
 ## What you hear
 

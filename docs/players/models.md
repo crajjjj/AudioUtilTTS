@@ -1,6 +1,6 @@
 # Voice Models
 
-A model is a folder of files the speech runtime reads, under `Data\SKSE\Plugins\AudioUtilTTS\models\<folder>`. The default one, `kokoro-en-v0_19`, is the second release archive. A voice archive is one more such folder, ready to install.
+A model is a folder of files the speech runtime reads, under `Data\SKSE\Plugins\AudioUtilTTS\models\<folder>`. The default one, `kokoro-en-v0_19`, is the second release archive. A voice archive is one more such folder, ready to install; the archives for the vanilla voice types are shared outside this site, on LoversLab.
 
 ## Adding a model
 
