@@ -32,6 +32,12 @@ CommonLibSSE-NG
     MIT License (MIT-CommonLibSSE.txt in this folder).
     https://github.com/alandtse/CommonLibSSE-NG
 
+SKSE Menu Framework client header (SKSEMenuFramework.h)
+    Draws the in-game menu through SKSE Menu Framework, which is a separate
+    download; AudioUtilTTS.dll only calls into it when it is installed.
+    GNU General Public License v3.0 (GPL-3.0.txt in this folder)
+    https://github.com/QTR-Modding/SKSE-Menu-Framework-3
+
 toml++
     Reads the config file.
     Copyright (c) Mark Gillard

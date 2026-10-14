@@ -2,3 +2,9 @@
 tools/voicetrain/*.sh text eol=lf
 tools/voicetrain/*.py text eol=lf
 tools/voicetrain/*.txt text eol=lf
+
+# Vendored and copied files keep their bytes: their hashes are recorded
+# (vendor\SKSEMenuFramework\README.txt; src\menu\TomlEdit.h is a byte copy of
+# AudioUtil's), and core.autocrlf would change them on checkout.
+vendor/SKSEMenuFramework/SKSEMenuFramework.h -text
+src/menu/TomlEdit.h -text

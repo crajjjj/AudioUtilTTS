@@ -49,6 +49,19 @@ namespace Speaker
 {
 	void Start();   // kDataLoaded: slots, AudioUtil lookup, worker (loads the default model, if there is one)
 	bool Reload();  // re-read the config and reload the models; false = config kept
+
+	// The in-game menu wrote AudioUtilTTS.toml: re-read it. Only a change to
+	// what the models are loaded with ([general] enable, the [model] keys
+	// except max_loaded) or to a placeholder count does what Reload does; any
+	// other setting is read again for each line, so it applies to the next one
+	// without dropping a line or reloading a voice.
+	enum class ApplyResult
+	{
+		kApplied,   // the new settings are in use
+		kReloaded,  // and the models are being loaded again
+		kNotParsed  // the file did not parse: the previous settings are kept
+	};
+	ApplyResult ApplyConfig();
 	void Cancel();  // drop every narration and character line waiting or being generated
 	void Reset();   // Cancel, and drop every dialogue line on its way too: a save is being loaded
 

@@ -2746,30 +2746,67 @@ namespace Speaker
 		}
 	}
 
+	namespace
+	{
+		// Everything a reload does once the config is read: lines on their way
+		// are dropped, the placeholder files are checked, the models are loaded
+		// afresh by the worker and the per-model measurements start over.
+		void Rebuild()
+		{
+			Reset();
+			const auto settings = Config::Get();
+			PrepareSlots(kNarration, settings->slots);
+			PrepareSlots(kSpeech, settings->speechSlots);
+			PrepareSlots(kDialogue, settings->dialogueSlots);
+			{
+				std::scoped_lock lock{ g_lock };
+				g_reloadWanted = true;
+				// from here on, not from when the worker gets to it: until then the
+				// flags would still describe the models of the old config
+				g_modelState.store(Models::kLoading);
+				g_unknownPresets.clear();
+				// models may have been swapped on disk: measure and stamp them afresh
+				g_msPerChar.clear();
+				g_modelStamps.clear();
+				g_unusableModels.clear();
+				g_failedLines.clear();
+				g_loggedOnce.clear();
+			}
+			g_wake.notify_all();
+		}
+	}
+
 	bool Reload()
 	{
 		const bool parsed = Config::Load();
-		Reset();
-		const auto settings = Config::Get();
-		PrepareSlots(kNarration, settings->slots);
-		PrepareSlots(kSpeech, settings->speechSlots);
-		PrepareSlots(kDialogue, settings->dialogueSlots);
-		{
-			std::scoped_lock lock{ g_lock };
-			g_reloadWanted = true;
-			// from here on, not from when the worker gets to it: until then the
-			// flags would still describe the models of the old config
-			g_modelState.store(Models::kLoading);
-			g_unknownPresets.clear();
-			// models may have been swapped on disk: measure and stamp them afresh
-			g_msPerChar.clear();
-			g_modelStamps.clear();
-			g_unusableModels.clear();
-			g_failedLines.clear();
-			g_loggedOnce.clear();
-		}
-		g_wake.notify_all();
+		Rebuild();
 		return parsed;
+	}
+
+	ApplyResult ApplyConfig()
+	{
+		const auto before = Config::Get();
+		if (!Config::Load()) {
+			return ApplyResult::kNotParsed;
+		}
+		const auto after = Config::Get();
+		// what the models are loaded with, and what the placeholder files are
+		// made for; everything else is read again for every line
+		const bool models = before->enable != after->enable || before->model != after->model ||
+		                    before->family != after->family || before->threads != after->threads ||
+		                    before->lexicon != after->lexicon || before->lang != after->lang;
+		const bool slots = before->slots != after->slots || before->speechSlots != after->speechSlots ||
+		                   before->dialogueSlots != after->dialogueSlots;
+		if (models || slots) {
+			Rebuild();
+			return ApplyResult::kReloaded;
+		}
+		std::scoped_lock lock{ g_lock };
+		// a preset that was missing may be there now, and a reason logged once
+		// may hold no more
+		g_unknownPresets.clear();
+		g_loggedOnce.clear();
+		return ApplyResult::kApplied;
 	}
 
 	void Cancel()

@@ -6,6 +6,7 @@
 #include "Greetings.h"
 #include "PapyrusAPI.h"
 #include "Speaker.h"
+#include "menu/Menu.h"
 
 using namespace SKSE;
 using namespace SKSE::log;
@@ -60,6 +61,13 @@ namespace
 				}
 			} else {
 				log::info("Dialogue: off in the config, the game is left unpatched");
+			}
+			// the in-game menu, when SKSE Menu Framework is installed; it never
+			// takes the plugin down with it
+			try {
+				Menu::Register();
+			} catch (...) {
+				log::error("Menu: not registered");
 			}
 			break;
 		case MessagingInterface::kPreLoadGame:

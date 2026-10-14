@@ -2,7 +2,7 @@ set_xmakever("3.0.0")  -- the commonlibsse-ng submodule requires 3.0
 
 -- Globals
 PROJECT_NAME = "AudioUtilTTS"
-PROJECT_VERSION = "0.3.2"
+PROJECT_VERSION = "0.3.3"
 PROJECT_AUTHOR = "crajjjj"
 
 -- Project
@@ -78,7 +78,8 @@ target(PROJECT_NAME)
     -- Source files
     add_files("src/**.cpp")
     add_headerfiles("src/**.h")
-    add_includedirs("src", "include")
+    -- vendor\SKSEMenuFramework: the in-game menu's client header (src\menu\Ui.h)
+    add_includedirs("src", "include", "vendor/SKSEMenuFramework")
     set_pcxxheader("src/PCH.h")
 
     -- flags
@@ -114,6 +115,10 @@ target(PROJECT_NAME)
         slots(path.join(os.projectdir(), "dist", "Sound", "AudioUtilTTS"), 4, "_tts_speech")
         -- dialogue lines are played by the game as voice files: wav + lip pairs
         slots(path.join(os.projectdir(), "dist", "Sound", "Voice", "AudioUtilTTS"), 128, "_tts_dialog", true)
+        -- the in-game menu's defaults and its "reset": the config as shipped, which
+        -- the user's own copy no longer is once they edit it
+        local config_dir = path.join(os.projectdir(), "dist", "SKSE", "Plugins", "AudioUtilTTS")
+        os.cp(path.join(config_dir, "AudioUtilTTS.toml"), path.join(config_dir, "AudioUtilTTS.defaults.toml"))
 
         local mod_folder = os.getenv("XSE_TES5_MODS_PATH")
         if mod_folder and has_config("copy_to_mod") then
@@ -131,6 +136,19 @@ target("probe")
     add_includedirs("src")
     set_rundir("$(projectdir)")  -- `xmake run probe` takes paths relative to the repo
     use_sherpa()
+    add_cxxflags("cl::/utf-8")
+target_end()
+
+-- The in-game menu's config writer and schema, no game needed:
+--   xmake build menu-tests && xmake run menu-tests
+-- Runs against the shipped AudioUtilTTS.toml (see tests\menu_tests.cpp).
+target("menu-tests")
+    set_kind("binary")
+    set_default(false)
+    add_packages("toml++")
+    add_files("src/menu/ConfigDoc.cpp", "src/menu/Schema.cpp", "src/menu/Model.cpp", "src/menu/MenuSchema.cpp", "tests/menu_tests.cpp")
+    add_includedirs("src")
+    set_rundir("$(projectdir)")
     add_cxxflags("cl::/utf-8")
 target_end()
 
