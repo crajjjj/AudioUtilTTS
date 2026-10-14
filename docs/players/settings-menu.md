@@ -8,23 +8,22 @@ The framework is optional. Without it the plugin runs as before, and you edit `A
 
 | Page | What it holds |
 |---|---|
-| **Status** | Whether speech is ready, the default model, how many voice models are installed and loaded, the unvoiced-dialogue counts and the cache size. A voice to try, reload, and clearing the cache |
-| **Voice** | The master switch, the default voice and its model, threads and models in memory (`[general]`, `[model]`, `[voice]`) |
-| **Presets** | Each `[preset.<name>]` of your file: model, voice, speed and volume |
-| **Dialogue** | Unvoiced dialogue, lines said right away, the mouth, the cache (`[dialogue]`) |
-| **Narration** | Lines that wait, the longest line, the AudioUtil group and channel (`[playback]`) |
-| **Character speech** | The mouth, the AudioUtil group and channel (`[speech]`) |
+| **Status** | Whether speech is ready, the default voice, the voice models loaded and installed, this session's dialogue and the line cache. A voice to try, reload, and clearing the cache |
+| **Dialogue** | Unvoiced dialogue, new lines said right away, the mouth (`[dialogue]`) |
 | **Voice types** | The `[voicetype]` lines of your file, and a form to add one |
+| **Voice** | The master switch, the default voice, threads and models in memory (`[general]`, `[model]`, `[voice]`) |
+| **Presets** | Each `[preset.<name>]` of your file: model, voice, speed and volume |
+| **Narration & speech** | Lines that wait, the longest line, the speaker's mouth (`[playback]`, `[speech]`) |
 
-Hover over a setting to see what it does, its default and its key in the file.
+Settings that are only for an unusual setup, such as placeholder file counts, AudioUtil groups and channels or a model's language, are in each page's **Advanced** group, which starts closed. Hover over a setting to see what it does, its default and its key in the file.
 
 ## How a change is saved
 
 - **Written as you change it.** A slider when you let go of it, a typed value when you leave the field, a checkbox at once. Only the value is replaced: the comments and the layout of the file stay as they were. A text value is written in single quotes (`'MaleNord'`), which TOML reads the same as double quotes.
 - **Used from the next line on.** Most settings are read again for every line, so a change is heard at once. Two kinds take longer:
-    - The master switch and the default model's settings (all of the **Default model** group, and **Threads per line**) load the voice models again. That takes a second or two, and lines on their way are dropped.
-    - The three **Placeholder files** counts and **Cache size limit** take effect after the next game start. The menu marks them "(after a restart)".
-    - **Speak unvoiced dialogue** stops at once when you turn it off. Turned on again, it works at once when it was on at game start, and after the next game start when it was not.
+    - **Speech on**, **Model folder**, **Threads per line** and the model settings under **Advanced** load the voice models again. That takes a second or two, and lines on their way are dropped.
+    - The placeholder file counts and **Cache size limit** take effect after the next game start. The menu marks them "(after a restart)".
+    - Unvoiced dialogue **On** stops it at once when you turn it off. Turned on again, it works at once when it was on at game start, and after the next game start when it was not.
 - **reset** puts a setting back to the value the plugin ships with, and **Reset this page to defaults** does it for a whole page after asking. The shipped values come from `AudioUtilTTS.defaults.toml`, which the plugin archive installs beside the config.
 - **A setting your file leaves out** shows the value the plugin uses for it. Changing it adds the line.
 - **A preset setting left out** shows the default voice's value, which is what the preset uses. Changing it sets it for that preset alone.
@@ -43,6 +42,7 @@ Not edited here: the presets a mod brings in `presets\*.toml`, [voice type patch
 
 ## The Status page
 
+- **Status.** Five lines: whether speech is ready (and why not), the default voice, how many voice models are loaded and installed, how many dialogue lines were given a voice or left unvoiced this session, and the size of the line cache. **Details** below them opens the full text `autts status` and `autts dialogue` print.
 - **Try a voice.** Type a line and pick a voice: **(the default voice)** or one of the presets.
     - **Speak it as narration** speaks the line flat, as a mod's narration would be.
     - **Speak it as the selected NPC** has the NPC you clicked in the console before opening the menu say it, at them, with their mouth moving. With nobody selected, your own character says it. With **(the default voice)** picked, they speak in the voice of their own voice type.

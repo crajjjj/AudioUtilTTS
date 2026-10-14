@@ -34,6 +34,9 @@ namespace Core
 		Restart   // after the next game start
 	};
 
+	// The group a page shows last and closed: settings for an unusual setup.
+	inline constexpr std::string_view kAdvancedGroup = "Advanced";
+
 	struct SettingSpec
 	{
 		// "dialogue.fallback", or a pattern with one "*" for a name the file

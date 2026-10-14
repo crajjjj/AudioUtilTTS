@@ -227,6 +227,12 @@ namespace
 		Check(presets != nullptr, "a Presets page");
 		Check(voiceTypes != nullptr, "a Voice types page, also with no line in the file");
 		Check(model.Pages().size() == Core::TtsSchema().Pages().size(), "no Other page for the shipped file");
+		for (const auto& page : model.Pages()) {
+			const auto advanced = std::find_if(page.groups.begin(), page.groups.end(),
+				[](const Core::Group& g) { return g.title == Core::kAdvancedGroup; });
+			Check(advanced == page.groups.end() || advanced + 1 == page.groups.end(), page.title + ": Advanced is the last group");
+			Check(&page == voiceTypes || advanced != page.groups.begin(), page.title + ": a settings page opens with settings, not with Advanced");
+		}
 		if (presets) {
 			std::vector<std::string> titles;
 			for (const auto& group : presets->groups) {

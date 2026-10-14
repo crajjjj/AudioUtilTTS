@@ -3409,32 +3409,45 @@ namespace Speaker
 				"");
 	}
 
-	std::string DialogueStatus()
+	namespace
 	{
-		const auto settings = Config::Get();
-		std::string state;
-		if (!settings->dialogue) {
-			state = "off in AudioUtilTTS.toml";
-		} else if (!g_dialogueHooked.load()) {
-			state = "off: the game hook is not in place (see AudioUtilTTS.log; a change of [dialogue] enable needs "
-					"a restart)";
-		} else if (!IsDialogueEnabled()) {
-			state = "switched off";
-		} else {
-			state = "on";
+		std::string DialogueState(const Config::Settings& a_settings)
+		{
+			if (!a_settings.dialogue) {
+				return "off in AudioUtilTTS.toml";
+			}
+			if (!g_dialogueHooked.load()) {
+				return "off: the game hook is not in place (see AudioUtilTTS.log; a change of [dialogue] enable needs "
+					   "a restart)";
+			}
+			return IsDialogueEnabled() ? "on" : "switched off";
 		}
-		std::uintmax_t  bytes = 0;
-		std::size_t     lines = 0;
-		std::error_code ec;
-		for (const auto& item : fs::directory_iterator(CacheDir(), ec)) {
-			if (item.is_regular_file(ec) && item.path().extension() == ".wav") {
-				if (const auto size = item.file_size(ec); !ec) {
-					bytes += size;
-					++lines;
+
+		// the generated lines on disk: how many, and their size
+		void CacheSize(std::size_t& a_lines, std::uintmax_t& a_bytes)
+		{
+			a_lines = 0;
+			a_bytes = 0;
+			std::error_code ec;
+			for (fs::directory_iterator it(CacheDir(), ec), end; !ec && it != end; it.increment(ec)) {
+				std::error_code item;
+				if (it->is_regular_file(item) && it->path().extension() == ".wav") {
+					if (const auto size = it->file_size(item); !item) {
+						a_bytes += size;
+						++a_lines;
+					}
 				}
-				ec.clear();
 			}
 		}
+	}
+
+	std::string DialogueStatus()
+	{
+		const auto     settings = Config::Get();
+		const auto     state = DialogueState(*settings);
+		std::uintmax_t bytes = 0;
+		std::size_t    lines = 0;
+		CacheSize(lines, bytes);
 		return std::format("dialogue {} | this session: {} responses given a voice, {} left unvoiced, {} with "
 						   "nothing to say, {} lines spoken late (which is {}), {} lines generated ({} of them "
 						   "greetings made ahead, which is {}) | "
@@ -3446,6 +3459,39 @@ namespace Speaker
 			g_usableSlots[kDialogue].load(), settings->dialogueSlots, settings->dialogueLip ? "on" : "off",
 			settings->voiceTypes.size(), settings->patchVoiceTypes.size(), settings->modelVoiceTypes.size(), lines,
 			static_cast<double>(bytes) / (1024.0 * 1024.0));
+	}
+
+	Summary GetSummary()
+	{
+		const auto settings = Config::Get();
+		Summary    summary;
+		summary.notReady = NotReadyReason(*settings, kNarration, Needs::kAnyModel);
+		summary.switchedOff = !IsEnabled();
+		switch (g_modelState.load()) {
+		case Models::kDefault:
+			summary.defaultModel = settings->model;
+			summary.defaultVoices = g_defaultVoices.load();
+			break;
+		case Models::kLoading:
+			summary.noDefaultWhy = "still loading";
+			break;
+		default:
+			{
+				std::scoped_lock lock{ g_lock };
+				summary.noDefaultWhy = g_problem.empty() ? "see AudioUtilTTS.log"s : g_problem;
+			}
+			break;
+		}
+		summary.modelsLoaded = g_modelsLoaded.load();
+		summary.modelsInstalled = g_modelsInstalled.load();
+		summary.dialogue = DialogueState(*settings);
+		summary.given = g_dialogueGiven.load();
+		summary.unvoiced = g_dialogueUnvoiced.load();
+		summary.late = g_dialogueLate.load();
+		std::uintmax_t bytes = 0;
+		CacheSize(summary.cacheLines, bytes);
+		summary.cacheMb = static_cast<double>(bytes) / (1024.0 * 1024.0);
+		return summary;
 	}
 
 	int ClearDialogueCache()

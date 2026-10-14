@@ -116,7 +116,7 @@ With the feature on, the log gives the reason per line, or once for a reason tha
 
 `AudioUtilTTS.log` says at game start whether the menu was registered: `Menu: off, SKSE Menu Framework is not installed`, `Menu: off, this SKSE Menu Framework lacks: ...` (update the framework), or `Menu: registered`. See [In-Game Menu](settings-menu.md#when-the-menu-is-not-there).
 
-A change made in the menu that seems to have no effect: hover over the setting. One marked "(after a restart)" takes effect at the next game start. When a voice pack ships its own `AudioUtilTTS.toml`, the menu edits that copy, and reinstalling the pack puts its own values back.
+A change made in the menu that seems to have no effect: hover over the setting. One marked "(after a restart)" takes effect at the next game start. Settings for an unusual setup are in each page's **Advanced** group, which starts closed. When a voice pack ships its own `AudioUtilTTS.toml`, the menu edits that copy, and reinstalling the pack puts its own values back.
 
 ## Speech plays at the wrong pitch or speed
 

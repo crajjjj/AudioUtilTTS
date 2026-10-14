@@ -75,9 +75,11 @@ namespace Menu
 
 		// ------------------------------------- written by tasks and threads
 		std::mutex        g_resultLock;
-		std::string       g_statusText;    // Speaker::Status()
-		std::string       g_dialogueText;  // Speaker::DialogueStatus()
+		Speaker::Summary  g_summary;       // what the Status page shows
+		bool              g_haveSummary = false;
+		std::string       g_details;       // Speaker::Status() and DialogueStatus(), while "Details" is open
 		Clock::time_point g_statusAt{};
+		std::atomic<bool> g_wantDetails{ false };
 		std::string       g_actionNote;    // what the last button did
 		std::string       g_voiceNote;     // which voice the selected NPC gets
 		std::atomic<bool> g_statusBusy{ false };
@@ -162,11 +164,12 @@ namespace Menu
 			}
 			std::thread([] {
 				try {
-					auto status = Speaker::Status();
-					auto dialogue = Speaker::DialogueStatus();
+					auto summary = Speaker::GetSummary();
+					auto details = g_wantDetails.load() ? Speaker::Status() + " | " + Speaker::DialogueStatus() : std::string{};
 					std::scoped_lock lock{ g_resultLock };
-					g_statusText = std::move(status);
-					g_dialogueText = std::move(dialogue);
+					g_summary = std::move(summary);
+					g_haveSummary = true;
+					g_details = std::move(details);
 					g_statusAt = Clock::now();
 				} catch (...) {
 				}
@@ -195,7 +198,7 @@ namespace Menu
 
 		std::string NotTaken()
 		{
-			return "Not taken. Another line may still be on its way, or this voice has no model: the status above and AudioUtilTTS.log say which.";
+			return "Not taken: another line is still on its way, or this voice has no model. AudioUtilTTS.log says which.";
 		}
 
 		void Colored(const Ui::ImVec4& a_color, const std::string& a_text)
@@ -278,6 +281,35 @@ namespace Menu
 			return !a_key.empty() && std::all_of(a_key.begin(), a_key.end(), [](unsigned char c) {
 				return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
 			});
+		}
+
+		// "Label   value", the values lined up
+		void Fact(const char* a_label, const std::string& a_value, const Ui::ImVec4* a_color = nullptr)
+		{
+			Colored(kHint, a_label);
+			Ui::SameLine(Ui::GetFontSize() * 7.0f);
+			Wrapped(a_value, a_color);
+		}
+
+		void DrawSummary(const Speaker::Summary& a_summary)
+		{
+			if (!a_summary.notReady.empty()) {
+				Fact("Speech", "not ready: " + a_summary.notReady, &kWarn);
+			} else if (a_summary.switchedOff) {
+				Fact("Speech", "switched off for this session (autts enable 1)", &kWarn);
+			} else {
+				Fact("Speech", "ready", &kGood);
+			}
+			Fact("Default voice", a_summary.defaultModel.empty() ?
+									  "none (" + a_summary.noDefaultWhy + "): narration and the generic voices are silent" :
+									  std::format("{}, {} voices", a_summary.defaultModel, a_summary.defaultVoices));
+			Fact("Voice models", std::format("{} loaded, {} installed", a_summary.modelsLoaded, a_summary.modelsInstalled));
+			if (a_summary.dialogue == "on") {
+				Fact("Dialogue", std::format("on: {} lines given a voice, {} left unvoiced this session", a_summary.given, a_summary.unvoiced));
+			} else {
+				Fact("Dialogue", a_summary.dialogue, &kWarn);
+			}
+			Fact("Line cache", std::format("{} lines, {:.0f} MB", a_summary.cacheLines, a_summary.cacheMb));
 		}
 
 		// ---------------------------------------------------------- the model
@@ -512,7 +544,8 @@ namespace Menu
 				Wrapped(page.note, &kHint);
 			}
 			for (const auto& group : page.groups) {
-				if (Ui::CollapsingHeader(group.title.c_str(), Ui::ImGuiTreeNodeFlags_DefaultOpen)) {
+				const auto open = group.title == Core::kAdvancedGroup ? Ui::ImGuiTreeNodeFlags_None : Ui::ImGuiTreeNodeFlags_DefaultOpen;
+				if (Ui::CollapsingHeader(group.title.c_str(), open)) {
 					for (const auto index : group.rows) {
 						DrawRow(index);
 					}
@@ -522,9 +555,9 @@ namespace Menu
 			Ui::PopID();
 		}
 
+		// Only when something is wrong, or about to change: a page is for settings.
 		void DrawBanner()
 		{
-			Wrapped("Saved to AudioUtilTTS.toml as you change them. Most settings apply to the next line.");
 			if (!g_writeError.empty()) {
 				Wrapped(g_writeError, &kWarn);
 			}
@@ -540,7 +573,6 @@ namespace Menu
 			if (g_model.Ok() && !g_model.HasDefaults()) {
 				Wrapped("AudioUtilTTS.defaults.toml is missing, so default values and reset are not available.", &kHint);
 			}
-			Ui::Separator();
 		}
 
 		void DrawFooter(std::size_t a_thunk, const std::vector<std::size_t>& a_pages)
@@ -605,7 +637,7 @@ namespace Menu
 			if (!g_addNote.empty()) {
 				Wrapped(g_addNote, &kWarn);
 			}
-			Wrapped("The ID is the voice type's editor ID: select an NPC in the console and run autts voice to see theirs. A voice archive named after a voice type needs no line here, and neither do the voice types a patch or a model's own model.toml covers.", &kHint);
+			Wrapped("The ID is the voice type's editor ID. Which voice does the selected NPC get? on the Status page shows an NPC's.", &kHint);
 		}
 
 		// All file I/O of the frame, before its first or after its last ImGui
@@ -752,22 +784,34 @@ namespace Menu
 				BeginFrame();
 				RefreshStatus();
 
-				const auto status = Read(g_statusText);
-				const auto dialogue = Read(g_dialogueText);
-				if (Ui::CollapsingHeader("Speech", Ui::ImGuiTreeNodeFlags_DefaultOpen)) {
-					if (status.empty()) {
+				Wrapped("Settings are saved to AudioUtilTTS.toml as you change them, and used from the next line on.", &kHint);
+				if (Ui::CollapsingHeader("Status", Ui::ImGuiTreeNodeFlags_DefaultOpen)) {
+					Speaker::Summary summary;
+					bool             have = false;
+					std::string      details;
+					{
+						std::scoped_lock lock{ g_resultLock };
+						summary = g_summary;
+						have = g_haveSummary;
+						details = g_details;
+					}
+					if (have) {
+						DrawSummary(summary);
+					} else {
+						Colored(kHint, "Reading...");
+					}
+					const bool open = Ui::CollapsingHeader("Details", Ui::ImGuiTreeNodeFlags_None);
+					if (open && !g_wantDetails.exchange(true)) {
+						std::scoped_lock lock{ g_resultLock };
+						g_statusAt = {};  // made at once, not at the next round
+					}
+					if (!open) {
+						g_wantDetails.store(false);
+					} else if (details.empty()) {
 						Colored(kHint, "Reading...");
 					} else {
-						if (status.starts_with("not ready")) {
-							Wrapped(status, &kWarn);
-						} else {
-							Lines(status);
-						}
+						Lines(details);
 					}
-					Ui::Spacing();
-				}
-				if (Ui::CollapsingHeader("Unvoiced dialogue", Ui::ImGuiTreeNodeFlags_DefaultOpen)) {
-					Lines(dialogue);
 					Ui::Spacing();
 				}
 
@@ -783,9 +827,7 @@ namespace Menu
 					if (Ui::Button("Speak it as narration")) {
 						Note("Sending...");
 						Post([line, preset = g_tryPreset] {
-							Note(Speaker::SpeakAs(line, preset, kSender) ?
-									 "Taken: it is spoken in a moment, about two seconds for a sentence. With the game paused you may hear it only once the menu is closed."s :
-									 NotTaken());
+							Note(Speaker::SpeakAs(line, preset, kSender) ? "Taken: it is spoken in a moment."s : NotTaken());
 						});
 					}
 					Ui::SameLine();
@@ -797,9 +839,7 @@ namespace Menu
 								Note("No one to speak: nothing is selected and the player is not loaded.");
 								return;
 							}
-							Note(Speaker::SpeakActor(actor, line, preset, true, kSender) ?
-									 who + " says it in a moment. With the game paused you may hear it only once the menu is closed." :
-									 NotTaken());
+							Note(Speaker::SpeakActor(actor, line, preset, true, kSender) ? who + " says it in a moment." : NotTaken());
 						});
 					}
 					if (Ui::Button("Which voice does the selected NPC get?")) {
@@ -810,7 +850,7 @@ namespace Menu
 							g_voiceNote = std::move(text);
 						});
 					}
-					Wrapped("The selected NPC is the one you clicked in the console before opening this menu; with none, the player. As a voice, pick (the default voice) to hear the NPC's own: the voice of their voice type.", &kHint);
+					Wrapped("The selected NPC is the one clicked in the console before opening this menu, else you. With (the default voice), an NPC speaks in their own voice type's voice.", &kHint);
 					if (const auto voice = Read(g_voiceNote); !voice.empty()) {
 						Wrapped(voice);
 					}

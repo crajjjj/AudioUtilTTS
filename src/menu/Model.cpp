@@ -256,6 +256,11 @@ namespace Core
 				groups.push_back({ place.group, { place.row } });
 			}
 		}
+		// the closed group of settings few people touch goes last on its page
+		for (auto& page : _pages) {
+			std::stable_partition(page.groups.begin(), page.groups.end(),
+				[](const Group& g) { return g.title != kAdvancedGroup; });
+		}
 	}
 
 	Row* Model::Find(std::string_view a_key)

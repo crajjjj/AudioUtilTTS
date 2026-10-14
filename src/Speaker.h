@@ -163,6 +163,26 @@ namespace Speaker
 	int  VoiceCount();  // voices in the default model, 0 while it is not loaded
 
 	std::string Status();         // one line, for the console
+
+	// The few facts the in-game menu's Status page shows, as values. It counts
+	// the files of the dialogue cache: call it off the game and render threads.
+	struct Summary
+	{
+		std::string   notReady;              // why nothing can be spoken; "" = something can
+		bool          switchedOff = false;   // speech is switched off for the session
+		std::string   defaultModel;          // the [model] dir while it is loaded, else ""
+		int           defaultVoices = 0;
+		std::string   noDefaultWhy;          // why it is not loaded, when it is not
+		int           modelsLoaded = 0;
+		int           modelsInstalled = 0;
+		std::string   dialogue;              // "on", or why it is off
+		std::uint32_t given = 0;             // this session: responses given a voice
+		std::uint32_t unvoiced = 0;          // left unvoiced
+		std::uint32_t late = 0;              // spoken late
+		std::size_t   cacheLines = 0;
+		double        cacheMb = 0.0;
+	};
+	Summary GetSummary();
 	std::string Channel();        // the AudioUtil channel narration plays on
 	std::string SpeechChannel();  // the AudioUtil channel character speech plays on
 }
