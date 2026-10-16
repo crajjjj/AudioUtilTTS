@@ -83,7 +83,7 @@ namespace Config
 		int         maxLoaded = 4;
 		// keep_loaded: Normalize(folder name)s never unloaded to make room (the
 		// default model never is anyway): for a model many voices share, such as
-		// a Pocket model. They count against max_loaded like any other.
+		// a Pocket model. max_loaded counts the other models only.
 		std::vector<std::string> keepLoaded{ "pocket-tts" };
 
 		// [voice]

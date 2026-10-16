@@ -33,26 +33,26 @@ lexicon = ""
 lang = ""
 # Loading a model takes about 1 second; a line whose model is not in memory
 # is delayed by that.
-# How many models may be in memory at once, the default one included (1 to 32).
-# A preset or a voice type can name another model; it is loaded the first time a
-# line asks for it and kept. Past this limit the least recently used one is
-# unloaded (never the default).
+# How many models besides the default one and those in keep_loaded below may
+# be in memory at once (1 to 32). A preset or a voice type can name another
+# model; it is loaded the first time a line asks for it and kept. Past this
+# limit the least recently used one is unloaded; the default model and the kept
+# ones never are, and they do not count.
 # RAM: a model takes memory only while it is loaded; an installed model that no
 # line has asked for takes none. Measured per loaded model: a Kokoro model (the
 # default one, or a fine-tuned voice of the same size) 450 to 500 MB after its
-# first lines and about 625 MB once settled; a Piper voice about 350 MB. With
-# Kokoro models this setting therefore allows up to about 0.6 GB times its
-# value: 4 = 2.5 GB, 6 = 3.8 GB, 10 = 6.3 GB.
+# first lines and about 625 MB once settled; a Piper voice about 350 MB; a
+# Pocket model about 600 MB. So the memory is about 0.6 GB for each of: this
+# value, the default model, each kept model. 4 with the default model and a
+# Pocket model = 6 models = about 3.7 GB.
 # With one model per voice type, raise this to the number of voices a busy
 # scene mixes, or loading and unloading will delay lines.
 max_loaded = 4
 # Models never unloaded to make room, by folder name, comma separated. For a
 # model that many voices share, such as a Pocket model, which would otherwise
 # be unloaded and loaded again (about a second) whenever other voices crowd it
-# out. They count against max_loaded; the default model never needs listing.
-# When max_loaded is used up by the default model and the kept ones, any other
-# model is turned away (its lines use the default voice, dialogue in it stays
-# unvoiced) and the log says so: raise max_loaded then.
+# out. They do not count against max_loaded; the default model never needs
+# listing.
 keep_loaded = "pocket-tts"
 
 [voice]

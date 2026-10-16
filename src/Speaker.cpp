@@ -332,11 +332,8 @@ namespace Speaker
 			std::uint64_t                     lastUsed = 0;
 		};
 		std::unordered_map<std::string, LoadedModel> g_models;     // keyed by normalized folder name
-		std::unordered_set<std::string>              g_badModels;  // failed to load, or turned away for a full max_loaded: not retried until a reload or g_retryModels
+		std::unordered_set<std::string>              g_badModels;  // failed to load: not retried until a reload
 		std::uint64_t                                g_useClock = 0;
-		// set by ApplyConfig when max_loaded or keep_loaded changed: there may be
-		// room now, so the models turned away are tried again on their next line
-		std::atomic<bool> g_retryModels{ false };
 
 		// ---------------------------------------------------------------- AudioUtil
 
@@ -1257,9 +1254,6 @@ namespace Speaker
 			bool& a_fellBack)
 		{
 			a_fellBack = false;
-			if (g_retryModels.exchange(false)) {
-				g_badModels.clear();  // ApplyConfig cleared g_unusableModels already
-			}
 			const auto defaultKey = Config::Normalize(a_settings.model);
 			const auto key = a_wanted.empty() ? defaultKey : a_wanted;
 			const auto use = [](const std::string& a_key) -> const TtsEngine::Model* {
@@ -1291,13 +1285,18 @@ namespace Speaker
 					hasDefault ? "Narration and character lines asking for it use the default model; dialogue "
 								 "lines in that voice stay unvoiced." :
 								 "Lines asking for it are not spoken: there is no default model to fall back on.";
-				// make room first; the default model and the kept ones always stay
+				// Make room first. max_loaded counts the models that come and go:
+				// the default model and the kept ones ([model] keep_loaded) sit
+				// outside it and are never unloaded, so a kept one needs no room.
 				const auto kept = [&](const std::string& a_key) {
 					return a_key == defaultKey || std::find(a_settings.keepLoaded.begin(), a_settings.keepLoaded.end(),
 												a_key) != a_settings.keepLoaded.end();
 				};
-				bool full = false;  // max_loaded is used up by models that are never unloaded
-				while (!full && static_cast<int>(g_models.size()) >= a_settings.maxLoaded) {
+				const auto rotating = [&] {
+					return static_cast<int>(std::count_if(g_models.begin(), g_models.end(),
+						[&](const auto& a_entry) { return !kept(a_entry.first); }));
+				};
+				while (!kept(key) && rotating() >= a_settings.maxLoaded) {
 					auto oldest = g_models.end();
 					for (auto it = g_models.begin(); it != g_models.end(); ++it) {
 						if (!kept(it->first) &&
@@ -1306,39 +1305,25 @@ namespace Speaker
 						}
 					}
 					if (oldest == g_models.end()) {
-						full = true;
-					} else {
-						logger::info("Model '{}' unloaded to make room for '{}'", oldest->first, key);
-						g_models.erase(oldest);
+						break;  // cannot happen: rotating() >= max_loaded >= 1
 					}
+					logger::info("Model '{}' unloaded to make room for '{}'", oldest->first, key);
+					g_models.erase(oldest);
 				}
-				if (full) {
-					// the cap is the user's: it is not exceeded, the model is turned
-					// away with the way out named
-					std::string holders;
-					for (const auto& [loaded, state] : g_models) {
-						holders += (holders.empty() ? "" : ", ") + loaded;
-					}
-					logger::warn("Model '{}' not loaded: [model] max_loaded = {} is used up by models that are never "
-								 "unloaded ({}). Raise max_loaded, or take one out of [model] keep_loaded. {}",
-						key, a_settings.maxLoaded, holders, consequence);
-					markBad();
-				} else {
-					std::string error;
-					if (auto model = LoadModel(key, a_settings, false, error)) {
-						const auto* raw = model.get();
-						g_models[key] = LoadedModel{ std::move(model), ++g_useClock };
-						g_modelsLoaded.store(static_cast<int>(g_models.size()));
-						return raw;
-					}
-					if (ModelStampFor(key) == 0) {
-						logger::warn("Model '{}' not loaded: {}. {}", key, error, consequence);
-					} else {
-						logger::error("Model '{}' not loaded: {}. {}", key, error, consequence);
-					}
-					markBad();
+				std::string error;
+				if (auto model = LoadModel(key, a_settings, false, error)) {
+					const auto* raw = model.get();
+					g_models[key] = LoadedModel{ std::move(model), ++g_useClock };
 					g_modelsLoaded.store(static_cast<int>(g_models.size()));
+					return raw;
 				}
+				if (ModelStampFor(key) == 0) {
+					logger::warn("Model '{}' not loaded: {}. {}", key, error, consequence);
+				} else {
+					logger::error("Model '{}' not loaded: {}. {}", key, error, consequence);
+				}
+				markBad();
+				g_modelsLoaded.store(static_cast<int>(g_models.size()));
 			}
 			a_fellBack = key != defaultKey;
 			return use(defaultKey);
@@ -2977,15 +2962,7 @@ namespace Speaker
 			Rebuild();
 			return ApplyResult::kReloaded;
 		}
-		// room may have been made: a model turned away for a full max_loaded
-		// is tried again on its next line (the worker drops its own mark when
-		// it sees the flag; the door's mark goes here)
-		const bool room = before->maxLoaded != after->maxLoaded || before->keepLoaded != after->keepLoaded;
 		std::scoped_lock lock{ g_lock };
-		if (room) {
-			g_unusableModels.clear();
-			g_retryModels.store(true);
-		}
 		// a preset that was missing may be there now, and a reason logged once
 		// may hold no more
 		g_unknownPresets.clear();
