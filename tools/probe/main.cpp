@@ -1,5 +1,6 @@
 // Offline check of the speech core, no game needed.
 //   probe <model dir> "text" [voice] [out.wav] [threads] [output rate]
+// voice is a number, or on a Pocket model the name of one of its recordings.
 // Loads the model through the same TtsEngine the plugin uses, speaks one line
 // and writes it as a wav, printing how long each step took. Beside the wav it
 // writes the mouth animation the plugin would hand the game for that line
@@ -13,6 +14,7 @@
 // Speaks a whole list with the model loaded once. The list is UTF-8, one line
 // each: a file name, a tab, the text. Writes <out dir>\<file name>.wav and
 // .lip. A line whose wav is already there is skipped, so a stopped run resumes.
+#include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -36,6 +38,22 @@ namespace
 		}
 	}
 
+	// the voice argument: a number, or on a Pocket model a recording's name; -1 = no such recording
+	int VoiceArg(const TtsEngine::Model& a_model, const char* a_arg)
+	{
+		if (!a_arg || !*a_arg) {
+			return 0;
+		}
+		if (std::isdigit(static_cast<unsigned char>(a_arg[0]))) {
+			return std::atoi(a_arg);
+		}
+		const int voice = a_model.VoiceIndex(a_arg);
+		if (voice < 0) {
+			std::printf("no recording '%s' in the model (voices\\%s.wav)\n", a_arg, a_arg);
+		}
+		return voice;
+	}
+
 	int Batch(int argc, char** argv)
 	{
 		namespace fs = std::filesystem;
@@ -44,7 +62,7 @@ namespace
 		TtsEngine::ModelSpec spec;
 		spec.dir = argv[2];
 		const fs::path outDir = argv[4];
-		const int      voice = argc > 5 ? std::atoi(argv[5]) : 0;
+		const char*    voiceArg = argc > 5 ? argv[5] : "0";
 		spec.threads = argc > 6 ? std::atoi(argv[6]) : 2;
 		const int   outputRate = argc > 7 ? std::atoi(argv[7]) : 0;
 		const float strength = argc > 8 ? static_cast<float>(std::atof(argv[8])) : 0.8f;
@@ -61,6 +79,10 @@ namespace
 		const auto  model = TtsEngine::Model::Load(spec, error);
 		if (!model) {
 			std::printf("load failed: %s\n", error.c_str());
+			return 1;
+		}
+		const int voice = VoiceArg(*model, voiceArg);
+		if (voice < 0) {
 			return 1;
 		}
 		std::printf("sherpa-onnx %s, %s, %d voices, %d Hz, voice %d, %d threads\n", TtsEngine::RuntimeVersion().c_str(),
@@ -157,7 +179,7 @@ int main(int argc, char** argv)
 	TtsEngine::ModelSpec spec;
 	spec.dir = argv[1];
 	const std::string text = argv[2];
-	const int         voice = argc > 3 ? std::atoi(argv[3]) : 0;
+	const char*       voiceArg = argc > 3 ? argv[3] : "0";
 	const std::string out = argc > 4 ? argv[4] : "probe.wav";
 	spec.threads = argc > 5 ? std::atoi(argv[5]) : 2;
 	const int outputRate = argc > 6 ? std::atoi(argv[6]) : 0;
@@ -177,6 +199,10 @@ int main(int argc, char** argv)
 		TtsEngine::RuntimeVersion().c_str(), model->Family().c_str(), model->VoiceCount(), model->SampleRate(), ms(t0, t1),
 		static_cast<unsigned long long>(TtsEngine::ModelStamp(spec.dir)));
 	PrintVoiceNames(*model);
+	const int voice = VoiceArg(*model, voiceArg);
+	if (voice < 0) {
+		return 1;
+	}
 
 	TtsEngine::Audio audio;
 	const auto       result = model->Synthesize(text, voice, 1.0f, {}, audio, error);

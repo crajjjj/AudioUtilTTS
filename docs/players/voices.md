@@ -18,10 +18,11 @@ A voice type finds its voice in this order; the first that answers wins:
 
 1. its line in `[voicetype]`, naming a preset
 2. a preset of `AudioUtilTTS.toml` named exactly like the voice type
-3. a [voice type patch](#voice-type-patches) that names an installed model
+3. a [voice type patch](#voice-type-patches) that names an installed voice
 4. a model that lists the voice type in its own [`model.toml`](models.md#models-that-bring-their-own-voice-types)
 5. a model folder named exactly like the voice type (its first voice)
-6. the preset `female` or `male` by sex, only with `[dialogue] fallback = true`
+6. a [fill-in voice](#fill-in-voices), from a patch, then from a `model.toml`
+7. the preset `female` or `male` by sex, only with `[dialogue] fallback = true`
 
 ```toml
 [voicetype]
@@ -57,9 +58,12 @@ GorrVoice = "MaleBrute"
 
 # when the model holds several voices, or the voice needs its own speed or volume
 RumarinVoice = { model = "my-voices", voice = 3, speed = 1.0, volume = 1.0 }
+
+# on a Pocket model, a recording by its name
+OrcVoice = { model = "pocket-tts", voice = "gruff" }
 ```
 
-- **Patches add up.** Every file in that folder is read, in name order. When two name the same voice type, the later one wins, unless its voice is not installed and the earlier one's is.
+- **Patches add up.** Every file in that folder is read, in name order. When two name the same voice type, the later one wins, unless its voice is not installed and the earlier one's is, or it is a [fill-in](#fill-in-voices) and the earlier one is not.
 - **A voice that is not installed is skipped**, and the lookup goes on. `AudioUtilTTS.log` names such voices at game start, one line per patch.
 - **Your own config wins**: `[voicetype]` and the presets of `AudioUtilTTS.toml` are asked first.
 - **Read at game start and on `autts reload`.** Under Mod Organizer 2, a file added while the game runs is not seen until the next start.
@@ -73,9 +77,18 @@ HjoromirVoice = "MaleYoungEager"
 
 Run `autts reload`, then `autts voice` again: it now says `model 'maleyoungeager' by the patch MyPatch.toml`.
 
+### Fill-in voices
+
+A voice archive can offer stand-in voices for many voice types at once, for example one [Pocket](models.md#pocket-voices) recording for each voice type you have no trained voice for. Those are **fill-in voices**: they speak only for a voice type nothing else gives a voice, so a voice archive named after a voice type, a patch or a line of your own always wins, also one you install later.
+
+- A patch or a `model.toml` marks its voices as fill-ins with `fill_in = true` at its top; a patch can also mark single lines, `{ model = "pocket-tts", voice = "gruff", fill_in = true }`.
+- Among files that name one voice type, a voice meant for it beats a fill-in whatever the file order.
+- `[general] fill_in_voices = false` switches every fill-in voice off.
+- `autts voice` answers `fill-in model '...' by the patch ...` or `fill-in listed by model '...'` for an NPC who gets one.
+
 ### Finding out who gets which voice
 
-Click an NPC in the console and run `autts voice`. It shows their voice type, the voice it leads to and why: `preset '...'`, `model '...' by the patch ...`, `listed by model ...`, `model folder ...`, `preset 'female' by sex` or `never spoken for`. It also says when that voice cannot speak, and why. `autts sayactor "Some text"` lets you hear it. With nothing selected, both act on the player.
+Click an NPC in the console and run `autts voice`. It shows their voice type, the voice it leads to and why: `preset '...'`, `model '...' by the patch ...`, `listed by model ...`, `model folder ...`, `fill-in ...`, `preset 'female' by sex` or `never spoken for`. It also says when that voice cannot speak, and why. `autts sayactor "Some text"` lets you hear it. With nothing selected, both act on the player.
 
 ### What happens with no voice set up
 
@@ -97,9 +110,14 @@ voice = 2
 [preset.fast]
 model = "vits-piper-en_US-lessac-medium"
 speed = 1.1
+
+[preset.gruff]
+model = "pocket-tts"
+voice = "gruff"            # a Pocket model's recording, by name
 ```
 
 - **What a preset leaves out comes from `[model]` and `[voice]`.** A preset on another model that names no voice uses that model's first one.
+- **On a Pocket model, `voice` is a recording's name**, the file name without `.wav`; see [Pocket voices](models.md#pocket-voices).
 - **The shipped config has four**: `narrator`, `female`, `male` and `whisper`, all on the default model.
 - **An unknown name falls back to the default voice**, so a mod can ask for a role without knowing what you have. The log notes the name once.
 - **A preset on another model** loads that model the first time a line asks for it, about a second; see [Voice Models](models.md#how-many-fit-in-memory).

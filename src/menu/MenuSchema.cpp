@@ -70,6 +70,13 @@ namespace Core
 			return a_spec;
 		}
 
+		// shown on another page than the one its table is edited on
+		SettingSpec OnPage(SettingSpec a_spec, std::string a_page)
+		{
+			a_spec.page = std::move(a_page);
+			return a_spec;
+		}
+
 		// a preset key the menu offers in every [preset.<name>] table
 		SettingSpec EveryPreset(SettingSpec a_spec, std::string a_inherit, std::optional<Scalar> a_fallback = std::nullopt)
 		{
@@ -120,6 +127,9 @@ namespace Core
 					Applies::Restart),
 
 				// ---------------------------------------------------------- Voice types
+				OnPage(S("general.fill_in_voices", "Fill-in voices", "Use fill-in voices", Control::Flag,
+						   "Voices a voice archive offers for the voice types nothing else has a voice for. They never take a voice type from a voice you install for it."),
+					"Voice types"),
 				S("voicetype.*", "Lines in your file", "*", Control::Text,
 					"The preset that speaks for the voice type *. Empty = never spoken for."),
 
@@ -128,7 +138,7 @@ namespace Core
 							 "Master switch. Off loads no voice model and speaks nothing."),
 					Applies::Reload),
 				AtLeast(S("voice.voice", "Default voice", "Voice number", Control::Int,
-							"Voice number inside the default model. kokoro-en-v0_19: 0 af, 1 af_bella, 2 af_nicole (whispered), 3 af_sarah, 4 af_sky, 5 am_adam, 6 am_michael, 7 bf_emma, 8 bf_isabella, 9 bm_george, 10 bm_lewis. Try one on the Status page."),
+							"Voice number inside the default model. kokoro-en-v0_19: 0 af, 1 af_bella, 2 af_nicole (whispered), 3 af_sarah, 4 af_sky, 5 am_adam, 6 am_michael, 7 bf_emma, 8 bf_isabella, 9 bm_george, 10 bm_lewis. Try one on the Status page. For a Pocket model, the name of one of its recordings, set in the file."),
 					0),
 				Range(S("voice.speed", "Default voice", "Speed", Control::Float, "1.0 is the model's natural pace."), 0.5, 2.0),
 				Range(S("voice.volume", "Default voice", "Volume", Control::Float, "Before AudioUtil's group volume."), 0.0, 1.0),
@@ -155,7 +165,7 @@ namespace Core
 								"Empty = the default model."),
 					{}, Scalar{ std::string{} }),
 				EveryPreset(AtLeast(S("preset.*.voice", "Preset *", "Voice number", Control::Int,
-										"Voice number inside the preset's model."),
+										"Voice number inside the preset's model. For a Pocket model, the name of one of its recordings, set in the file."),
 								0),
 					"voice.voice"),
 				EveryPreset(Range(S("preset.*.speed", "Preset *", "Speed", Control::Float, "1.0 is the model's natural pace."), 0.5, 2.0),

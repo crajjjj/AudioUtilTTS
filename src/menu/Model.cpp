@@ -158,7 +158,7 @@ namespace Core
 
 			Placed place;
 			place.row = _rows.size();
-			place.page = _schema->PageOf(a_section);
+			place.page = spec && !spec->page.empty() ? _schema->PageTitled(spec->page) : _schema->PageOf(a_section);
 			place.rank = !spec ? 2 : (matched.empty() ? 0 : 1);
 			place.spec = specAt;
 			place.table = tableAt(a_section);

@@ -86,6 +86,16 @@ namespace Core
 		return nullptr;
 	}
 
+	int Schema::PageTitled(std::string_view a_title) const
+	{
+		for (std::size_t i = 0; i < _pages.size(); ++i) {
+			if (_pages[i].title == a_title) {
+				return static_cast<int>(i);
+			}
+		}
+		return -1;
+	}
+
 	int Schema::PageOf(std::string_view a_section) const
 	{
 		for (std::size_t i = 0; i < _pages.size(); ++i) {

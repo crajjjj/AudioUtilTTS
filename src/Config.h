@@ -25,27 +25,44 @@ namespace Config
 	// Such a preset is for lines that ask for it by name. It does not speak for
 	// a voice type by being named like one (Speaker's VoiceForType): that is
 	// what a voice type patch is for.
+	//
+	// "voice" is a number, or in quotes the name of one of a Pocket model's
+	// recordings (voices\<name>.wav, see TtsEngine::Clip): that one is `clip`
+	// here, and it counts over `voice`.
 	struct Preset
 	{
 		std::string model;           // "" = the [model] dir
 		int         voice = -1;      // < 0 = not set
+		std::string clip;            // a recording's name, "" = not set
 		float       speed = 0.0f;    // <= 0 = not set
 		float       volume = -1.0f;  // < 0 = not set
 		std::string source;          // the preset file it comes from, "" = AudioUtilTTS.toml
 	};
 
 	// The voice a model offers for one voice type, from models\<folder>\model.toml:
+	//   fill_in = false   # optional, see below
 	//   [voicetype]
 	//   MaleNord = 0      # voice type editor ID = voice number inside this model
+	//   MaleOrc = "gruff" # or the name of one of a Pocket model's recordings
 	//   [voice]           # optional, for every voice type the file lists
 	//   speed = 1.0
 	//   volume = 1.0
 	// The file travels with the model, so a model can be installed, updated and
 	// removed on its own, with no line in AudioUtilTTS.toml.
+	//
+	// A fill-in voice (fill_in = true) is offered for voice types that nothing
+	// else gives a voice: it ranks below every other way a voice type finds its
+	// voice, a model folder named like the voice type included, so that a set of
+	// stand-in voices for the voice types a user has no trained voice for never
+	// takes a voice type away from a trained voice they add later. Among the
+	// files that name one voice type, one meant for it beats a fill-in whatever
+	// the file order. Settings::fillInVoices switches them off as a whole.
 	struct ModelVoice
 	{
 		std::string model;           // Normalize(folder name)
 		int         voice = 0;
+		std::string clip;            // a recording's name; counts over voice when set
+		bool        fillIn = false;
 		float       speed = 0.0f;    // <= 0 = not set
 		float       volume = -1.0f;  // < 0 = not set
 		std::string source;          // the patch file that says so, "" for a model.toml
@@ -55,6 +72,7 @@ namespace Config
 	{
 		// [general]
 		bool enable = true;
+		bool fillInVoices = true;  // fill_in_voices: use the fill-in voices (see ModelVoice)
 
 		// [model]
 		std::string model = "kokoro-en-v0_19";  // folder under ...\AudioUtilTTS\models
@@ -65,8 +83,9 @@ namespace Config
 		int         maxLoaded = 4;
 
 		// [voice]
-		int   voice = 7;
-		float speed = 1.0f;
+		int         voice = 7;
+		std::string voiceClip;  // voice given as a recording's name (Pocket); counts over voice when set
+		float       speed = 1.0f;
 		float volume = 1.0f;
 
 		// [playback]
@@ -109,10 +128,13 @@ namespace Config
 		// file of its own, so the voice types of a mod can be given voices by
 		// dropping one in, and several patches add up (in file name order; a
 		// voice type two of them name goes to the later one):
+		//   fill_in = false                                   # optional, for the whole file
 		//   [voicetype]
 		//   HjoromirVoice = "MaleYoungEager"                  # the model folder
-		//   RumarinVoice = { model = "my-voices", voice = 3 }  # speed, volume too
-		// Asked after the two maps above and before the model.toml files.
+		//   RumarinVoice = { model = "my-voices", voice = 3 }  # speed, volume, fill_in too
+		//   OrcVoice = { model = "pocket-tts", voice = "gruff" }  # a recording by name
+		// Asked after the two maps above and before the model.toml files; a
+		// fill-in entry (see ModelVoice) after everything else.
 		std::unordered_map<std::string, ModelVoice> patchVoiceTypes;
 
 		// The model.toml files: Normalize(voice type editor ID) -> the voice a

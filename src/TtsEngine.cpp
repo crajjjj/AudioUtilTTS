@@ -179,9 +179,34 @@ namespace TtsEngine
 			return Narrow(parts.front().filename());
 		}
 
-		std::vector<fs::path> ClipsIn(const fs::path& a_dir)
+		// Size and write time of one file as a number, 0 when it cannot be read.
+		std::uint64_t FileStamp(const fs::path& a_file)
 		{
-			return FilesIn(a_dir / "voices", [](const std::string& a_name) { return a_name.ends_with(".wav"); });
+			std::error_code ec;
+			const auto      size = fs::file_size(a_file, ec);
+			if (ec) {
+				return 0;
+			}
+			std::uint64_t stamp = 0xCBF29CE484222325ull;
+			const auto    mix = [&](std::uint64_t a_v) {
+				stamp ^= a_v;
+				stamp *= 0x100000001B3ull;
+			};
+			mix(size);
+			if (const auto written = fs::last_write_time(a_file, ec); !ec) {
+				mix(static_cast<std::uint64_t>(written.time_since_epoch().count()));
+			}
+			return stamp ? stamp : 1;
+		}
+
+		// a_name with a trailing ".wav" (any case) taken off
+		std::string WithoutWav(std::string_view a_name)
+		{
+			std::string name(a_name);
+			if (name.size() > 4 && Lower(name.substr(name.size() - 4)) == ".wav") {
+				name.resize(name.size() - 4);
+			}
+			return name;
 		}
 
 		// A recording to speak like: any plain wav, PCM of 8 to 32 bits or 32-bit
@@ -308,9 +333,8 @@ namespace TtsEngine
 
 		struct PocketFiles
 		{
-			std::string           lmFlow, lmMain, encoder, decoder, textConditioner, vocab, scores;
-			std::vector<fs::path> clips;
-			std::vector<std::string> names;
+			std::string       lmFlow, lmMain, encoder, decoder, textConditioner, vocab, scores;
+			std::vector<Clip> clips;
 		};
 
 		bool FindPocketFiles(const ModelSpec& a_spec, const fs::path& a_dir, PocketFiles& a_out, std::string& a_error)
@@ -338,7 +362,7 @@ namespace TtsEngine
 				}
 				*path = Join(a_spec.dir, name);
 			}
-			a_out.clips = ClipsIn(a_dir);
+			a_out.clips = Clips(a_spec.dir);
 			if (a_out.clips.empty()) {
 				a_error = "no voice in " + a_spec.dir + "\\voices: a Pocket model speaks like the .wav recordings there";
 				return false;
@@ -346,14 +370,12 @@ namespace TtsEngine
 			// every clip is read once here: a bad one fails the load instead of a
 			// line, and is never skipped, which would renumber the voices after it
 			for (const auto& clip : a_out.clips) {
-				auto        name = Narrow(clip.stem());
 				Audio       audio;
 				std::string why;
-				if (!ReadClip(clip, CLIP_SECONDS, audio, why)) {
-					a_error = "voice clip voices\\" + Narrow(clip.filename()) + ": " + why;
+				if (!ReadClip(clip.path, CLIP_SECONDS, audio, why)) {
+					a_error = "voice clip voices\\" + Narrow(clip.path.filename()) + ": " + why;
 					return false;
 				}
-				a_out.names.push_back(std::move(name));
 			}
 			return true;
 		}
@@ -468,7 +490,9 @@ namespace TtsEngine
 		if (family == "pocket") {
 			loaded->_voices = static_cast<int>(pocket.clips.size());
 			loaded->_clips = std::move(pocket.clips);
-			loaded->_voiceNames = std::move(pocket.names);
+			for (const auto& clip : loaded->_clips) {
+				loaded->_voiceNames.push_back(clip.name);
+			}
 		} else {
 			loaded->_voices = SherpaOnnxOfflineTtsNumSpeakers(tts);
 		}
@@ -480,6 +504,30 @@ namespace TtsEngine
 		if (_tts) {
 			SherpaOnnxDestroyOfflineTts(_tts);
 		}
+	}
+
+	int Model::VoiceIndex(std::string_view a_name) const
+	{
+		const auto wanted = Lower(WithoutWav(a_name));
+		for (std::size_t i = 0; i < _clips.size(); ++i) {
+			if (Lower(_clips[i].name) == wanted) {
+				return static_cast<int>(i);
+			}
+		}
+		return -1;
+	}
+
+	std::vector<Clip> Clips(const std::string& a_dir)
+	{
+		std::vector<Clip> clips;
+		for (auto& path : FilesIn(U8(a_dir) / "voices", [](const std::string& a_name) { return a_name.ends_with(".wav"); })) {
+			Clip clip;
+			clip.name = Narrow(path.stem());
+			clip.stamp = FileStamp(path);
+			clip.path = std::move(path);
+			clips.push_back(std::move(clip));
+		}
+		return clips;
 	}
 
 	std::string RuntimeVersion()
@@ -502,9 +550,10 @@ namespace TtsEngine
 			// the clip of the voice used last stays read: lines mostly come in runs
 			if (_clipVoice != gen.sid) {
 				_clipVoice = -1;
+				const auto& clip = _clips[static_cast<std::size_t>(gen.sid)];
 				std::string why;
-				if (!ReadClip(_clips[static_cast<std::size_t>(gen.sid)], CLIP_SECONDS, _clip, why)) {
-					a_error = "voice clip voices\\" + Narrow(_clips[static_cast<std::size_t>(gen.sid)].filename()) + ": " + why;
+				if (!ReadClip(clip.path, CLIP_SECONDS, _clip, why)) {
+					a_error = "voice clip voices\\" + Narrow(clip.path.filename()) + ": " + why;
 					return Result::Failed;
 				}
 				_clipVoice = gen.sid;
@@ -747,10 +796,12 @@ namespace TtsEngine
 		for (const auto& name : { modelName, std::string("voices.bin") }) {
 			file(dir / U8(name));
 		}
-		// and a Pocket model's clips, names included: voice numbers follow their order
-		for (const auto& clip : ClipsIn(dir)) {
-			if (file(clip)) {
-				mix(Hash64(Lower(Narrow(clip.filename()))));
+		// the other parts of a Pocket model (behind the two above, so that a
+		// one-file model keeps the stamp it has had); its recordings are not in
+		// it, see Clip
+		for (const auto& part : FilesIn(dir, [](const std::string& a_name) { return a_name.ends_with(".onnx"); })) {
+			if (Narrow(part.filename()) != modelName) {
+				file(part);
 			}
 		}
 		return stamp ? stamp : 1;

@@ -6,6 +6,12 @@
 # Master switch. false also skips loading any model (the default one settles at
 # about 625 MB of memory).
 enable = true
+# Fill-in voices: a voice archive can offer voices for the voice types that
+# nothing else gives a voice (fill_in = true in its model.toml or voice type
+# patch). They rank below every other way a voice type finds its voice, a voice
+# archive named after the voice type included, so a voice you install for a
+# voice type later takes over by itself. false = fill-in voices are not used.
+fill_in_voices = true
 
 [model]
 # The default model: a folder under Data\SKSE\Plugins\AudioUtilTTS\models\.
@@ -47,6 +53,8 @@ max_loaded = 4
 #   0 af          1 af_bella     2 af_nicole    3 af_sarah    4 af_sky
 #   5 am_adam     6 am_michael   7 bf_emma      8 bf_isabella 9 bm_george
 #   10 bm_lewis
+# For a Pocket model, the name of one of its recordings in quotes: "gruff" for
+# models\<dir>\voices\gruff.wav.
 voice = 7
 # 1.0 = the model's natural pace (0.5 to 2.0).
 speed = 1.0
@@ -87,6 +95,13 @@ voice = 2    # af_nicole
 # [preset.fast]
 # model = "vits-piper-en_US-lessac-medium"
 # speed = 1.1
+#
+# On a Pocket model a voice is one of the model's recordings, named by its
+# file name without ".wav" (speed does not apply to those):
+#
+# [preset.gruff]
+# model = "pocket-tts"
+# voice = "gruff"        # models\pocket-tts\voices\gruff.wav
 
 # Character speech: a line spoken by an actor, positioned at them, with their
 # mouth moving (AudioUtilTTS.SpeakActorFrom, or the actor sending
@@ -215,7 +230,8 @@ cache_max_mb = 1024
 #   4. a model that lists the voice type in its own model.toml (see below)
 #   5. a model folder named exactly like the voice type, models\MaleNord
 #      (its first voice), with no line here at all
-#   6. the preset "female" or "male" by sex, only when [dialogue] fallback is on
+#   6. a fill-in voice (see below), unless [general] fill_in_voices is off
+#   7. the preset "female" or "male" by sex, only when [dialogue] fallback is on
 # The ID is the voice type's editor ID as xEdit shows it; case is ignored.
 # "autts voice" in the console shows which voice the selected actor gets.
 # An empty preset name means that voice type is never spoken for.
@@ -226,19 +242,29 @@ cache_max_mb = 1024
 #   [voicetype]
 #   HjoromirVoice = "MaleYoungEager"     # voice type ID = the model folder
 #   RumarinVoice = { model = "my-voices", voice = 3 }   # speed, volume too
-# Several patches add up, and an entry whose model is not installed is skipped.
+#   OrcVoice = { model = "pocket-tts", voice = "gruff" }   # a recording by name
+# Several patches add up, and an entry whose voice is not installed is skipped.
 #
 # A model can bring its own list, so that installing the model is all it takes:
 # a file models\<folder>\model.toml inside the model's folder,
 #   [voicetype]
 #   MaleNord = 0             # voice type ID = voice number inside that model
 #   MaleNordCommander = 0
+#   MaleOrc = "gruff"        # or, on a Pocket model, a recording by name
 #   [voice]                  # optional, for every voice type the file lists
 #   speed = 1.0
 #   volume = 1.0
 # Lines 1 and 2 here win over it, so a model's choice can always be overruled
 # or silenced from this file. When two models list the same voice type, the
 # one later in folder name order is used and the log says so.
+#
+# Fill-in voices: a patch or a model.toml that starts with
+#   fill_in = true
+# offers its voices only for the voice types nothing else gives a voice (step
+# 6): a set of stand-in voices for the voice types you have no trained voice
+# for, which a voice you install later takes over from by itself. A voice meant
+# for a voice type beats a fill-in whatever the file order. [general]
+# fill_in_voices = false switches them all off.
 [voicetype]
 # MaleNord = "malenord"
 # FemaleEvenToned = "eventoned"

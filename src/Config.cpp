@@ -2,6 +2,7 @@
 
 #include "TtsEngine.h"
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -54,9 +55,111 @@ namespace Config
 			return false;
 		}
 
+		// What is installed, as far as asked, by Normalize(folder name): whether a
+		// model folder holds a model (the same test a spoken line meets later,
+		// TtsEngine::ModelStamp) and, for a Pocket model, its recordings. Used for
+		// the notes in the log, and so that a voice nobody installed does not take
+		// the place of one that is there.
+		struct Installed
+		{
+			std::unordered_map<std::string, bool>                          models;
+			std::unordered_map<std::string, std::vector<TtsEngine::Clip>> clips;
+		};
+
+		bool ModelInstalled(const std::string& a_folder, Installed& a_known)
+		{
+			if (const auto it = a_known.models.find(a_folder); it != a_known.models.end()) {
+				return it->second;
+			}
+			const bool found = IsFolderName(a_folder) && TtsEngine::ModelStamp(std::string(MODELS_DIR) + a_folder) != 0;
+			a_known.models.emplace(a_folder, found);
+			return found;
+		}
+
+		// Is this voice of the model there: the model, and for a recording given
+		// by name (or by a number on a Pocket model) the recording too.
+		bool VoiceInstalled(const std::string& a_folder, int a_number, const std::string& a_clip, Installed& a_known)
+		{
+			if (!ModelInstalled(a_folder, a_known)) {
+				return false;
+			}
+			auto it = a_known.clips.find(a_folder);
+			if (it == a_known.clips.end()) {
+				it = a_known.clips.emplace(a_folder, TtsEngine::Clips(std::string(MODELS_DIR) + a_folder)).first;
+			}
+			const auto& clips = it->second;
+			if (!a_clip.empty()) {
+				const auto wanted = Normalize(a_clip);
+				return std::any_of(clips.begin(), clips.end(),
+					[&](const TtsEngine::Clip& a_c) { return Normalize(a_c.name) == wanted; });
+			}
+			return clips.empty() || a_number < static_cast<int>(clips.size());
+		}
+
+		// "voice 3", "recording 'gruff'"
+		std::string VoiceLabel(int a_number, const std::string& a_clip)
+		{
+			return a_clip.empty() ? std::format("voice {}", a_number) : std::format("recording '{}'", a_clip);
+		}
+
+		// A voice as a file gives it: a number (0 or more), or in quotes the name
+		// of a Pocket model's recording. a_label names the line in a warning.
+		// false = neither, and the warning is in the log.
+		bool ReadVoice(const toml::node& a_node, int& a_number, std::string& a_clip, const std::string& a_label)
+		{
+			if (a_node.is_integer()) {
+				if (const auto number = a_node.value<int>(); number && *number >= 0) {
+					a_number = *number;
+					a_clip.clear();
+					return true;
+				}
+			} else if (const auto name = a_node.value<std::string>()) {
+				// as written, but for the whitespace around it and a ".wav"
+				auto clip = *name;
+				clip.erase(0, clip.find_first_not_of(" \t"));
+				clip.erase(clip.find_last_not_of(" \t") + 1);
+				if (clip.size() > 4 && Normalize(clip.substr(clip.size() - 4)) == ".wav") {
+					clip.resize(clip.size() - 4);
+				}
+				if (IsFolderName(clip)) {
+					a_number = -1;
+					a_clip = std::move(clip);
+					return true;
+				}
+			}
+			logger::warn("{} must be a voice number (0 or more) or, in quotes, the name of a recording of a Pocket "
+						 "model; ignored",
+				a_label);
+			return false;
+		}
+
+		// Several files give one voice type a voice: does the one taken already
+		// stay over a_incoming? A voice that is there stays over one nobody
+		// installed; then one meant for the voice type over a fill-in (see
+		// ModelVoice::fillIn); among equals the later file wins, so kNo.
+		enum class Keep
+		{
+			kNo,
+			kInstalled,  // the later one's voice is not installed, the earlier one's is
+			kRank        // the later one is a fill-in, the earlier one is not
+		};
+
+		Keep KeepExisting(const ModelVoice& a_existing, bool a_existingInstalled, const ModelVoice& a_incoming,
+			bool a_incomingInstalled)
+		{
+			if (!a_incomingInstalled && a_existingInstalled) {
+				return Keep::kInstalled;
+			}
+			if (a_incoming.fillIn && !a_existing.fillIn && a_existingInstalled) {
+				return Keep::kRank;
+			}
+			return Keep::kNo;
+		}
+
 		// Reads every models\<folder>\model.toml (see ModelVoice), in folder name
-		// order: a voice type two models list goes to the later one.
-		void LoadModelFiles(Settings& a_settings)
+		// order: a voice type two models list goes to the later one, unless that
+		// one is a fill-in and the earlier one is not.
+		void LoadModelFiles(Settings& a_settings, Installed& a_installed)
 		{
 			namespace fs = std::filesystem;
 			std::map<std::string, fs::path> files;  // by Normalize(folder name)
@@ -87,8 +190,14 @@ namespace Config
 					continue;
 				}
 
+				if (!ModelInstalled(folder, a_installed)) {
+					logger::warn("{} of model '{}': the folder holds no model, ignored", MODEL_FILE, folder);
+					continue;
+				}
+
 				ModelVoice base;
 				base.model = folder;
+				base.fillIn = root["fill_in"].value_or(false);
 				if (const auto* voice = root["voice"].as_table()) {
 					base.speed = SaneSpeed((*voice)["speed"].value_or(base.speed));
 					base.volume = SaneVolume((*voice)["volume"].value_or(base.volume));
@@ -97,29 +206,41 @@ namespace Config
 				std::size_t listed = 0;
 				if (const auto* voiceTypes = root["voicetype"].as_table()) {
 					for (auto&& [name, node] : *voiceTypes) {
-						const auto         key = Normalize(name.str());
-						std::optional<int> number;
-						if (node.is_integer()) {
-							number = node.value<int>();
+						const auto key = Normalize(name.str());
+						const auto label = std::format("{} of model '{}': {}", MODEL_FILE, folder, name.str());
+						auto       voice = base;
+						if (key.empty() || !ReadVoice(node, voice.voice, voice.clip, label)) {
+							continue;
 						}
-						if (key.empty() || !number || *number < 0) {
-							logger::warn("{} of model '{}': {} must be a voice number (0 or more), ignored", MODEL_FILE,
-								folder, name.str());
+						if (!VoiceInstalled(folder, voice.voice, voice.clip, a_installed)) {
+							logger::warn("{}: the model has no {}, ignored", label, VoiceLabel(voice.voice, voice.clip));
 							continue;
 						}
 						if (const auto it = a_settings.modelVoiceTypes.find(key);
 							it != a_settings.modelVoiceTypes.end() && it->second.model != folder) {
-							logger::warn("Voice type {} is listed by model '{}' and by model '{}': '{}' is used. A "
-										 "[voicetype] line in AudioUtilTTS.toml settles it.",
-								name.str(), it->second.model, folder, folder);
+							// both folders hold a model: this loop reads no other
+							if (KeepExisting(it->second, true, voice, true) == Keep::kRank) {
+								logger::info("Voice type {} is listed by model '{}' and, as a fill-in, by model '{}': "
+											 "'{}' is used",
+									name.str(), it->second.model, folder, it->second.model);
+								continue;
+							}
+							if (it->second.fillIn && !voice.fillIn) {
+								logger::info("Voice type {} is listed as a fill-in by model '{}' and by model '{}': '{}' "
+											 "is used",
+									name.str(), it->second.model, folder, folder);
+							} else {
+								logger::warn("Voice type {} is listed by model '{}' and by model '{}': '{}' is used. A "
+											 "[voicetype] line in AudioUtilTTS.toml settles it.",
+									name.str(), it->second.model, folder, folder);
+							}
 						}
-						auto voice = base;
-						voice.voice = *number;
 						a_settings.modelVoiceTypes[key] = std::move(voice);
 						++listed;
 					}
 				}
-				logger::info("Model '{}' lists {} voice types in its {}", folder, listed, MODEL_FILE);
+				logger::info("Model '{}' lists {} voice types in its {}{}", folder, listed, MODEL_FILE,
+					base.fillIn ? ", as fill-in voices" : "");
 			}
 		}
 
@@ -154,23 +275,6 @@ namespace Config
 			return files;
 		}
 
-		// Which model folders hold a model, as far as asked: Normalize(folder name).
-		using InstalledModels = std::unordered_map<std::string, bool>;
-
-		// Is the model a patch or a preset file names installed? The same test a
-		// spoken line meets later (TtsEngine::ModelStamp). Used for the notes in
-		// the log, and so that a voice nobody installed does not take the place
-		// of one that is there.
-		bool ModelInstalled(const std::string& a_folder, InstalledModels& a_known)
-		{
-			if (const auto it = a_known.find(a_folder); it != a_known.end()) {
-				return it->second;
-			}
-			const bool found = IsFolderName(a_folder) && TtsEngine::ModelStamp(std::string(MODELS_DIR) + a_folder) != 0;
-			a_known.emplace(a_folder, found);
-			return found;
-		}
-
 		// "a, b and c", and "a, b, c and 4 more" for a long list
 		std::string Listed(const std::vector<std::string>& a_names)
 		{
@@ -198,15 +302,16 @@ namespace Config
 			return out;
 		}
 
-		// A file a mod drops in is read for one table only. Whatever else its
-		// author put there is named in the log, so that a [voicetype] table in a
-		// preset file, say, is not ignored without a word.
+		// A file a mod drops in is read for one table only (and a_alsoOk, a key
+		// beside it). Whatever else its author put there is named in the log, so
+		// that a [voicetype] table in a preset file, say, is not ignored without a
+		// word.
 		void WarnOtherTables(const toml::table& a_root, std::string_view a_wanted, std::string_view a_what,
-			const std::string& a_name, std::string_view a_hint)
+			const std::string& a_name, std::string_view a_hint, std::string_view a_alsoOk = {})
 		{
 			std::vector<std::string> others;
 			for (auto&& [key, node] : a_root) {
-				if (key.str() != a_wanted) {
+				if (key.str() != a_wanted && (a_alsoOk.empty() || key.str() != a_alsoOk)) {
 					others.emplace_back(key.str());
 				}
 			}
@@ -248,7 +353,9 @@ namespace Config
 			}
 			Preset preset;
 			preset.model = (*table)["model"].value_or(""s);
-			preset.voice = (*table)["voice"].value_or(-1);
+			if (const auto* voice = (*table)["voice"].node()) {
+				ReadVoice(*voice, preset.voice, preset.clip, a_label + " voice");  // left unset when it is neither
+			}
 			preset.speed = SaneSpeed((*table)["speed"].value_or(0.0f));
 			preset.volume = SaneVolume((*table)["volume"].value_or(-1.0f));
 			if (!preset.model.empty() && !IsFolderName(preset.model)) {
@@ -261,17 +368,17 @@ namespace Config
 
 		// Can the preset speak in its own voice? One on the default model always
 		// counts: whether that model is there is not for the config to say.
-		bool PresetInstalled(const Preset& a_preset, InstalledModels& a_installed)
+		bool PresetInstalled(const Preset& a_preset, Installed& a_installed)
 		{
 			const auto model = Normalize(a_preset.model);
-			return model.empty() || ModelInstalled(model, a_installed);
+			return model.empty() || VoiceInstalled(model, a_preset.voice, a_preset.clip, a_installed);
 		}
 
 		// Reads every presets\*.toml (see Preset), in file name order, on top of
 		// the presets of AudioUtilTTS.toml: a name the user's file defines stays
 		// the user's, a name two preset files define goes to the later one, unless
 		// only the earlier one's model is installed.
-		void LoadPresetFiles(Settings& a_settings, InstalledModels& a_installed)
+		void LoadPresetFiles(Settings& a_settings, Installed& a_installed)
 		{
 			for (const auto& [fileKey, file] : TomlFilesIn(PRESET_DIR)) {
 				const auto& [name, path] = file;
@@ -288,9 +395,10 @@ namespace Config
 				}
 
 				std::size_t                        added = 0;
-				std::set<std::string>              seen;       // names this file defined so far
-				std::vector<std::string>           overruled;  // AudioUtilTTS.toml has its own
-				std::map<std::string, std::string> missing;    // models nobody installed, as written
+				std::set<std::string>              seen;           // names this file defined so far
+				std::vector<std::string>           overruled;      // AudioUtilTTS.toml has its own
+				std::map<std::string, std::string> missing;        // models nobody installed, as written
+				std::vector<std::string>           missingVoices;  // voices that installed models do not have
 				for (auto&& [presetName, node] : *presets) {
 					const auto id = Normalize(presetName.str());
 					const auto label = std::format("{}: [preset.{}]", name, presetName.str());
@@ -309,7 +417,10 @@ namespace Config
 						continue;
 					}
 					const bool installed = PresetInstalled(*preset, a_installed);
-					if (!installed) {
+					if (!installed && ModelInstalled(Normalize(preset->model), a_installed)) {
+						missingVoices.push_back(std::format("{} of '{}' ({})", VoiceLabel(preset->voice, preset->clip),
+							preset->model, presetName.str()));
+					} else if (!installed) {
 						missing.emplace(Normalize(preset->model), preset->model);
 					}
 					if (!seen.insert(id).second) {
@@ -338,14 +449,18 @@ namespace Config
 				if (!missing.empty()) {
 					notes += std::format(". Models it names that are not installed: {}", Listed(Values(missing)));
 				}
+				if (!missingVoices.empty()) {
+					notes += std::format(". Voices it names that the model does not have: {}", Listed(missingVoices));
+				}
 				logger::info("Preset file {}: {} new preset{}{}", name, added, added == 1 ? "" : "s", notes);
 			}
 		}
 
 		// Reads every voicetypes\*.toml (see Settings::patchVoiceTypes), in file
 		// name order: a voice type two patches name goes to the later one, unless
-		// only the earlier one's voice is installed.
-		void LoadPatchFiles(Settings& a_settings, InstalledModels& a_installed)
+		// only the earlier one's voice is installed, or the later one is a fill-in
+		// and the earlier one is not.
+		void LoadPatchFiles(Settings& a_settings, Installed& a_installed)
 		{
 			for (const auto& [fileKey, file] : TomlFilesIn(PATCH_DIR)) {
 				const auto& [name, path] = file;
@@ -354,69 +469,93 @@ namespace Config
 					continue;
 				}
 				WarnOtherTables(root, "voicetype", "Voice type patch", name,
-					"Voice types are listed under [voicetype]; presets go into a file under presets\\.");
+					"Voice types are listed under [voicetype]; presets go into a file under presets\\.", "fill_in");
+				const bool fillInFile = root["fill_in"].value_or(false);
 
 				std::size_t                        given = 0;
-				std::size_t                        unvoiced = 0;  // of those, lines whose model nobody installed
+				std::size_t                        unvoiced = 0;  // of those, lines whose voice nobody installed
 				std::set<std::string>              seen;          // voice types this file named so far
-				std::map<std::string, std::string> missing;       // those models, as written
+				std::map<std::string, std::string> missing;       // those voices, as written
 				if (const auto* voiceTypes = root["voicetype"].as_table()) {
 					for (auto&& [type, node] : *voiceTypes) {
 						const auto id = Normalize(type.str());
+						const auto label = std::format("Voice type patch {}: {}", name, type.str());
 						ModelVoice voice;
 						voice.source = name;
+						voice.fillIn = fillInFile;
 						std::string written;  // the model as the file spells it, for the log
+						bool        ok = true;
 						if (const auto model = node.value<std::string>()) {
 							written = *model;
 						} else if (const auto* table = node.as_table()) {
 							written = (*table)["model"].value_or(std::string{});
-							voice.voice = (*table)["voice"].value_or(voice.voice);
+							voice.fillIn = (*table)["fill_in"].value_or(fillInFile);
 							voice.speed = SaneSpeed((*table)["speed"].value_or(voice.speed));
 							voice.volume = SaneVolume((*table)["volume"].value_or(voice.volume));
+							if (const auto* number = (*table)["voice"].node()) {
+								ok = ReadVoice(*number, voice.voice, voice.clip, label + " voice");  // warns itself
+							}
 						}
-						voice.model = Normalize(written);
-						if (id.empty() || !IsFolderName(voice.model) || voice.voice < 0) {
-							logger::warn("Voice type patch {}: {} must name a model folder, as \"folder\" or as "
-										 "{{ model = \"folder\", voice = 0 }}; ignored",
-								name, type.str());
+						if (!ok) {
 							continue;
 						}
-						const bool installed = ModelInstalled(voice.model, a_installed);
+						voice.model = Normalize(written);
+						if (id.empty() || !IsFolderName(voice.model)) {
+							logger::warn("{} must name a model folder, as \"folder\" or as {{ model = \"folder\", "
+										 "voice = 0 }}; ignored",
+								label);
+							continue;
+						}
+						const bool installed = VoiceInstalled(voice.model, voice.voice, voice.clip, a_installed);
 						const bool again = !seen.insert(id).second;
 						if (again) {
-							logger::warn("Voice type patch {}: {} is named a second time in that file (names ignore "
-										 "case): the later line is used",
-								name, type.str());
+							logger::warn("{} is named a second time in that file (names ignore case): the later line "
+										 "is used",
+								label);
 						} else {
 							++given;
 							unvoiced += installed ? 0 : 1;
 						}
 						if (!installed) {
-							missing.emplace(voice.model, written);
+							// the model as written, or the voice of it when the model is there
+							missing.emplace(voice.model + "|" + VoiceLabel(voice.voice, voice.clip),
+								ModelInstalled(voice.model, a_installed) ?
+									std::format("{} of '{}'", VoiceLabel(voice.voice, voice.clip), written) :
+									written);
 						}
 						if (const auto it = a_settings.patchVoiceTypes.find(id);
 							it != a_settings.patchVoiceTypes.end() && it->second.source != name) {
 							// A patch is one of several suggestions for a voice type: the
 							// later one counts, but not when its voice is missing and the
-							// earlier one's is there.
-							if (!installed && ModelInstalled(it->second.model, a_installed)) {
+							// earlier one's is there, and not as a fill-in over a voice
+							// meant for the voice type.
+							const bool existingInstalled =
+								VoiceInstalled(it->second.model, it->second.voice, it->second.clip, a_installed);
+							switch (KeepExisting(it->second, existingInstalled, voice, installed)) {
+							case Keep::kInstalled:
 								logger::info("Voice type {} is named by the patches {} and {}: the voice of the later "
 											 "one is not installed, so {} is kept",
 									type.str(), it->second.source, name, it->second.source);
 								continue;
+							case Keep::kRank:
+								logger::info("Voice type {} is named by the patch {} and, as a fill-in, by {}: {} is used",
+									type.str(), it->second.source, name, it->second.source);
+								continue;
+							default:
+								logger::info("Voice type {} is named by the patches {} and {}: {} is used", type.str(),
+									it->second.source, name, name);
 							}
-							logger::info("Voice type {} is named by the patches {} and {}: {} is used", type.str(),
-								it->second.source, name, name);
 						}
 						a_settings.patchVoiceTypes[id] = std::move(voice);
 					}
 				}
 				const auto* types = given == 1 ? "voice type" : "voice types";
+				const auto* kind = fillInFile ? ", as fill-in voices" : "";
 				if (missing.empty()) {
-					logger::info("Voice type patch {}: {} {}", name, given, types);
+					logger::info("Voice type patch {}: {} {}{}", name, given, types, kind);
 				} else {
-					logger::info("Voice type patch {}: {} {}; {} of them skipped, their voices are not installed: {}",
-						name, given, types, unvoiced, Listed(Values(missing)));
+					logger::info("Voice type patch {}: {} {}{}; {} of them skipped, their voices are not installed: {}",
+						name, given, types, kind, unvoiced, Listed(Values(missing)));
 				}
 			}
 		}
@@ -458,6 +597,7 @@ namespace Config
 		auto settings = std::make_shared<Settings>();
 		if (const auto* general = root["general"].as_table()) {
 			settings->enable = (*general)["enable"].value_or(settings->enable);
+			settings->fillInVoices = (*general)["fill_in_voices"].value_or(settings->fillInVoices);
 		}
 		if (const auto* model = root["model"].as_table()) {
 			settings->model = (*model)["dir"].value_or(settings->model);
@@ -468,7 +608,9 @@ namespace Config
 			settings->maxLoaded = (*model)["max_loaded"].value_or(settings->maxLoaded);
 		}
 		if (const auto* voice = root["voice"].as_table()) {
-			settings->voice = (*voice)["voice"].value_or(settings->voice);
+			if (const auto* number = (*voice)["voice"].node()) {
+				ReadVoice(*number, settings->voice, settings->voiceClip, "[voice] voice");
+			}
 			settings->speed = (*voice)["speed"].value_or(settings->speed);
 			settings->volume = (*voice)["volume"].value_or(settings->volume);
 		}
@@ -561,28 +703,35 @@ namespace Config
 		}
 		const auto ownPresets = settings->presets.size();
 
-		InstalledModels installed;
+		Installed installed;
 		LoadPresetFiles(*settings, installed);
-		LoadModelFiles(*settings);
+		LoadModelFiles(*settings, installed);
 		LoadPatchFiles(*settings, installed);
 
-		logger::info("Config: model '{}' ({}), voice {}, speed {:.2f}, volume {:.2f}, threads {}, max_loaded {}, "
+		std::size_t fillIns = 0;
+		for (const auto* map : { &settings->patchVoiceTypes, &settings->modelVoiceTypes }) {
+			fillIns += static_cast<std::size_t>(
+				std::count_if(map->begin(), map->end(), [](const auto& a_entry) { return a_entry.second.fillIn; }));
+		}
+
+		logger::info("Config: model '{}' ({}), {}, speed {:.2f}, volume {:.2f}, threads {}, max_loaded {}, "
 					 "group '{}', channel '{}', interrupt {}, max_pending {}, slots {}, output_rate {}, {} presets "
 					 "({} of them from preset files), speech group '{}', channel '{}', slots {}, lipsync {}{}",
-			settings->model, settings->family, settings->voice, settings->speed, settings->volume,
-			settings->threads, settings->maxLoaded, settings->group, settings->channel, settings->interrupt,
-			settings->maxPending, settings->slots, settings->outputRate, settings->presets.size(),
+			settings->model, settings->family, VoiceLabel(settings->voice, settings->voiceClip), settings->speed,
+			settings->volume, settings->threads, settings->maxLoaded, settings->group, settings->channel,
+			settings->interrupt, settings->maxPending, settings->slots, settings->outputRate, settings->presets.size(),
 			settings->presets.size() - ownPresets, settings->speechGroup, settings->speechChannel,
 			settings->speechSlots, settings->speechLipSync, settings->enable ? "" : " [disabled]");
 		logger::info("Config: dialogue {}, slots {}, lipsync {} (strength {:.2f}), fallback {}, "
 					 "greetings {} (up to {:.1f} s late, in two parts {}), prepare_greetings {}, skip_directions {}, "
-					 "cache {} MB, {} voice types mapped, {} given a voice by patches, {} listed by models",
+					 "cache {} MB, {} voice types mapped, {} given a voice by patches, {} listed by models, {} of "
+					 "those fill-in voices ({})",
 			settings->dialogue, settings->dialogueSlots, settings->dialogueLip, settings->dialogueLipStrength,
 			settings->dialogueFallback, settings->dialogueGreetings, settings->dialogueLateMax,
 			settings->dialogueLateSplit, settings->dialoguePrepare,
 			settings->dialogueSkipDirections,
 			settings->dialogueCacheMb, settings->voiceTypes.size(), settings->patchVoiceTypes.size(),
-			settings->modelVoiceTypes.size());
+			settings->modelVoiceTypes.size(), fillIns, settings->fillInVoices ? "on" : "off");
 
 		std::scoped_lock lock{ g_lock };
 		g_settings = std::move(settings);

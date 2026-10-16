@@ -45,28 +45,30 @@ models\pocket-tts\
   lm_main.int8.onnx  lm_flow.int8.onnx  encoder.onnx  decoder.int8.onnx  text_conditioner.onnx
   vocab.json  token_scores.json
   voices\
-    00-merchant.wav      voice 0
-    01-old-woman.wav     voice 1
-    02-whisper.wav       voice 2
+    merchant.wav         the voice "merchant"
+    old-woman.wav        the voice "old-woman"
+    whisper.wav          the voice "whisper"
 ```
 
 - **Get the model** from the [sherpa-onnx model list](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models): `sherpa-onnx-pocket-tts-int8-2026-01-26`. Unpack it into a folder under `models\`, add a `voices` folder and put your recordings in it. The folder name is yours to pick.
-- **A voice number is the recording's place in file name order**, from 0. Start the names with a number, as above, so that a new recording does not renumber the others. `AudioUtilTTS.log` lists them when the model loads: `its voices are its clips: 0 00-merchant, 1 01-old-woman, ...`.
+- **A recording is named by its file name**, without `.wav`: `voice = "old-woman"`. A number works too (the recording's place in name order, from 0), but a name stays right when recordings are added. `AudioUtilTTS.log` lists them when the model loads.
+- **Anyone can add recordings.** A mod that needs a voice ships only its `voices\mymod-anna.wav` into the same folder (a mod manager merges the folders) and a preset or patch that names it. The model is loaded once for all of them, and a recording added or replaced leaves the cached lines of the others as they are.
 - **A good recording** is 5 to 10 seconds of one person speaking, clean, with no music and no other voices. Only the first 10 seconds are used. Any wav works: 8 to 32-bit or float, mono or stereo, any sample rate.
 - **The manner of the recording carries over.** A whispered recording gives whispered lines. So one speaker recorded in several moods can be several presets.
 - **Speed has no effect on Pocket voices.** A slower or faster voice is a slower or faster recording.
 - **Use only voices you may use.** Kyutai's terms for Pocket TTS forbid copying a person's voice without their consent. Kyutai publishes voices recorded for this, each with its license, at [kyutai/tts-voices](https://huggingface.co/kyutai/tts-voices).
 
-A Pocket voice is used like any other, by its number:
+A Pocket voice is used like any other, by the recording's name:
 
 ```toml
 [preset.innkeeper]
 model = "pocket-tts"
-voice = 0
+voice = "merchant"
 ```
 
-- **One folder, many voices.** The model is loaded once, about 0.6 GB, however many recordings it holds. To give voice types their own recordings, list them in the folder's [`model.toml`](#models-that-bring-their-own-voice-types), one voice number each, rather than making a folder per voice type: every folder is a model of its own in memory.
-- **After adding or replacing a recording, run `autts reload`.** Dialogue lines already made in that model's voices are made again.
+- **One folder, many voices.** The model is loaded once, about 0.6 GB, however many recordings it holds. To give voice types their own recordings, list them in the folder's [`model.toml`](#models-that-bring-their-own-voice-types), one recording each, rather than making a folder per voice type: every folder is a model of its own in memory.
+- **Stand-in voices for the voice types you have no trained voice for** are what [fill-in voices](voices.md#fill-in-voices) are for: a `model.toml` with `fill_in = true` maps recordings onto voice types without ever taking one from a voice archive named after it.
+- **After adding or replacing a recording, run `autts reload`.** Lines made with that recording are made again; the other recordings' lines stay cached.
 - **It is faster than Kokoro**: about 0.3 s of work per second of speech on two threads, against about 0.45 s; see [Cost](what-to-expect.md#cost).
 
 ## Models that bring their own voice types

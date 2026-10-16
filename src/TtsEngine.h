@@ -44,14 +44,31 @@ namespace TtsEngine
 		Failed
 	};
 
+	// A recording a Pocket model speaks like: one voices\<name>.wav of the model
+	// folder. The name (the file name without ".wav") is what a config refers to
+	// it by; a voice number is its place in name order. The stamp (size and
+	// write time) changes when the recording is replaced, and only then: a
+	// recording added beside it leaves it as it is.
+	struct Clip
+	{
+		std::string           name;
+		std::filesystem::path path;
+		std::uint64_t         stamp = 0;
+	};
+
+	// The recordings of a model folder, in name order (case ignored). Empty for
+	// a folder that holds none, which every model but a Pocket one is.
+	std::vector<Clip> Clips(const std::string& a_dir);
+
 	// One loaded voice model. Several can be alive at once; each is used from
 	// one thread at a time (the plugin's worker owns them all).
 	//
 	// A Pocket model (Kyutai's Pocket TTS) has no voices of its own: it speaks in
-	// the voice of a short recording handed to it with each line. Its folder
-	// holds those as voices\*.wav, and a voice number is a clip's place in file
-	// name order (0 = the first). Only the first 10 seconds of a clip are used.
-	// Pocket takes no speed: a line's speed does not change it.
+	// the voice of a short recording handed to it with each line, one of the
+	// Clips of its folder. A voice number is a clip's place in name order (0 =
+	// the first); VoiceIndex turns a clip's name into that. Only the first 10
+	// seconds of a clip are used. Pocket takes no speed: a line's speed does not
+	// change it.
 	class Model
 	{
 	public:
@@ -70,6 +87,10 @@ namespace TtsEngine
 		// Voice names by voice number: a Pocket model's clip names (file names
 		// without ".wav"). Empty for the other families, whose voices are numbers.
 		const std::vector<std::string>& VoiceNames() const { return _voiceNames; }
+		// The voice number of a named recording (case ignored, ".wav" may be
+		// given), -1 when the model has no such one. -1 for every name on a
+		// model whose voices are numbers.
+		int VoiceIndex(std::string_view a_name) const;
 
 		// a_keepGoing is polled between sentences; returning false abandons the line.
 		Result Synthesize(const std::string& a_text, int a_voice, float a_speed,
@@ -81,11 +102,11 @@ namespace TtsEngine
 		const SherpaOnnxOfflineTts*        _tts = nullptr;
 		int                                _sampleRate = 0;
 		int                                _voices = 0;
-		std::string                        _family;
-		std::vector<std::filesystem::path> _clips;  // Pocket: voice N speaks like _clips[N]
-		std::vector<std::string>           _voiceNames;
-		mutable int                        _clipVoice = -1;  // the voice whose clip _clip holds
-		mutable Audio                      _clip;
+		std::string              _family;
+		std::vector<Clip>        _clips;  // Pocket: voice N speaks like _clips[N]
+		std::vector<std::string> _voiceNames;
+		mutable int              _clipVoice = -1;  // the voice whose clip _clip holds
+		mutable Audio            _clip;
 	};
 
 	std::string RuntimeVersion();
@@ -119,8 +140,8 @@ namespace TtsEngine
 	bool ReadWav(const std::filesystem::path& a_path, Audio& a_out);
 
 	// Size and write time of the model files in a_dir, as one number: it changes
-	// when the model is replaced, and when a Pocket voice clip is replaced,
-	// added or removed (that renumbers the voices). 0 when the folder holds no
-	// model.
+	// when the model is replaced. 0 when the folder holds no model. A Pocket
+	// model's recordings are not part of it (each Clip carries its own stamp),
+	// so adding one leaves the lines of the others as they are.
 	std::uint64_t ModelStamp(const std::string& a_dir);
 }

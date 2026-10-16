@@ -105,6 +105,7 @@ namespace Speaker
 			std::string     text;
 			std::string     model;  // normalized folder name, "" = the default model
 			int             voice = -1;
+			std::string     clip;   // a recording's name (a Pocket model), counts over voice; "" = by number
 			float           volume = -1.0f;
 			float           speed = -1.0f;
 			Lane            lane = kNarration;
@@ -184,6 +185,7 @@ namespace Speaker
 		// per model (normalized folder name), all cleared by a reload:
 		std::unordered_map<std::string, float>         g_msPerChar;    // measured generation time per character
 		std::unordered_map<std::string, std::uint64_t> g_modelStamps;  // TtsEngine::ModelStamp, 0 = no such model
+		std::unordered_map<std::string, std::vector<TtsEngine::Clip>> g_clips;  // TtsEngine::Clips: a Pocket model's recordings
 		std::unordered_set<std::string>                g_loggedOnce;   // see LogOnce
 
 		std::atomic<std::uint64_t> g_epoch{ 1 };  // bumped by Cancel: lines from an older epoch are dropped
@@ -215,6 +217,7 @@ namespace Speaker
 			std::string       text;
 			std::string       model;
 			int               voice = -1;
+			std::string       clip;
 			float             volume = 1.0f;
 			RE::ActorHandle   speaker;
 			bool              named = false;  // the game said who speaks it
@@ -405,11 +408,19 @@ namespace Speaker
 			return a_line.model.empty() ? Config::Normalize(a_settings.model) : a_line.model;
 		}
 
+		// "voice 3", or "recording 'gruff'" on a Pocket model, for the log
+		std::string VoiceText(const Line& a_line)
+		{
+			return a_line.clip.empty() ? std::format("voice {}", a_line.voice) :
+										 std::format("recording '{}'", a_line.clip);
+		}
+
 		// Voice, volume and speed a line left unset take the configured defaults.
 		void FillDefaults(Line& a_line, const Config::Settings& a_settings)
 		{
-			if (a_line.voice < 0) {
+			if (a_line.voice < 0 && a_line.clip.empty()) {
 				a_line.voice = a_settings.voice;
+				a_line.clip = a_settings.voiceClip;
 			}
 			a_line.volume = a_line.volume >= 0.0f ? std::min(a_line.volume, 1.0f) : a_settings.volume;
 			if (a_line.speed <= 0.0f) {
@@ -906,6 +917,75 @@ namespace Speaker
 			return stamp;
 		}
 
+		// A Pocket model's recordings (empty for any other model), read once per
+		// model until a reload. A copy: the worker clears the table on a reload.
+		// Not to be called under g_lock.
+		std::vector<TtsEngine::Clip> ClipsFor(const std::string& a_modelKey)
+		{
+			{
+				std::scoped_lock lock{ g_lock };
+				if (const auto it = g_clips.find(a_modelKey); it != g_clips.end()) {
+					return it->second;
+				}
+			}
+			auto clips = Config::IsFolderName(a_modelKey) ? TtsEngine::Clips(std::string(MODELS_DIR) + a_modelKey) :
+														   std::vector<TtsEngine::Clip>{};
+			std::scoped_lock lock{ g_lock };
+			return g_clips.emplace(a_modelKey, std::move(clips)).first->second;
+		}
+
+		// The recording a line is spoken with on a Pocket model: the one it
+		// names, else the one its voice number stands for (past the last, the
+		// last, as the runtime does). nullopt for a model whose voices are
+		// numbers, and for a named recording that is not there.
+		std::optional<TtsEngine::Clip> ClipOf(const std::string& a_modelKey, const Line& a_line)
+		{
+			const auto clips = ClipsFor(a_modelKey);
+			if (clips.empty()) {
+				return std::nullopt;
+			}
+			if (a_line.clip.empty()) {
+				return clips[static_cast<std::size_t>(std::clamp(a_line.voice, 0, static_cast<int>(clips.size()) - 1))];
+			}
+			const auto wanted = Config::Normalize(a_line.clip);
+			for (const auto& clip : clips) {
+				if (Config::Normalize(clip.name) == wanted) {
+					return clip;
+				}
+			}
+			return std::nullopt;
+		}
+
+		// Can this voice speak, as far as the files tell: its model is installed
+		// and, when it names a recording, the model has it. The default model
+		// ("" here) counts: ModelStateOf answers for that one.
+		bool VoiceInstalled(const std::string& a_model, const std::string& a_clip)
+		{
+			if (a_model.empty()) {
+				return true;
+			}
+			if (ModelStampFor(a_model) == 0) {
+				return false;
+			}
+			if (a_clip.empty()) {
+				return true;
+			}
+			const auto wanted = Config::Normalize(a_clip);
+			for (const auto& clip : ClipsFor(a_model)) {
+				if (Config::Normalize(clip.name) == wanted) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		// why VoiceInstalled said no, for the log
+		std::string NotInstalled(const std::string& a_model, const std::string& a_clip)
+		{
+			return ModelStampFor(a_model) == 0 ? std::format("model '{}' is not installed", a_model) :
+												 std::format("model '{}' has no recording '{}'", a_model, a_clip);
+		}
+
 		// empty = this line is not cached (the model is not there)
 		fs::path CacheFileFor(const std::string& a_modelKey, const Line& a_line, const Config::Settings& a_settings)
 		{
@@ -913,9 +993,36 @@ namespace Speaker
 			if (stamp == 0) {
 				return {};
 			}
-			const auto key = std::format("{:016x}|{}|{:.3f}|{}|{}", stamp, a_line.voice, a_line.speed,
-				a_settings.outputRate, a_line.text);
+			// A line on a Pocket model is known by its recording, name and stamp,
+			// so that a recording added or replaced touches the lines of no other;
+			// speed is not in it, Pocket takes none. A named recording that is not
+			// there keys the line all the same: the worker reports it.
+			std::string voice;
+			if (const auto clip = ClipOf(a_modelKey, a_line)) {
+				voice = std::format("{}|{:016x}", Config::Normalize(clip->name), clip->stamp);
+			} else if (!a_line.clip.empty()) {
+				voice = std::format("{}|{:016x}", Config::Normalize(a_line.clip), 0);
+			} else {
+				voice = std::format("{}|{:.3f}", a_line.voice, a_line.speed);
+			}
+			const auto key = std::format("{:016x}|{}|{}|{}", stamp, voice, a_settings.outputRate, a_line.text);
 			return CacheDir() / std::format("{:016x}.wav", TtsEngine::Hash64(key));
+		}
+
+		// The voice number a line is generated with on a_model: its recording's
+		// when it names one. -1 with a_error when the model has no such recording.
+		int VoiceNumberFor(const TtsEngine::Model& a_model, const Line& a_line, const std::string& a_modelKey,
+			std::string& a_error)
+		{
+			if (a_line.clip.empty()) {
+				return a_line.voice;
+			}
+			const int index = a_model.VoiceIndex(a_line.clip);
+			if (index < 0) {
+				a_error = std::format("model '{}' has no recording '{}' (voices\\{}.wav)", a_modelKey, a_line.clip,
+					a_line.clip);
+			}
+			return index;
 		}
 
 		bool LoadCached(const fs::path& a_file, TtsEngine::Audio& a_out)
@@ -1403,11 +1510,11 @@ namespace Speaker
 						std::chrono::duration<float>(Clock::now() - line.asked).count(),
 						line.split ? ", its beginning: the rest follows" : "");
 				}
-				logger::info("Spoke {} chars as {:.1f} s of speech, generated in {} ms ({}{}{}{}, model {}, voice {}, {}, "
+				logger::info("Spoke {} chars as {:.1f} s of speech, generated in {} ms ({}{}{}{}, model {}, {}, {}, "
 							 "handle {})",
 					line.text.size(), a_seconds, a_synthMs, LANE_NAME[line.lane], From(line.sender),
 					speech ? std::format(" by {:08X}{}", speaker->GetFormID(), lipSync ? " with lipsync" : "") : ""s, late,
-					line.model.empty() ? "default"s : line.model, line.voice, slotRel, handle);
+					line.model.empty() ? "default"s : line.model, VoiceText(line), slotRel, handle);
 				// A greeting spoken late is the game's line, not a mod's: no mod is
 				// told it started, as none is for any other dialogue line.
 				if (auto* source = lateGreeting ? nullptr : SKSE::GetModCallbackEventSource()) {
@@ -1641,8 +1748,10 @@ namespace Speaker
 				MarkBusy(a_line.estimateMs * static_cast<float>(text.size()) /
 						 static_cast<float>(std::max<std::size_t>(a_line.text.size(), 1)));
 				std::string error;
+				const int   voice = VoiceNumberFor(*model, a_line, modelKey, error);
 				const auto  start = Clock::now();
-				const auto  result = model->Synthesize(text, a_line.voice, a_line.speed, current, audio, error);
+				const auto  result = voice < 0 ? TtsEngine::Result::Failed :
+				                                 model->Synthesize(text, voice, a_line.speed, current, audio, error);
 				MarkBusy(0.0f);
 				if (result != TtsEngine::Result::Ok) {
 					if (result != TtsEngine::Result::Cancelled) {
@@ -1900,17 +2009,20 @@ namespace Speaker
 					return;
 				}
 				if (fellBack) {
-					// the voice number belonged to the model that is not there
+					// the voice belonged to the model that is not there
 					a_line.model.clear();
 					a_line.voice = settings->voice;
+					a_line.clip = settings->voiceClip;
 				}
 				if (!current()) {
 					return;  // loading a model can take a second: the line may be stale by now
 				}
 
 				MarkBusy(a_line.estimateMs);
+				const int  voice = VoiceNumberFor(*model, a_line, ModelKeyOf(a_line, *settings), error);
 				const auto start = Clock::now();
-				const auto result = model->Synthesize(a_line.text, a_line.voice, a_line.speed, current, audio, error);
+				const auto result = voice < 0 ? TtsEngine::Result::Failed :
+				                                model->Synthesize(a_line.text, voice, a_line.speed, current, audio, error);
 				MarkBusy(0.0f);
 				if (result == TtsEngine::Result::Cancelled) {
 					return;
@@ -2333,6 +2445,7 @@ namespace Speaker
 			Line line;
 			line.model = std::move(late.model);
 			line.voice = late.voice;
+			line.clip = std::move(late.clip);
 			line.volume = late.volume;
 			line.lane = kSpeech;
 			line.speaker = late.speaker;
@@ -2417,7 +2530,16 @@ namespace Speaker
 			}
 			// a voice number means something only inside its own model, so a preset
 			// on another model that names no voice gets that model's first one
-			line.voice = a_preset.voice >= 0 ? a_preset.voice : (line.model.empty() ? a_settings.voice : 0);
+			if (!a_preset.clip.empty()) {
+				line.clip = a_preset.clip;
+			} else if (a_preset.voice >= 0) {
+				line.voice = a_preset.voice;
+			} else if (line.model.empty()) {
+				line.voice = a_settings.voice;
+				line.clip = a_settings.voiceClip;
+			} else {
+				line.voice = 0;
+			}
 			line.volume = a_preset.volume;
 			line.speed = a_preset.speed;
 			return line;
@@ -2456,10 +2578,12 @@ namespace Speaker
 		// The voice of a voice type, looked for in this order:
 		//   1. its line in [voicetype], naming a preset ("" = never spoken for)
 		//   2. a preset named like the voice type
-		//   3. a voice type patch (voicetypes\*.toml) that names an installed model
+		//   3. a voice type patch (voicetypes\*.toml) that names an installed voice
 		//   4. a model that lists the voice type in its own model.toml
 		//   5. a model folder named like the voice type (its first voice)
-		//   6. when a_fallback: the preset "female" / "male" by sex, else the
+		//   6. a fill-in voice (Config::ModelVoice::fillIn), from a patch, then
+		//      from a model.toml, unless [general] fill_in_voices is off
+		//   7. when a_fallback: the preset "female" / "male" by sex, else the
 		//      default voice
 		struct VoiceChoice
 		{
@@ -2467,8 +2591,8 @@ namespace Speaker
 			{
 				kNone,    // nothing matched and no fallback was allowed
 				kSilent,  // the config says this voice type is never spoken for
-				kOwn,     // steps 1 to 5: a voice meant for this voice type
-				kBySex    // step 6
+				kOwn,     // steps 1 to 6: a voice meant for this voice type
+				kBySex    // step 7
 			};
 			Line        line;
 			Source      source = kNone;
@@ -2517,7 +2641,7 @@ namespace Speaker
 				}
 				if (preset) {
 					auto line = LineOf(a_settings, *preset);
-					if (line.model.empty() || ModelStampFor(line.model) != 0) {
+					if (VoiceInstalled(line.model, line.clip)) {
 						choice.line = std::move(line);
 						choice.source = VoiceChoice::kOwn;
 						choice.label += ": " + PresetLabel(presetKey, *preset);
@@ -2525,33 +2649,53 @@ namespace Speaker
 					}
 					// like a patch on a model nobody installed: it says nothing, and
 					// the lookup goes on
-					LogOnce(std::format("{} would get the {}, whose model '{}' is not installed: that is ignored", name,
-						PresetLabel(presetKey, *preset), line.model));
+					LogOnce(std::format("{} would get the {}, but {}: that is ignored", name,
+						PresetLabel(presetKey, *preset), NotInstalled(line.model, line.clip)));
 				}
 				const auto borrow = [&](const Config::ModelVoice& a_voice) {
 					choice.line.model = a_voice.model == Config::Normalize(a_settings.model) ? std::string{} : a_voice.model;
 					choice.line.voice = a_voice.voice;
+					choice.line.clip = a_voice.clip;
 					choice.line.speed = a_voice.speed;
 					choice.line.volume = a_voice.volume;
 					choice.source = VoiceChoice::kOwn;
 				};
+				// " (recording 'gruff')" for the label, "" for a voice by number
+				const auto recording = [](const Config::ModelVoice& a_voice) {
+					return a_voice.clip.empty() ? std::string{} : std::format(" (recording '{}')", a_voice.clip);
+				};
 				// A patch is written for a voice somebody else installs: when that
-				// model is not there, the patch says nothing and the lookup goes on.
-				if (const auto it = a_settings.patchVoiceTypes.find(id); it != a_settings.patchVoiceTypes.end()) {
-					if (ModelStampFor(it->second.model) != 0) {
-						borrow(it->second);
-						choice.label += std::format(": model '{}' by the patch {}", it->second.model, it->second.source);
-						return choice;
+				// voice is not there, the patch says nothing and the lookup goes on.
+				// A fill-in entry waits for its turn, step 6.
+				const auto fromPatch = [&](bool a_fillIn) {
+					const auto it = a_settings.patchVoiceTypes.find(id);
+					if (it == a_settings.patchVoiceTypes.end() || it->second.fillIn != a_fillIn) {
+						return false;
 					}
-					LogOnce(std::format("The patch {} gives {} the voice of model '{}', which is not installed: that "
-										"line is ignored",
-						it->second.source, name, it->second.model));
-				}
+					const auto& voice = it->second;
+					if (VoiceInstalled(voice.model, voice.clip)) {
+						borrow(voice);
+						choice.label += std::format(": {}model '{}'{} by the patch {}", a_fillIn ? "fill-in " : "",
+							voice.model, recording(voice), voice.source);
+						return true;
+					}
+					LogOnce(std::format("The patch {} gives {} a voice of model '{}', but {}: that line is ignored",
+						voice.source, name, voice.model, NotInstalled(voice.model, voice.clip)));
+					return false;
+				};
 				// a model.toml whose model files are gone speaks for nothing
-				if (const auto it = a_settings.modelVoiceTypes.find(id);
-					it != a_settings.modelVoiceTypes.end() && ModelStampFor(it->second.model) != 0) {
+				const auto fromModel = [&](bool a_fillIn) {
+					const auto it = a_settings.modelVoiceTypes.find(id);
+					if (it == a_settings.modelVoiceTypes.end() || it->second.fillIn != a_fillIn ||
+						!VoiceInstalled(it->second.model, it->second.clip)) {
+						return false;
+					}
 					borrow(it->second);
-					choice.label += std::format(": listed by model '{}'", it->second.model);
+					choice.label += std::format(": {}listed by model '{}'{}", a_fillIn ? "fill-in " : "", it->second.model,
+						recording(it->second));
+					return true;
+				};
+				if (fromPatch(false) || fromModel(false)) {
 					return choice;
 				}
 				if (ModelStampFor(id) != 0) {
@@ -2559,6 +2703,9 @@ namespace Speaker
 					choice.line.voice = 0;
 					choice.source = VoiceChoice::kOwn;
 					choice.label += std::format(": model folder '{}'", id);
+					return choice;
+				}
+				if (a_settings.fillInVoices && (fromPatch(true) || fromModel(true))) {
 					return choice;
 				}
 			}
@@ -2777,6 +2924,7 @@ namespace Speaker
 				// models may have been swapped on disk: measure and stamp them afresh
 				g_msPerChar.clear();
 				g_modelStamps.clear();
+				g_clips.clear();
 				g_unusableModels.clear();
 				g_failedLines.clear();
 				g_loggedOnce.clear();
@@ -3207,6 +3355,7 @@ namespace Speaker
 			late.text = line.text;
 			late.model = line.model;
 			late.voice = line.voice;
+			late.clip = line.clip;
 			late.volume = line.volume;
 			late.asked = Clock::now();
 			RememberLateGreeting(lateKey, std::move(late));
@@ -3411,8 +3560,10 @@ namespace Speaker
 		default:
 			break;
 		}
-		return std::format("{} (model {}, voice {}){}{}", choice.label, line.model.empty() ? settings->model : line.model,
-			line.voice < 0 ? settings->voice : line.voice, note,
+		Line shown = line;
+		FillDefaults(shown, *settings);
+		return std::format("{} (model {}, {}){}{}", choice.label, line.model.empty() ? settings->model : line.model,
+			VoiceText(shown), note,
 			choice.source == VoiceChoice::kBySex && !settings->dialogueFallback ?
 				" | unvoiced dialogue stays silent: [dialogue] fallback is off" :
 				"");

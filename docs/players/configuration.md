@@ -9,6 +9,7 @@ A file that does not parse is not used: the previous settings stay, and `AudioUt
 | Key | Default | Meaning |
 |---|---|---|
 | `enable` | `true` | Master switch. `false` loads no model and speaks nothing |
+| `fill_in_voices` | `true` | Use the [fill-in voices](voices.md#fill-in-voices) voice archives offer for voice types nothing else voices. `false` switches them all off |
 
 ## [model]
 
@@ -29,7 +30,7 @@ The default voice: what a line gets when it names no preset.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `voice` | `7` | Voice number inside the default model. See [Voices](voices.md#voices) |
+| `voice` | `7` | Voice number inside the default model, or for a Pocket model the name of one of its recordings in quotes. See [Voices](voices.md#voices) |
 | `speed` | `1.0` | `1.0` = the model's natural pace, 0.5 to 2.0 |
 | `volume` | `1.0` | 0.0 to 1.0, before AudioUtil's group volume |
 
@@ -40,7 +41,7 @@ A named voice mods ask for. See [Presets](voices.md#presets).
 | Key | Default | Meaning |
 |---|---|---|
 | `model` | the `[model]` one | A model folder, loaded on first use |
-| `voice` | the `[voice]` one | Voice number inside that model; on another model, left out = its first voice |
+| `voice` | the `[voice]` one | Voice number inside that model, or for a Pocket model the name of one of its recordings; on another model, left out = its first voice |
 | `speed` | the `[voice]` one | 0.5 to 2.0 |
 | `volume` | the `[voice]` one | 0.0 to 1.0 |
 

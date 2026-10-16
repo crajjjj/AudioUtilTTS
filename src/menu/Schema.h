@@ -43,6 +43,7 @@ namespace Core
 		// chooses: "preset.*.voice" (any preset), "voicetype.*" (any voice type)
 		std::string           key;
 		std::string           group;  // a "*" in it is what the pattern matched: "Preset *"
+		std::string           page;   // the title of the page it is shown on; empty = its table's page
 		std::string           label;  // likewise; empty = made from the key's name
 		std::string           tip;
 		std::string           unit;
@@ -83,6 +84,8 @@ namespace Core
 
 		// The page that edits a table, or -1 when no page names it.
 		int PageOf(std::string_view a_section) const;
+		// The page with this title, or -1.
+		int PageTitled(std::string_view a_title) const;
 
 	private:
 		std::vector<PageSpec>    _pages;
