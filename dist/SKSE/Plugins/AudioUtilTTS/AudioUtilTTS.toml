@@ -178,7 +178,9 @@ greetings = true
 # The longest a line may be late and still be spoken, in seconds (0.5 to 10).
 # A line that is not ready by then stays unvoiced this once and is spoken on
 # time from the next time on. The wait is the time the line takes to generate,
-# plus about a second when its voice has to be loaded first.
+# plus about a second when its voice has to be loaded first. It counts from the
+# moment the NPC begins the line, which with a voiced player (DBVO) comes after
+# the player's own line.
 # Can be changed with "autts reload".
 greetings_max_late = 4.0
 # Speak a long line that is late in two parts, so that it is heard sooner: its

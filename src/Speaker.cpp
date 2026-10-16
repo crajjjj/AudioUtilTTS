@@ -223,6 +223,12 @@ namespace Speaker
 			bool              named = false;  // the game said who speaks it
 			bool              ready = false;  // it is in the cache, or its beginning is in audio
 			Clock::time_point asked{};        // when the game built the line
+			// When the game reported the speaker beginning it, {} = not yet. That can
+			// come seconds after the line was built: a topic the player picks is
+			// built at the click, and the NPC answers only after the player's own
+			// line has been spoken (DBVO, DBReV). Lateness counts from the later of
+			// the two, the moment the NPC is heard to begin.
+			Clock::time_point said{};
 			// set while only the beginning of the line is generated (see LateSplit):
 			// that beginning and the line's state; both empty = the whole line, from
 			// the cache file
@@ -1543,6 +1549,10 @@ namespace Speaker
 			}
 		}
 
+		// The lines dropped by PruneLateGreetingsLocked for want of a speaker, not
+		// logged yet (see LogUnnamedGreeting). g_lock.
+		std::vector<std::string> g_unnamedLate;
+
 		// Drops the late greetings nobody came for in time. true = one of them was
 		// generated and never given a speaker. g_lock held.
 		bool PruneLateGreetingsLocked()
@@ -1551,7 +1561,11 @@ namespace Speaker
 			const auto now = Clock::now();
 			for (auto it = g_lateGreetings.begin(); it != g_lateGreetings.end();) {
 				if (now - it->second.asked > LATE_GREETING_MAX) {
-					unnamed = unnamed || (it->second.ready && !it->second.named);
+					if (it->second.ready && !it->second.named) {
+						unnamed = true;
+						g_unnamedLate.push_back(std::format("{} chars, topic info {:08X}", it->second.text.size(),
+							static_cast<RE::FormID>(it->first >> 32)));  // see LateKey
+					}
 					it = g_lateGreetings.erase(it);
 				} else {
 					++it;
@@ -1560,10 +1574,21 @@ namespace Speaker
 			return unnamed;
 		}
 
+		// One line each: which topic info it was tells, in the plugin that adds it,
+		// whether the game said the line at all (a response built and then not said
+		// is never reported) or reported it under another topic info.
 		void LogUnnamedGreeting()
 		{
-			LogOnce("Late lines: the game did not report who spoke a line, so it was not spoken late (it is in the "
-					"cache for the next time)");
+			std::vector<std::string> lines;
+			{
+				std::scoped_lock lock{ g_lock };
+				lines.swap(g_unnamedLate);
+			}
+			for (const auto& line : lines) {
+				logger::info("Line not spoken late ({}): the game never reported who said it. It is in the cache for "
+							 "the next time.",
+					line);
+			}
 		}
 
 		// The worker has a dialogue line in the cache: a greeting that waited for
@@ -2428,8 +2453,10 @@ namespace Speaker
 			}
 			const auto speaker = late.speaker.get();
 			const auto info = static_cast<RE::FormID>(a_key >> 32);  // see LateKey
-			if (const char* why = LateGreetingStale(late.asked, speaker.get(), info)) {
-				return LogLateGreetingSkipped(late.asked, why);
+			// late from the moment the NPC began the line, not from when it was built
+			const auto since = std::max(late.asked, late.said);
+			if (const char* why = LateGreetingStale(since, speaker.get(), info)) {
+				return LogLateGreetingSkipped(since, why);
 			}
 			// A greeting gives way to every line a mod sent: it takes the character
 			// lane only when nothing of that lane waits, is being generated or plays.
@@ -2444,7 +2471,7 @@ namespace Speaker
 				laneTaken = LaneUseLocked(kSpeech, started, cutShort) != LaneUse::kFree || (split && !split->cut);
 			}
 			if (laneTaken) {
-				return LogLateGreetingSkipped(late.asked, "another character line is waiting, being generated or spoken");
+				return LogLateGreetingSkipped(since, "another character line is waiting, being generated or spoken");
 			}
 			Line line;
 			line.model = std::move(late.model);
@@ -2458,7 +2485,7 @@ namespace Speaker
 			// only its beginning so far (see LateSplit): that, and the rest follows
 			line.ready = std::move(late.audio);
 			line.split = std::move(late.split);
-			line.asked = late.asked;
+			line.asked = since;  // checked again, and logged, from there when it plays
 			line.lateInfo = info;
 			Queue(late.text, std::move(line));
 		}
@@ -2485,6 +2512,7 @@ namespace Speaker
 				if (newest) {
 					a_late.speaker = newest->speaker;
 					a_late.named = true;
+					a_late.said = newest->at;  // before the build: lateness counts from the build
 					newest->key = 0;
 				}
 				// the same line built again before it was spoken: what is known stays
@@ -2492,6 +2520,7 @@ namespace Speaker
 					if (it->second.named && !a_late.named) {
 						a_late.speaker = it->second.speaker;
 						a_late.named = true;
+						a_late.said = it->second.said;
 					}
 					a_late.ready = a_late.ready || it->second.ready;
 					if (!a_late.audio) {
@@ -2792,6 +2821,9 @@ namespace Speaker
 				if (const auto it = g_lateGreetings.find(key); it != g_lateGreetings.end()) {
 					it->second.speaker = a_actor->GetHandle();
 					it->second.named = true;
+					if (it->second.said == Clock::time_point{}) {
+						it->second.said = Clock::now();  // the NPC begins it now (see LateGreeting::said)
+					}
 					speak = it->second.ready;
 				} else {
 					g_heard[g_heardNext++ % g_heard.size()] = HeardInfo{ key, a_actor->GetHandle(), Clock::now() };
@@ -2992,6 +3024,7 @@ namespace Speaker
 		g_generating.clear();
 		g_fills.clear();
 		g_lateGreetings.clear();
+		g_unnamedLate.clear();
 		g_heard = {};
 		g_said = {};
 		g_latePlaying = {};
