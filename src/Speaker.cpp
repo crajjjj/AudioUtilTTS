@@ -1278,30 +1278,46 @@ namespace Speaker
 					std::scoped_lock lock{ g_lock };
 					g_unusableModels.insert(key);
 				};
-				// the one place is the default model's only when there is one
-				if (a_settings.maxLoaded < 2 && hasDefault) {
-					logger::warn("Model '{}' not loaded: [model] max_loaded = 1 keeps only the default model", key);
-					markBad();
-				} else {
-					// make room first; the default model and the kept ones always stay
-					const auto kept = [&](const std::string& a_key) {
-						return a_key == defaultKey || std::find(a_settings.keepLoaded.begin(), a_settings.keepLoaded.end(),
-													a_key) != a_settings.keepLoaded.end();
-					};
-					while (static_cast<int>(g_models.size()) >= a_settings.maxLoaded) {
-						auto oldest = g_models.end();
-						for (auto it = g_models.begin(); it != g_models.end(); ++it) {
-							if (!kept(it->first) &&
-								(oldest == g_models.end() || it->second.lastUsed < oldest->second.lastUsed)) {
-								oldest = it;
-							}
+				// A model nobody installed is no fault of the plugin: a preset
+				// file or a patch may name a voice the user does not have. A
+				// model that is there and will not load is an error.
+				const auto* consequence =
+					hasDefault ? "Narration and character lines asking for it use the default model; dialogue "
+								 "lines in that voice stay unvoiced." :
+								 "Lines asking for it are not spoken: there is no default model to fall back on.";
+				// make room first; the default model and the kept ones always stay
+				const auto kept = [&](const std::string& a_key) {
+					return a_key == defaultKey || std::find(a_settings.keepLoaded.begin(), a_settings.keepLoaded.end(),
+												a_key) != a_settings.keepLoaded.end();
+				};
+				bool full = false;  // max_loaded is used up by models that are never unloaded
+				while (!full && static_cast<int>(g_models.size()) >= a_settings.maxLoaded) {
+					auto oldest = g_models.end();
+					for (auto it = g_models.begin(); it != g_models.end(); ++it) {
+						if (!kept(it->first) &&
+							(oldest == g_models.end() || it->second.lastUsed < oldest->second.lastUsed)) {
+							oldest = it;
 						}
-						if (oldest == g_models.end()) {
-							break;
-						}
+					}
+					if (oldest == g_models.end()) {
+						full = true;
+					} else {
 						logger::info("Model '{}' unloaded to make room for '{}'", oldest->first, key);
 						g_models.erase(oldest);
 					}
+				}
+				if (full) {
+					// the cap is the user's: it is not exceeded, the model is turned
+					// away with the way out named
+					std::string holders;
+					for (const auto& [loaded, state] : g_models) {
+						holders += (holders.empty() ? "" : ", ") + loaded;
+					}
+					logger::warn("Model '{}' not loaded: [model] max_loaded = {} is used up by models that are never "
+								 "unloaded ({}). Raise max_loaded, or take one out of [model] keep_loaded. {}",
+						key, a_settings.maxLoaded, holders, consequence);
+					markBad();
+				} else {
 					std::string error;
 					if (auto model = LoadModel(key, a_settings, false, error)) {
 						const auto* raw = model.get();
@@ -1309,13 +1325,6 @@ namespace Speaker
 						g_modelsLoaded.store(static_cast<int>(g_models.size()));
 						return raw;
 					}
-					// A model nobody installed is no fault of the plugin: a preset
-					// file or a patch may name a voice the user does not have. A
-					// model that is there and will not load is an error.
-					const auto* consequence =
-						hasDefault ? "Narration and character lines asking for it use the default model; dialogue "
-									 "lines in that voice stay unvoiced." :
-									 "Lines asking for it are not spoken: there is no default model to fall back on.";
 					if (ModelStampFor(key) == 0) {
 						logger::warn("Model '{}' not loaded: {}. {}", key, error, consequence);
 					} else {

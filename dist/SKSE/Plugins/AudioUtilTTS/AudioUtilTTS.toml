@@ -50,6 +50,9 @@ max_loaded = 4
 # model that many voices share, such as a Pocket model, which would otherwise
 # be unloaded and loaded again (about a second) whenever other voices crowd it
 # out. They count against max_loaded; the default model never needs listing.
+# When max_loaded is used up by the default model and the kept ones, any other
+# model is turned away (its lines use the default voice, dialogue in it stays
+# unvoiced) and the log says so: raise max_loaded then.
 keep_loaded = "pocket-tts"
 
 [voice]

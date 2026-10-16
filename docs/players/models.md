@@ -103,6 +103,7 @@ A model takes memory only while it is loaded.
 - The **default model** is loaded at game start and stays.
 - **Any other model** is loaded the first time a line asks for it, which delays that line by about a second.
 - `[model] max_loaded` (4) caps how many are kept, the default one included. Past it, the one used longest ago is unloaded, never the default and never one named in `[model] keep_loaded` (shipped as `"pocket-tts"`: a Pocket model serves many voices, so it should stay).
+- **When the cap is used up by models that are never unloaded**, for example `max_loaded = 2` with the default model and the Pocket model loaded, any other model is turned away: its narration and character lines use the default voice, its dialogue lines stay unvoiced, and `AudioUtilTTS.log` says so. The cap is yours; raise it rather than expect it to be exceeded.
 
 | `max_loaded` | Kokoro models in memory |
 |---|---|
