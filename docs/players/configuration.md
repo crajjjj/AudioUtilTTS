@@ -23,6 +23,7 @@ The default model; see [Voice Models](models.md). It is optional: without it onl
 | `lexicon` | `""` | Multi-language Kokoro builds only: file names inside the model folder, comma separated |
 | `lang` | `""` | Multi-language Kokoro builds only |
 | `max_loaded` | `4` | Models kept in memory, the default one included, 1 to 32. See [How many fit in memory](models.md#how-many-fit-in-memory) |
+| `keep_loaded` | `"pocket-tts"` | Model folders never unloaded to make room, comma separated: a model many voices share. They count against `max_loaded` |
 
 ## [voice]
 

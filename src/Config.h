@@ -81,6 +81,10 @@ namespace Config
 		std::string lexicon;
 		std::string lang;
 		int         maxLoaded = 4;
+		// keep_loaded: Normalize(folder name)s never unloaded to make room (the
+		// default model never is anyway): for a model many voices share, such as
+		// a Pocket model. They count against max_loaded like any other.
+		std::vector<std::string> keepLoaded{ "pocket-tts" };
 
 		// [voice]
 		int         voice = 7;

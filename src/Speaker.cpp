@@ -1283,11 +1283,15 @@ namespace Speaker
 					logger::warn("Model '{}' not loaded: [model] max_loaded = 1 keeps only the default model", key);
 					markBad();
 				} else {
-					// make room first; the default model always stays
+					// make room first; the default model and the kept ones always stay
+					const auto kept = [&](const std::string& a_key) {
+						return a_key == defaultKey || std::find(a_settings.keepLoaded.begin(), a_settings.keepLoaded.end(),
+													a_key) != a_settings.keepLoaded.end();
+					};
 					while (static_cast<int>(g_models.size()) >= a_settings.maxLoaded) {
 						auto oldest = g_models.end();
 						for (auto it = g_models.begin(); it != g_models.end(); ++it) {
-							if (it->first != defaultKey &&
+							if (!kept(it->first) &&
 								(oldest == g_models.end() || it->second.lastUsed < oldest->second.lastUsed)) {
 								oldest = it;
 							}

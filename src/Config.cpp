@@ -606,6 +606,21 @@ namespace Config
 			settings->lexicon = (*model)["lexicon"].value_or(settings->lexicon);
 			settings->lang = (*model)["lang"].value_or(settings->lang);
 			settings->maxLoaded = (*model)["max_loaded"].value_or(settings->maxLoaded);
+			if (const auto kept = (*model)["keep_loaded"].value<std::string>()) {
+				// "a, b": folder names, comma separated
+				settings->keepLoaded.clear();
+				std::size_t start = 0;
+				while (start <= kept->size()) {
+					auto end = kept->find(',', start);
+					if (end == std::string::npos) {
+						end = kept->size();
+					}
+					if (const auto name = Normalize(kept->substr(start, end - start)); IsFolderName(name)) {
+						settings->keepLoaded.push_back(name);
+					}
+					start = end + 1;
+				}
+			}
 		}
 		if (const auto* voice = root["voice"].as_table()) {
 			if (const auto* number = (*voice)["voice"].node()) {
@@ -714,11 +729,16 @@ namespace Config
 				std::count_if(map->begin(), map->end(), [](const auto& a_entry) { return a_entry.second.fillIn; }));
 		}
 
-		logger::info("Config: model '{}' ({}), {}, speed {:.2f}, volume {:.2f}, threads {}, max_loaded {}, "
+		std::string kept;
+		for (const auto& name : settings->keepLoaded) {
+			kept += (kept.empty() ? "" : ", ") + name;
+		}
+		logger::info("Config: model '{}' ({}), {}, speed {:.2f}, volume {:.2f}, threads {}, max_loaded {} (kept: {}), "
 					 "group '{}', channel '{}', interrupt {}, max_pending {}, slots {}, output_rate {}, {} presets "
 					 "({} of them from preset files), speech group '{}', channel '{}', slots {}, lipsync {}{}",
 			settings->model, settings->family, VoiceLabel(settings->voice, settings->voiceClip), settings->speed,
-			settings->volume, settings->threads, settings->maxLoaded, settings->group, settings->channel,
+			settings->volume, settings->threads, settings->maxLoaded, kept.empty() ? "none" : kept, settings->group,
+			settings->channel,
 			settings->interrupt, settings->maxPending, settings->slots, settings->outputRate, settings->presets.size(),
 			settings->presets.size() - ownPresets, settings->speechGroup, settings->speechChannel,
 			settings->speechSlots, settings->speechLipSync, settings->enable ? "" : " [disabled]");

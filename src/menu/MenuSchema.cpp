@@ -152,6 +152,8 @@ namespace Core
 				Range(S("model.max_loaded", "Performance", "Models in memory", Control::Int,
 						  "Voice models kept loaded at once, the default one included. About 0.6 GB each; loading one again delays its next line by about a second."),
 					1, 32),
+				S("model.keep_loaded", "Performance", "Never unloaded", Control::Text,
+					"Model folders never unloaded to make room, comma separated: a model many voices share, such as a Pocket model."),
 				Applying(Advanced("model.family", "Model family", Control::Text,
 							 "auto reads the folder (lm_main*.onnx means Pocket, voices.bin Kokoro, otherwise VITS), or kokoro, vits or pocket."),
 					Applies::Reload),

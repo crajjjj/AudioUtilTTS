@@ -46,6 +46,11 @@ lang = ""
 # With one model per voice type, raise this to the number of voices a busy
 # scene mixes, or loading and unloading will delay lines.
 max_loaded = 4
+# Models never unloaded to make room, by folder name, comma separated. For a
+# model that many voices share, such as a Pocket model, which would otherwise
+# be unloaded and loaded again (about a second) whenever other voices crowd it
+# out. They count against max_loaded; the default model never needs listing.
+keep_loaded = "pocket-tts"
 
 [voice]
 # The default voice: what a line gets when it names no preset.
