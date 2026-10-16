@@ -75,7 +75,9 @@ namespace Speaker
 		// line never waits for it.
 		struct DialogueJob
 		{
-			int           slot = -1;        // -1 = generated for the cache only
+			// -1 = generated for the cache only. Set to -1 under g_lock, while the
+			// job still waits, when its line is to be spoken late (NoteSpeaker).
+			int           slot = -1;
 			std::uint64_t slotStamp = 0;    // the slot's stamp when it was handed out
 			fs::path      cacheFile;
 			std::string   cacheKey;         // its file name: what the line is known by
@@ -653,6 +655,20 @@ namespace Speaker
 		{
 			std::scoped_lock lock{ g_lock };
 			ForgetDialogueSlotLocked(a_slot, a_stamp);
+		}
+
+		// The game is playing this slot's silence for the line it was handed to,
+		// which is spoken late instead: forgotten, and with a new stamp, so that a
+		// writer already at work no longer finds it its own (DialogueSlotWritable)
+		// and does not write the line into a file the game is playing. g_lock held.
+		void RetireDialogueSlotLocked(int a_slot, std::uint64_t a_stamp)
+		{
+			if (a_slot < 0 || static_cast<std::size_t>(a_slot) >= g_dialogueSlots.size() ||
+				g_dialogueSlots[static_cast<std::size_t>(a_slot)].stamp != a_stamp) {
+				return;
+			}
+			ForgetDialogueSlotLocked(a_slot, a_stamp);
+			g_dialogueSlots[static_cast<std::size_t>(a_slot)].stamp = ++g_slotStampClock;
 		}
 
 		// Opened with no sharing: while the bytes go in nobody else can open the
@@ -1558,8 +1574,8 @@ namespace Speaker
 
 		// Placeholders handed to the game that hold silence until their line is
 		// generated. Should the game begin that topic info meanwhile, the response
-		// plays as silence this once; NoteSpeaker says so in the log, which is the
-		// only way to tell that case from a line the game never said. g_lock.
+		// plays as silence; NoteSpeaker says so in the log, which is the only way
+		// to tell that case from a line the game never said. g_lock.
 		struct PendingSlot
 		{
 			RE::FormID        info = 0;
@@ -1568,6 +1584,11 @@ namespace Speaker
 			int               slot = -1;
 			std::uint64_t     stamp = 0;
 			Clock::time_point handed{};
+			// A line of one response, for which that is no loss: it is spoken late
+			// instead, as a greeting said right away is (see NoteSpeaker). This is
+			// what that takes, no speaker yet. Null for a response of several, which
+			// would be spoken over the ones after it, and with [dialogue] greetings off.
+			std::shared_ptr<const LateGreeting> late;
 		};
 		std::vector<PendingSlot> g_pendingSlots;
 
@@ -2836,28 +2857,56 @@ namespace Speaker
 				g_wake.notify_all();
 				logger::info("A line spoken late was cut short: its speaker began another line");
 			}
-			// The one case of silence the game cannot be told about: it reached a
-			// line whose placeholder was handed out as in time and is not filled yet.
-			for (const auto& pending : early) {
-				logger::info(
-					"Line said before it was ready (topic info {:08X}, response {}, {} chars): its placeholder was handed "
-					"to the game {:.1f} s ago and is still being generated, so {}",
-					a_info, pending.response, pending.chars,
-					std::chrono::duration<float>(Clock::now() - pending.handed).count(),
-					pending.response <= 1 ? "it plays as silence this once"s :
-											"it is silent unless it is ready by the time the responses before it end"s);
-			}
 			bool        female = false;
 			const auto* voiceType = VoiceTypeOf(a_actor, female);
-			if (!voiceType) {
-				return;
+			// The one case of silence the game cannot be told about: it reached a
+			// line whose placeholder was handed out as in time and is not filled yet.
+			// A line of one response is spoken late instead, unless it is in the
+			// cache already: then the worker is writing it into its slot right now.
+			std::shared_ptr<const LateGreeting> rescue;
+			PendingSlot                         rescued;
+			for (const auto& pending : early) {
+				if (std::error_code ec; pending.late && voiceType && !fs::exists(pending.late->cacheFile, ec)) {
+					rescue = pending.late;
+					rescued = pending;
+					break;
+				}
 			}
-			const auto key = LateKey(a_info, voiceType->GetFormID());
+			const auto key = voiceType ? LateKey(a_info, voiceType->GetFormID()) : 0;
 			bool       speak = false;
 			bool       unnamed = false;
-			{
+			if (voiceType) {
 				std::scoped_lock lock{ g_lock };
 				unnamed = PruneLateGreetingsLocked();
+				// Only while the placeholder is still pending and the line is still
+				// being generated: the worker may have settled it since, or dropped it
+				// from a full queue. Its silence plays on; the line goes to the head
+				// of the queue like a greeting said right away, and into no slot.
+				if (rescue && g_generating.contains(rescue->cacheKey) &&
+					std::erase_if(g_pendingSlots, [&](const PendingSlot& a_pending) {
+						return a_pending.slot == rescued.slot && a_pending.stamp == rescued.stamp;
+					}) > 0) {
+					RetireDialogueSlotLocked(rescued.slot, rescued.stamp);
+					for (auto& waiting : g_dialogueWaiting) {
+						if (auto& job = *waiting.job; job.cacheKey == rescue->cacheKey) {
+							job.greeting = true;
+							job.prepared = false;
+							if (job.slot == rescued.slot && job.slotStamp == rescued.stamp) {
+								job.slot = -1;
+							}
+						}
+					}
+					LateGreeting late = *rescue;
+					late.asked = Clock::now();
+					if (const auto it = g_lateGreetings.find(key); it != g_lateGreetings.end()) {
+						late.ready = it->second.ready;
+						late.audio = it->second.audio;
+						late.split = it->second.split;
+					}
+					g_lateGreetings[key] = std::move(late);
+				} else {
+					rescue.reset();
+				}
 				if (const auto it = g_lateGreetings.find(key); it != g_lateGreetings.end()) {
 					it->second.speaker = a_actor->GetHandle();
 					it->second.named = true;
@@ -2869,11 +2918,28 @@ namespace Speaker
 					g_heard[g_heardNext++ % g_heard.size()] = HeardInfo{ key, a_actor->GetHandle(), Clock::now() };
 				}
 			}
+			for (const auto& pending : early) {
+				const bool late = rescue && pending.slot == rescued.slot && pending.stamp == rescued.stamp;
+				logger::info(
+					"Line said before it was ready (topic info {:08X}, response {}, {} chars): its placeholder was handed "
+					"to the game {:.1f} s ago and is still being generated, so {}",
+					a_info, pending.response, pending.chars,
+					std::chrono::duration<float>(Clock::now() - pending.handed).count(),
+					late                   ? "it is spoken late, as soon as it is ready"s :
+					pending.response <= 1 ? "it plays as silence this once"s :
+											"it is silent unless it is ready by the time the responses before it end"s);
+			}
+			if (!voiceType) {
+				return;
+			}
 			if (unnamed) {
 				LogUnnamedGreeting();
 			}
 			if (speak) {
 				PostLateGreeting(key);
+			} else if (std::error_code ec; rescue && fs::exists(rescue->cacheFile, ec)) {
+				// generated in the moment between the look at the cache and the entry
+				LateGreetingReady(rescue->cacheKey);
 			}
 		}
 
@@ -3340,14 +3406,24 @@ namespace Speaker
 		{
 			bool unusable = false;
 			bool failed = false;
+			bool lateNow = false;
 			int  held = -1;
 			{
 				std::scoped_lock lock{ g_lock };
 				unusable = g_unusableModels.contains(modelKey);
 				failed = g_failedLines.contains(cacheKey);
-				if (!unusable && !failed) {
+				// Listed again while the NPC's line is waiting to be spoken late: a
+				// placeholder now could be played as well, the line twice over.
+				if (listed && a_greeting != 0) {
+					const auto it = g_lateGreetings.find(LateKey(a_greeting, a_voiceType->GetFormID()));
+					lateNow = it != g_lateGreetings.end() && it->second.named;
+				}
+				if (!unusable && !failed && !lateNow) {
 					held = ReuseDialogueSlotLocked(key);
 				}
+			}
+			if (lateNow) {
+				return leave(label, "it is being spoken late", Log::kNo);
 			}
 			if (unusable) {
 				return leave(label, std::format("the model '{}' could not be loaded (see above)", modelKey), Log::kOnce);
@@ -3426,7 +3502,7 @@ namespace Speaker
 		// heard this time, late, as a character line (see LateGreeting).
 		const bool lateGreeting = a_greeting != 0 && !listed && !later && settings->dialogueGreetings;
 		const auto lateKey = LateKey(a_greeting, a_voiceType->GetFormID());
-		if (lateGreeting) {
+		const auto lateOf = [&] {
 			LateGreeting late;
 			late.cacheKey = cacheKey;
 			late.cacheFile = cacheFile;
@@ -3436,7 +3512,17 @@ namespace Speaker
 			late.clip = line.clip;
 			late.volume = line.volume;
 			late.asked = Clock::now();
-			RememberLateGreeting(lateKey, std::move(late));
+			return late;
+		};
+		if (lateGreeting) {
+			RememberLateGreeting(lateKey, lateOf());
+		}
+		// One that is handed a slot as in time can still be said before it is in:
+		// built and said in the same moment while the menu is open, as the answer
+		// to a picked topic with random answers was seen to be.
+		std::shared_ptr<const LateGreeting> standby;
+		if (a_greeting != 0 && later && settings->dialogueGreetings) {
+			standby = std::make_shared<const LateGreeting>(lateOf());
 		}
 
 		auto job = std::make_shared<DialogueJob>();
@@ -3486,7 +3572,7 @@ namespace Speaker
 					std::erase_if(g_pendingSlots, [&](const PendingSlot& a_pending) {
 						return now - a_pending.handed > std::chrono::minutes(1);
 					});
-					g_pendingSlots.push_back({ job->infoID, a_response, chars, slot, job->slotStamp, now });
+					g_pendingSlots.push_back({ job->infoID, a_response, chars, slot, job->slotStamp, now, std::move(standby) });
 				}
 				if (g_dialogueWaiting.size() > MAX_DIALOGUE_WAITING) {
 					// the line that would be generated last makes room, this one included

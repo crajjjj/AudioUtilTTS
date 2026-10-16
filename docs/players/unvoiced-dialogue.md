@@ -30,7 +30,7 @@ A new line has to be generated first, about two seconds a sentence with the defa
 
 | The line is... | First time | Later times |
 |---|---|---|
-| **Listed in the dialogue menu** | Voiced if it can be ready within about 2.5 seconds, the time it takes to pick a topic; otherwise unvoiced this once | From the cache |
+| **Listed in the dialogue menu** | Voiced if it can be ready within about 2.5 seconds, the time it takes to pick a topic; otherwise unvoiced this once. A line of one response the NPC begins before it is ready is spoken a moment late, as a greeting is | From the cache |
 | **Said right away** (a greeting, the line that opens a conversation, a remark in passing) | Spoken a moment late, as soon as it is ready; see [Greetings spoken late](#greetings-spoken-late) | From the cache |
 | **A later line of the same topic** | Generated while the earlier lines play | From the cache |
 

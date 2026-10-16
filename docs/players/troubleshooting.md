@@ -88,7 +88,7 @@ Still silent? See below.
 | `its voice is on the default model, which is not loaded` | Install the default voice, or give the voice type a voice of its own |
 | `the config says so` | The voice type has an empty line in `[voicetype]` |
 | `Line not spoken late, N s after it was said` | It was not ready within `greetings_max_late`, or the speaker moved on. Next time it comes from the cache |
-| `Line said before it was ready` | The game reached a line whose voice was still being generated, so it played as silence that once. The next time it comes from the cache |
+| `Line said before it was ready` | The game reached a line whose voice was still being generated. A line of one response is then spoken late (`... so it is spoken late`); a response of several plays as silence that once. The next time it comes from the cache |
 | `Line not spoken late (...): the game never reported who said it` | The game built the line but did not report it as said, so the plugin does not know whom to play it at. The topic info in the message is the line's record. Next time it comes from the cache |
 | `every placeholder file is held by a recent line` | Raise `[dialogue] slots` and restart |
 | `the model '...' could not be loaded`, `the model folder '...' holds no model` | The voice's model is missing or broken |
