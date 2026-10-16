@@ -81,6 +81,7 @@ namespace Speaker
 			std::string   cacheKey;         // its file name: what the line is known by
 			std::string   label;            // whose voice, for the log
 			const void*   info = nullptr;   // the topic info it belongs to: compared, never read
+			RE::FormID    infoID = 0;       // the same topic info by form ID, for the log
 			int           response = 1;     // its number inside that topic info
 			// made ahead of a greeting (Greetings): behind every line the game asked
 			// for. Cleared under g_lock, while the job still waits, when the game
@@ -1337,14 +1338,15 @@ namespace Speaker
 
 		// ------------------------------------------------------------------- worker
 
-		// Has the game reported a_speaker as beginning another topic info than
-		// a_info since a_since?
-		bool SaidAnotherSince(RE::FormID a_speaker, RE::FormID a_info, Clock::time_point a_since)
+		// The topic info other than a_info that the game has reported a_speaker as
+		// beginning since a_since, 0 = none.
+		RE::FormID SaidAnotherSince(RE::FormID a_speaker, RE::FormID a_info, Clock::time_point a_since)
 		{
 			std::scoped_lock lock{ g_lock };
-			return std::any_of(g_said.begin(), g_said.end(), [&](const SaidInfo& a_said) {
+			const auto it = std::find_if(g_said.begin(), g_said.end(), [&](const SaidInfo& a_said) {
 				return a_said.speaker == a_speaker && a_said.info != a_info && a_said.at > a_since;
 			});
+			return it != g_said.end() ? it->info : 0;
 		}
 
 		// Why a greeting should not be spoken late any more, nullptr = it still
@@ -1353,7 +1355,7 @@ namespace Speaker
 		// Game thread.
 		// a_rest = it is the rest of a line whose beginning has been spoken (see
 		// LateSplit): that follows however late it is by then.
-		const char* LateGreetingStale(Clock::time_point a_asked, const RE::Actor* a_speaker, RE::FormID a_info,
+		std::string LateGreetingStale(Clock::time_point a_asked, const RE::Actor* a_speaker, RE::FormID a_info,
 			bool a_rest = false)
 		{
 			const float late = std::chrono::duration<float>(Clock::now() - a_asked).count();
@@ -1366,10 +1368,11 @@ namespace Speaker
 			// A conversation that has started does not stop it: the greeting is
 			// what opened it. Only once the speaker has begun another line would it
 			// be spoken over that one.
-			if (SaidAnotherSince(a_speaker->GetFormID(), a_info, a_asked)) {
-				return "the speaker has gone on to another line";
+			if (const auto other = SaidAnotherSince(a_speaker->GetFormID(), a_info, a_asked)) {
+				return std::format("the speaker has gone on to another line (topic info {:08X}, this one {:08X})",
+					other, a_info);
 			}
-			return nullptr;
+			return {};
 		}
 
 		void LogLateGreetingSkipped(Clock::time_point a_asked, std::string_view a_why)
@@ -1441,8 +1444,8 @@ namespace Speaker
 				}
 				const bool lateGreeting = line.asked != Clock::time_point{};
 				if (lateGreeting) {
-					if (const char* why =
-							LateGreetingStale(line.asked, speaker.get(), line.lateInfo, line.latePart > 0)) {
+					if (const auto why = LateGreetingStale(line.asked, speaker.get(), line.lateInfo, line.latePart > 0);
+						!why.empty()) {
 						LogLateGreetingSkipped(line.asked, why);
 						notSpoken();
 						return;
@@ -1552,6 +1555,21 @@ namespace Speaker
 		// The lines dropped by PruneLateGreetingsLocked for want of a speaker, not
 		// logged yet (see LogUnnamedGreeting). g_lock.
 		std::vector<std::string> g_unnamedLate;
+
+		// Placeholders handed to the game that hold silence until their line is
+		// generated. Should the game begin that topic info meanwhile, the response
+		// plays as silence this once; NoteSpeaker says so in the log, which is the
+		// only way to tell that case from a line the game never said. g_lock.
+		struct PendingSlot
+		{
+			RE::FormID        info = 0;
+			int               response = 0;
+			std::size_t       chars = 0;
+			int               slot = -1;
+			std::uint64_t     stamp = 0;
+			Clock::time_point handed{};
+		};
+		std::vector<PendingSlot> g_pendingSlots;
 
 		// Drops the late greetings nobody came for in time. true = one of them was
 		// generated and never given a speaker. g_lock held.
@@ -1722,6 +1740,11 @@ namespace Speaker
 				if (!a_inSlot) {
 					// whoever asks for this line next must not be told it has a slot
 					ForgetDialogueSlotLocked(job->slot, job->slotStamp);
+				}
+				if (job->slot >= 0) {
+					std::erase_if(g_pendingSlots, [&](const PendingSlot& a_pending) {
+						return a_pending.slot == job->slot && a_pending.stamp == job->slotStamp;
+					});
 				}
 			};
 			// the line will not come: a greeting that waits to be spoken late must not
@@ -2455,7 +2478,7 @@ namespace Speaker
 			const auto info = static_cast<RE::FormID>(a_key >> 32);  // see LateKey
 			// late from the moment the NPC began the line, not from when it was built
 			const auto since = std::max(late.asked, late.said);
-			if (const char* why = LateGreetingStale(since, speaker.get(), info)) {
+			if (const auto why = LateGreetingStale(since, speaker.get(), info); !why.empty()) {
 				return LogLateGreetingSkipped(since, why);
 			}
 			// A greeting gives way to every line a mod sent: it takes the character
@@ -2773,10 +2796,16 @@ namespace Speaker
 		// names the speaker of a greeting spoken late (see LateGreeting).
 		void NoteSpeaker(RE::FormID a_info, RE::Actor* a_actor)
 		{
-			std::int32_t cut = 0;
+			std::int32_t             cut = 0;
+			std::vector<PendingSlot> early;  // responses of this info whose placeholder is still silent
 			{
 				std::scoped_lock lock{ g_lock };
 				g_said[g_saidNext++ % g_said.size()] = SaidInfo{ a_actor->GetFormID(), a_info, Clock::now() };
+				for (const auto& pending : g_pendingSlots) {
+					if (pending.info == a_info) {
+						early.push_back(pending);
+					}
+				}
 				// Any line this speaker begins while one of theirs is being spoken
 				// late, the same topic info included: the game's report of the late
 				// line itself came before that started playing, so this is a repeat,
@@ -2806,6 +2835,17 @@ namespace Speaker
 				}
 				g_wake.notify_all();
 				logger::info("A line spoken late was cut short: its speaker began another line");
+			}
+			// The one case of silence the game cannot be told about: it reached a
+			// line whose placeholder was handed out as in time and is not filled yet.
+			for (const auto& pending : early) {
+				logger::info(
+					"Line said before it was ready (topic info {:08X}, response {}, {} chars): its placeholder was handed "
+					"to the game {:.1f} s ago and is still being generated, so {}",
+					a_info, pending.response, pending.chars,
+					std::chrono::duration<float>(Clock::now() - pending.handed).count(),
+					pending.response <= 1 ? "it plays as silence this once"s :
+											"it is silent unless it is ready by the time the responses before it end"s);
 			}
 			bool        female = false;
 			const auto* voiceType = VoiceTypeOf(a_actor, female);
@@ -3025,6 +3065,7 @@ namespace Speaker
 		g_fills.clear();
 		g_lateGreetings.clear();
 		g_unnamedLate.clear();
+		g_pendingSlots.clear();
 		g_heard = {};
 		g_said = {};
 		g_latePlaying = {};
@@ -3403,6 +3444,7 @@ namespace Speaker
 		job->cacheKey = cacheKey;
 		job->label = label;
 		job->info = a_info;
+		job->infoID = a_info ? static_cast<const RE::TESTopicInfo*>(a_info)->GetFormID() : 0;
 		job->response = a_response;
 		job->greeting = lateGreeting;
 		if (later) {
@@ -3437,6 +3479,15 @@ namespace Speaker
 				g_generating.insert(cacheKey);
 				g_dialogueWaiting.push_back(std::move(line));
 				queued = true;
+				if (slot >= 0) {
+					// silent until the worker has it in (see PendingSlot); one that was
+					// never filled nor settled goes after a minute
+					const auto now = Clock::now();
+					std::erase_if(g_pendingSlots, [&](const PendingSlot& a_pending) {
+						return now - a_pending.handed > std::chrono::minutes(1);
+					});
+					g_pendingSlots.push_back({ job->infoID, a_response, chars, slot, job->slotStamp, now });
+				}
 				if (g_dialogueWaiting.size() > MAX_DIALOGUE_WAITING) {
 					// the line that would be generated last makes room, this one included
 					const void* saying = TopicBeingSaid();
