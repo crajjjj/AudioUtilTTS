@@ -332,8 +332,11 @@ namespace Speaker
 			std::uint64_t                     lastUsed = 0;
 		};
 		std::unordered_map<std::string, LoadedModel> g_models;     // keyed by normalized folder name
-		std::unordered_set<std::string>              g_badModels;  // failed to load: not retried until a reload
+		std::unordered_set<std::string>              g_badModels;  // failed to load, or turned away for a full max_loaded: not retried until a reload or g_retryModels
 		std::uint64_t                                g_useClock = 0;
+		// set by ApplyConfig when max_loaded or keep_loaded changed: there may be
+		// room now, so the models turned away are tried again on their next line
+		std::atomic<bool> g_retryModels{ false };
 
 		// ---------------------------------------------------------------- AudioUtil
 
@@ -1254,6 +1257,9 @@ namespace Speaker
 			bool& a_fellBack)
 		{
 			a_fellBack = false;
+			if (g_retryModels.exchange(false)) {
+				g_badModels.clear();  // ApplyConfig cleared g_unusableModels already
+			}
 			const auto defaultKey = Config::Normalize(a_settings.model);
 			const auto key = a_wanted.empty() ? defaultKey : a_wanted;
 			const auto use = [](const std::string& a_key) -> const TtsEngine::Model* {
@@ -2971,7 +2977,15 @@ namespace Speaker
 			Rebuild();
 			return ApplyResult::kReloaded;
 		}
+		// room may have been made: a model turned away for a full max_loaded
+		// is tried again on its next line (the worker drops its own mark when
+		// it sees the flag; the door's mark goes here)
+		const bool room = before->maxLoaded != after->maxLoaded || before->keepLoaded != after->keepLoaded;
 		std::scoped_lock lock{ g_lock };
+		if (room) {
+			g_unusableModels.clear();
+			g_retryModels.store(true);
+		}
 		// a preset that was missing may be there now, and a reason logged once
 		// may hold no more
 		g_unknownPresets.clear();
