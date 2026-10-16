@@ -69,7 +69,7 @@ Dialogue lines that have no voice file. See [Unvoiced Dialogue](unvoiced-dialogu
 | `enable` | `true` | `false` leaves the game unpatched; a change needs a game restart. `autts dialogue 0` switches it off for one session |
 | `fallback` | `false` | `true`: a voice type with no voice of its own is spoken with the preset `female` or `male` by its sex (needs the default model) |
 | `greetings` | `true` | Speak a new line said right away as soon as it is ready, a moment late, instead of leaving it unvoiced that once. See [Greetings spoken late](unvoiced-dialogue.md#greetings-spoken-late) |
-| `greetings_max_late` | `4.0` | The latest such a line may still be spoken, in seconds, 0.5 to 10 |
+| `greetings_max_late` | `4.0` | The latest such a line may still be spoken, in seconds after the NPC begins it, 0.5 to 10 |
 | `greetings_split` | `true` | Speak a long late line in two parts, so that it starts sooner |
 | `prepare_greetings` | `false` | Generate nearby NPCs' greetings ahead of time. Heavy; see [Greetings made ahead](unvoiced-dialogue.md#greetings-made-ahead) |
 | `lipsync` | `true` | Move the speaker's mouth with the loudness of the line |

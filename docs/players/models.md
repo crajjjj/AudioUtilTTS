@@ -50,7 +50,7 @@ models\pocket-tts\
     whisper.wav          the voice "whisper"
 ```
 
-- **Get the model** from the [sherpa-onnx model list](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models): `sherpa-onnx-pocket-tts-int8-2026-01-26`. Unpack it into a folder under `models\`, add a `voices` folder and put your recordings in it. The folder name is yours to pick.
+- **Get the model** as `AudioUtilTTS-Voice-pocket-tts.zip` from the [latest release](https://github.com/crajjjj/AudioUtilTTS/releases/latest), which installs it as `models\pocket-tts`, the folder the [fill-in voices](voices.md#fill-in-voices) archive and the examples here use. It is the `sherpa-onnx-pocket-tts-int8-2026-01-26` model from the [sherpa-onnx model list](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models); unpacked by hand, the folder name is yours to pick, but recordings and presets made for `pocket-tts` then need that name.
 - **A recording is named by its file name**, without `.wav`: `voice = "old-woman"`. A number works too (the recording's place in name order, from 0), but a name stays right when recordings are added. `AudioUtilTTS.log` lists them when the model loads.
 - **Anyone can add recordings.** A mod that needs a voice ships only its `voices\mymod-anna.wav` into the same folder (a mod manager merges the folders) and a preset or patch that names it. The model is loaded once for all of them, and a recording added or replaced leaves the cached lines of the others as they are.
 - **A good recording** is 5 to 10 seconds of one person speaking, clean, with no music and no other voices. Only the first 10 seconds are used. Any wav works: 8 to 32-bit or float, mono or stereo, any sample rate.
