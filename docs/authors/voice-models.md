@@ -110,6 +110,6 @@ It writes one `Release\AudioUtilTTS-Voice-<folder>.zip` per model folder, `model
 
 ## What to tell your users
 
-- **Versions**: `model.toml` needs AudioUtilTTS 0.2.1 or newer; speaking without the default model installed, 0.3.1 or newer; a Pocket model, a voice named by its recording and fill-in voices, 0.4.1 or newer.
+- **Versions**: `model.toml` needs AudioUtilTTS 0.2.1 or newer; speaking without the default model installed, 0.3.1 or newer; a Pocket model, a voice named by its recording and fill-in voices, 0.5.0 or newer.
 - **Memory**: each loaded model costs memory, and `[model] max_loaded` (4) caps how many are kept; see [How many fit in memory](../players/models.md#how-many-fit-in-memory). One model holding many voices costs it once.
 - **The license**: put the voice's license in the model folder.
