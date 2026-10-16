@@ -24,13 +24,13 @@ A mod, or `autts sayactor "text"` in the console, has an actor say a line.
 
 Measured on an i7-12700KF for lines of about five seconds of speech. Nothing uses the GPU.
 
-| | Kokoro (default) | Piper voice |
-|---|---|---|
-| Memory, settled after a few lines | about 625 MB | about 350 MB |
-| Time to generate a line, 2 threads | about 2 s | about 0.25 s |
-| CPU while generating | 2 cores fully busy | 2 cores fully busy |
-| CPU between lines | none | none |
-| Time to load, in the background | 0.8 s | 0.6 s |
+| | Kokoro (default) | Piper voice | Pocket |
+|---|---|---|---|
+| Memory, settled after a few lines | about 625 MB | about 350 MB | about 600 MB |
+| Time to generate a line, 2 threads | about 2 s | about 0.25 s | about 1.4 s |
+| CPU while generating | 2 cores fully busy | 2 cores fully busy | 2 cores fully busy |
+| CPU between lines | none | none | none |
+| Time to load, in the background | 0.8 s | 0.6 s | 0.6 s |
 
 - **More threads, shorter bursts**: one thread takes about 3.2 s for a line, two about 1.9 s, four about 1.2 s.
 - **Memory does not grow with use.**

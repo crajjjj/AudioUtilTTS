@@ -14,7 +14,8 @@ enable = true
 # (narration, the presets below, the voices by sex), and a voice with a model
 # of its own, such as a model folder named like a voice type, speaks as usual.
 dir = "kokoro-en-v0_19"
-# "auto" reads the folder: voices.bin present = Kokoro, otherwise VITS (Piper voices).
+# "auto" reads the folder: lm_main*.onnx present = Pocket, voices.bin present =
+# Kokoro, otherwise VITS (Piper voices). Or "kokoro", "vits", "pocket".
 family = "auto"
 # CPU threads used while a line is being generated. More threads = the line is
 # ready sooner, but the game loses those cores for that moment. Measured on an

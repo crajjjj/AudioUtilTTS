@@ -145,4 +145,4 @@ A voice is a number inside a model. The default model, `kokoro-en-v0_19`, has 11
 | 9 | bm_george | British male |
 | 10 | bm_lewis | British male |
 
-Set the default with `voice = N` under `[voice]`, or give a preset its own `voice = N`. To hear one, run `autts sayv "Some text" 4`. Most Piper voices have just one voice, number 0.
+Set the default with `voice = N` under `[voice]`, or give a preset its own `voice = N`. To hear one, run `autts sayv "Some text" 4`. Most Piper voices have just one voice, number 0. A Pocket model's voices are its recordings; see [Pocket voices](models.md#pocket-voices).

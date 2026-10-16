@@ -17,7 +17,7 @@ The default model; see [Voice Models](models.md). It is optional: without it onl
 | Key | Default | Meaning |
 |---|---|---|
 | `dir` | `"kokoro-en-v0_19"` | A folder under `Data\SKSE\Plugins\AudioUtilTTS\models\`. Loaded at game start and kept |
-| `family` | `"auto"` | `"auto"`: Kokoro when the folder has `voices.bin`, VITS otherwise. Or `"kokoro"`, `"vits"` |
+| `family` | `"auto"` | `"auto"`: Pocket when the folder has an `lm_main*.onnx`, Kokoro when it has `voices.bin`, VITS otherwise. Or `"kokoro"`, `"vits"`, `"pocket"` |
 | `threads` | `2` | CPU threads per line, 1 to 16. More = ready sooner, and more cores taken from the game for that moment |
 | `lexicon` | `""` | Multi-language Kokoro builds only: file names inside the model folder, comma separated |
 | `lang` | `""` | Multi-language Kokoro builds only |

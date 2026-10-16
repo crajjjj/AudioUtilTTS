@@ -20,7 +20,7 @@ namespace TtsEngine
 		// game root: the phonemizer opens its data with narrow-path calls, so an
 		// absolute path through a non-ASCII install folder would not open.
 		std::string dir;
-		std::string family = "auto";  // auto | kokoro | vits (Piper voices are vits)
+		std::string family = "auto";  // auto | kokoro | vits (Piper voices are vits) | pocket
 		std::string lexicon;          // optional: comma-separated file names inside dir
 		std::string lang;             // optional language hint (Kokoro)
 		int         threads = 2;
@@ -46,6 +46,12 @@ namespace TtsEngine
 
 	// One loaded voice model. Several can be alive at once; each is used from
 	// one thread at a time (the plugin's worker owns them all).
+	//
+	// A Pocket model (Kyutai's Pocket TTS) has no voices of its own: it speaks in
+	// the voice of a short recording handed to it with each line. Its folder
+	// holds those as voices\*.wav, and a voice number is a clip's place in file
+	// name order (0 = the first). Only the first 10 seconds of a clip are used.
+	// Pocket takes no speed: a line's speed does not change it.
 	class Model
 	{
 	public:
@@ -58,8 +64,12 @@ namespace TtsEngine
 		Model(const Model&) = delete;
 		Model& operator=(const Model&) = delete;
 
-		int SampleRate() const { return _sampleRate; }
-		int VoiceCount() const { return _voices; }
+		int                SampleRate() const { return _sampleRate; }
+		int                VoiceCount() const { return _voices; }
+		const std::string& Family() const { return _family; }  // kokoro, vits or pocket
+		// Voice names by voice number: a Pocket model's clip names (file names
+		// without ".wav"). Empty for the other families, whose voices are numbers.
+		const std::vector<std::string>& VoiceNames() const { return _voiceNames; }
 
 		// a_keepGoing is polled between sentences; returning false abandons the line.
 		Result Synthesize(const std::string& a_text, int a_voice, float a_speed,
@@ -68,9 +78,14 @@ namespace TtsEngine
 	private:
 		Model() = default;
 
-		const SherpaOnnxOfflineTts* _tts = nullptr;
-		int                         _sampleRate = 0;
-		int                         _voices = 0;
+		const SherpaOnnxOfflineTts*        _tts = nullptr;
+		int                                _sampleRate = 0;
+		int                                _voices = 0;
+		std::string                        _family;
+		std::vector<std::filesystem::path> _clips;  // Pocket: voice N speaks like _clips[N]
+		std::vector<std::string>           _voiceNames;
+		mutable int                        _clipVoice = -1;  // the voice whose clip _clip holds
+		mutable Audio                      _clip;
 	};
 
 	std::string RuntimeVersion();
@@ -104,6 +119,8 @@ namespace TtsEngine
 	bool ReadWav(const std::filesystem::path& a_path, Audio& a_out);
 
 	// Size and write time of the model files in a_dir, as one number: it changes
-	// when the model is replaced. 0 when the folder holds no model.
+	// when the model is replaced, and when a Pocket voice clip is replaced,
+	// added or removed (that renumbers the voices). 0 when the folder holds no
+	// model.
 	std::uint64_t ModelStamp(const std::string& a_dir);
 }

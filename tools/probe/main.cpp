@@ -27,6 +27,15 @@
 
 namespace
 {
+	// a Pocket model's voices are its clips: which number is which
+	void PrintVoiceNames(const TtsEngine::Model& a_model)
+	{
+		const auto& names = a_model.VoiceNames();
+		for (std::size_t i = 0; i < names.size(); ++i) {
+			std::printf("  voice %zu: %s\n", i, names[i].c_str());
+		}
+	}
+
 	int Batch(int argc, char** argv)
 	{
 		namespace fs = std::filesystem;
@@ -54,8 +63,9 @@ namespace
 			std::printf("load failed: %s\n", error.c_str());
 			return 1;
 		}
-		std::printf("sherpa-onnx %s, %d voices, %d Hz, voice %d, %d threads\n", TtsEngine::RuntimeVersion().c_str(),
-			model->VoiceCount(), model->SampleRate(), voice, spec.threads);
+		std::printf("sherpa-onnx %s, %s, %d voices, %d Hz, voice %d, %d threads\n", TtsEngine::RuntimeVersion().c_str(),
+			model->Family().c_str(), model->VoiceCount(), model->SampleRate(), voice, spec.threads);
+		PrintVoiceNames(*model);
 
 		const auto  start = clock::now();
 		int         spoken = 0, skipped = 0, failed = 0;
@@ -163,9 +173,10 @@ int main(int argc, char** argv)
 		return 1;
 	}
 	const auto t1 = std::chrono::steady_clock::now();
-	std::printf("sherpa-onnx %s, %d voices, %d Hz, loaded in %lld ms, stamp %016llx\n",
-		TtsEngine::RuntimeVersion().c_str(), model->VoiceCount(), model->SampleRate(), ms(t0, t1),
+	std::printf("sherpa-onnx %s, %s, %d voices, %d Hz, loaded in %lld ms, stamp %016llx\n",
+		TtsEngine::RuntimeVersion().c_str(), model->Family().c_str(), model->VoiceCount(), model->SampleRate(), ms(t0, t1),
 		static_cast<unsigned long long>(TtsEngine::ModelStamp(spec.dir)));
+	PrintVoiceNames(*model);
 
 	TtsEngine::Audio audio;
 	const auto       result = model->Synthesize(text, voice, 1.0f, {}, audio, error);

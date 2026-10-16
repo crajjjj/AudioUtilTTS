@@ -31,7 +31,9 @@ In `Documents\My Games\Skyrim Special Edition\SKSE\`, also under Mod Organizer 2
 | `disabled in AudioUtilTTS.toml` | Set `[general] enable = true`, then `autts reload` |
 | `still starting`, `the model is still loading` | Wait a second and ask again |
 | `model folder not found: ...` | No voice model is installed at all. Install one, or fix `[model] dir` |
-| `no .onnx model in ...`, `tokens.txt missing in ...`, `voices.bin missing in ...`, `neither espeak-ng-data nor a lexicon in ...` | The model folder is incomplete: install it again |
+| `no .onnx model in ...`, `tokens.txt missing in ...`, `voices.bin missing in ...`, `neither espeak-ng-data nor a lexicon in ...`, `... missing in ... (Pocket model)` | The model folder is incomplete: install it again |
+| `no voice in ...\voices` | A Pocket model needs its recordings; see [Pocket voices](models.md#pocket-voices) |
+| `voice clip voices\...: ...` | That recording cannot be read, and the reason follows. Save it again as a plain wav, or remove it |
 | `the speech runtime rejected the model in ...` | Not a model the plugin reads; see [Voice Models](models.md) |
 | `no playable narration slot yet (restart the game once)` | Restart the game once |
 

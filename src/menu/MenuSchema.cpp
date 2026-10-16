@@ -143,7 +143,7 @@ namespace Core
 						  "Voice models kept loaded at once, the default one included. About 0.6 GB each; loading one again delays its next line by about a second."),
 					1, 32),
 				Applying(Advanced("model.family", "Model family", Control::Text,
-							 "auto reads the folder (voices.bin means Kokoro, otherwise VITS), or kokoro, or vits."),
+							 "auto reads the folder (lm_main*.onnx means Pocket, voices.bin Kokoro, otherwise VITS), or kokoro, vits or pocket."),
 					Applies::Reload),
 				Applying(Advanced("model.lexicon", "Lexicon files", Control::Text,
 							 "Only for multi-language Kokoro builds: file names inside the model folder, comma separated."),

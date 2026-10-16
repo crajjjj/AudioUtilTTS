@@ -1020,6 +1020,15 @@ namespace Speaker
 				const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
 				logger::info("Model '{}' loaded in {} ms: {} voices, {} Hz", a_folder, ms, model->VoiceCount(),
 					model->SampleRate());
+				// a Pocket voice is a clip, and its number is its place in name order
+				if (const auto& names = model->VoiceNames(); !names.empty()) {
+					std::string list;
+					for (std::size_t i = 0; i < names.size(); ++i) {
+						list += std::format("{}{} {}", i ? ", " : "", i, names[i]);
+					}
+					logger::info("Model '{}' is a Pocket model; its voices are its clips: {}. Speed does not apply to them",
+						a_folder, list);
+				}
 			}
 			return model;
 		}

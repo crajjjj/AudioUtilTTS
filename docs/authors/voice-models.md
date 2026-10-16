@@ -15,7 +15,23 @@ Data\SKSE\Plugins\AudioUtilTTS\models\<folder>\
 
 - **A folder named exactly like a voice type speaks for it** with no further file: `models\MaleNord` speaks for `MaleNord` with its first voice. For one voice and one voice type, that is all.
 - **The folder name is the model's name**, what a preset's `model = "..."` refers to. One plain folder name; case is ignored.
-- **The family is read off the folder**: `voices.bin` means Kokoro, otherwise VITS (Piper voices).
+- **The family is read off the folder**: an `lm_main*.onnx` means Pocket, `voices.bin` Kokoro, otherwise VITS (Piper voices).
+
+A Pocket model holds other files, and its voices are recordings:
+
+```
+Data\SKSE\Plugins\AudioUtilTTS\models\<folder>\
+  lm_main*.onnx  lm_flow*.onnx  encoder*.onnx  decoder*.onnx  text_conditioner*.onnx
+  vocab.json  token_scores.json
+  voices\*.wav          one recording per voice, numbered in file name order
+  model.toml            optional, as for any model
+```
+
+- **Each part may come as `.int8.onnx` or `.onnx`**; with both there, the `.int8` one is used.
+- **Every recording is read when the model loads.** One that cannot be read stops the model from loading, and the log names it: skipping it would renumber the voices after it.
+- **Use only voices you have the right to.** Kyutai's terms for Pocket TTS forbid copying a person's voice without their consent. A voice made from someone's recordings needs that person's agreement, and the license that comes with it belongs in the model folder.
+
+See [Pocket voices](../players/models.md#pocket-voices) for what makes a good recording.
 
 To make a model of your own, see [Training a Voice](training-voices.md).
 
@@ -75,6 +91,6 @@ It writes one `Release\AudioUtilTTS-Voice-<folder>.zip` per model folder, `model
 
 ## What to tell your users
 
-- **Versions**: `model.toml` needs AudioUtilTTS 0.2.1 or newer; speaking without the default model installed, 0.3.1 or newer.
+- **Versions**: `model.toml` needs AudioUtilTTS 0.2.1 or newer; speaking without the default model installed, 0.3.1 or newer; a Pocket model, 0.4.1 or newer.
 - **Memory**: each loaded model costs memory, and `[model] max_loaded` (4) caps how many are kept; see [How many fit in memory](../players/models.md#how-many-fit-in-memory). One model holding many voices costs it once.
 - **The license**: put the voice's license in the model folder.
