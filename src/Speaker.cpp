@@ -3737,7 +3737,7 @@ namespace Speaker
 		return {};
 	}
 
-	void EndPlayerLine(std::uint32_t a_id)
+	void EndPlayerLine(std::uint32_t a_id, bool a_stop)
 	{
 		std::int32_t     stop = 0;
 		std::deque<Line> dropped;  // destroyed outside the lock, see Cancel
@@ -3754,18 +3754,19 @@ namespace Speaker
 					++it;
 				}
 			}
-			if (g_playerPlaying.id == a_id && g_playerPlaying.handle > 0) {
-				stop = g_playerPlaying.handle;
-				g_playerPlaying = {};
-				if (g_laneHandle[kPlayer].load() == stop) {
-					g_lanes[kPlayer].quietAt = {};
-					g_laneHandle[kPlayer].store(0);
+			if (g_playerPlaying.id == a_id) {
+				if (a_stop && g_playerPlaying.handle > 0) {
+					stop = g_playerPlaying.handle;
+					if (g_laneHandle[kPlayer].load() == stop) {
+						g_lanes[kPlayer].quietAt = {};
+						g_laneHandle[kPlayer].store(0);
+					}
 				}
+				g_playerPlaying = {};
 			}
 		}
 		g_wake.notify_all();
 		dropped.clear();
-		// a line that played to its end is over by now: stopping it does nothing
 		if (const auto stopHandle = g_stopHandle.load(); stop > 0 && stopHandle && stopHandle(stop)) {
 			g_playerStopped.fetch_add(1);
 			logger::info("The player's line was stopped: the conversation moved on");
@@ -4360,6 +4361,8 @@ namespace Speaker
 		summary.player = PlayerState(*settings);
 		if (summary.player == "on") {
 			summary.player = std::format("on: {} spoken this session", g_playerSpoken.load());
+		} else if (!DBReV::IsPresent()) {
+			summary.player = "need Dragonborn ReVoiced, which is not installed";
 		}
 		summary.given = g_dialogueGiven.load();
 		summary.unvoiced = g_dialogueUnvoiced.load();

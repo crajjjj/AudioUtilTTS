@@ -309,7 +309,7 @@ namespace Menu
 			} else {
 				Fact("Dialogue", a_summary.dialogue, &kWarn);
 			}
-			Fact("Your lines", a_summary.player, a_summary.player.starts_with("on: ") ? nullptr : &kWarn);
+			Fact("Your lines", a_summary.player);
 			Fact("Line cache", std::format("{} lines, {:.0f} MB", a_summary.cacheLines, a_summary.cacheMb));
 		}
 

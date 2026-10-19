@@ -141,13 +141,14 @@ namespace DBReV
 		{
 			try {
 				Release(a_id);
-				if (a_reason != ::DBReV::kEndReason_Completed) {
+				const bool early = a_reason != ::DBReV::kEndReason_Completed;
+				if (early) {
 					g_endedEarly.fetch_add(1);
 					logger::info("DBReV line {} ended early: {}", a_id, ReasonText(a_reason));
 				}
-				// stops the line where it plays, drops it where it waits; for a
-				// completed line there is nothing left to do
-				Speaker::EndPlayerLine(a_id);
+				// stops the line where it still plays, drops it where it waits; a
+				// completed line has played to its end
+				Speaker::EndPlayerLine(a_id, early);
 			} catch (...) {
 			}
 		}

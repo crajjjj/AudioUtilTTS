@@ -167,9 +167,10 @@ namespace Speaker
 	// within maxWaitSeconds is still generated for the cache, so it is said at
 	// once the next time.
 	std::string SayPlayerLine(std::string_view a_text, PlayerLine a_line);
-	// The holder has let the conversation go on without the line: it is dropped
-	// where it waits or is being generated, and stopped where it plays.
-	void EndPlayerLine(std::uint32_t a_id);
+	// The holder has let the conversation go on: the line is dropped where it
+	// waits or is being generated, and, when a_stop (it did not play to its
+	// end: skipped, superseded, timed out), stopped where it plays.
+	void EndPlayerLine(std::uint32_t a_id, bool a_stop);
 	// The player begins a line, any voice mod's: an NPC line being spoken late
 	// by the player's conversation partner stops, as the game stops its own.
 	void PlayerSpeaks();
