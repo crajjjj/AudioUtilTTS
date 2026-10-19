@@ -120,6 +120,16 @@ namespace Config
 		bool  dialogueSkipDirections = true;
 		int   dialogueCacheMb = 1024;
 
+		// [player]: the player's own lines in a conversation, for a voice mod
+		// that holds the conversation open for them (Dragonborn ReVoiced, see
+		// DBReV.h). The voice is a preset, never the player's voice type.
+		bool        player = true;
+		std::string playerPreset;          // "" = the preset "female" / "male" by the player's sex
+		float       playerMaxWait = 5.0f;  // max_wait: seconds the conversation may wait for a line (1 to 30)
+		std::string playerGroup = "speech";
+		std::string playerChannel = "player";
+		int         playerSlots = 4;
+
 		// [preset.<name>], keyed by Normalize(name)
 		std::unordered_map<std::string, Preset> presets;
 

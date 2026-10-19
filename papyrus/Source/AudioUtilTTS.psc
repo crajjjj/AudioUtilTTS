@@ -66,7 +66,8 @@ Scriptname AudioUtilTTS Hidden
 
 ; API version of the installed plugin. 1 = first release. 2 added the dialogue
 ; functions and GetActorVoice. 3 added SpeakFrom, SpeakActorFrom,
-; IsNarrationFree, IsSpeechFree and the sender name in the event names.
+; IsNarrationFree, IsSpeechFree and the sender name in the event names. 4 added
+; the player line functions at the end of this file.
 int Function GetAPIVersion() global native
 
 ; True when the plugin can speak right now: a voice model is installed (the
@@ -212,3 +213,24 @@ string Function GetDialogueStatus() global native
 ; it is said. Returns the number of files removed. Not needed after replacing a
 ; model: lines are cached per model file, and ReloadConfig picks up the change.
 int Function ClearDialogueCache() global native
+
+; ---------------------------------------------------------------------------
+; The player's own lines (API 4). With Dragonborn ReVoiced (DBReV) installed,
+; a line of the player's that its voice pack has no recording for is handed
+; to this plugin and spoken in the player's voice while DBReV holds the
+; conversation. Nothing here has to be called for that; see [player] in
+; AudioUtilTTS.toml.
+; ---------------------------------------------------------------------------
+
+; Session switch on top of [player] enable. Off: every such line is declined
+; and DBReV handles it as before.
+Function SetPlayerEnabled(bool abEnabled) global native
+
+; True when the player's lines are spoken for: enabled in the config and not
+; switched off. It does not tell whether DBReV is installed; GetPlayerStatus
+; does.
+bool Function IsPlayerEnabled() global native
+
+; One line of status text: on or off and why, whether DBReV is there and this
+; plugin is registered with it, the voice, and this session's counts.
+string Function GetPlayerStatus() global native

@@ -9,7 +9,7 @@ version: 1
 name: AudioUtilTTSTest
 alias: autts
 script: AudioUtilTTSTest
-help: AudioUtilTTS console test harness (say, sayv, sayas, sayfrom, sayactor, sayactoras, event, eventas, sayevent, free, voice, dialogue, clearcache, status, stop, reload, enable)
+help: AudioUtilTTS console test harness (say, sayv, sayas, sayfrom, sayactor, sayactoras, event, eventas, sayevent, free, voice, dialogue, player, clearcache, status, stop, reload, enable)
 subs:
   - name: say
     func: Say
@@ -84,6 +84,14 @@ subs:
   - name: dialogue
     func: Dialogue
     help: Show the status of unvoiced-dialogue speech, or switch it for this session
+    args:
+      - name: on
+        type: int
+        default: -1
+        help: 1 = on, 0 = off, leave out to only show the status
+  - name: player
+    func: Player
+    help: Show the status of your own lines (Dragonborn ReVoiced), or switch them for this session
     args:
       - name: on
         type: int

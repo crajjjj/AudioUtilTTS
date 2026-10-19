@@ -2,7 +2,7 @@ set_xmakever("3.0.0")  -- the commonlibsse-ng submodule requires 3.0
 
 -- Globals
 PROJECT_NAME = "AudioUtilTTS"
-PROJECT_VERSION = "0.5.1"
+PROJECT_VERSION = "0.5.2"
 PROJECT_AUTHOR = "crajjjj"
 
 -- Project
@@ -113,6 +113,7 @@ target(PROJECT_NAME)
         import("scripts.slots")
         slots(path.join(os.projectdir(), "dist", "Sound", "AudioUtilTTS"), 4, "_tts_slot")
         slots(path.join(os.projectdir(), "dist", "Sound", "AudioUtilTTS"), 4, "_tts_speech")
+        slots(path.join(os.projectdir(), "dist", "Sound", "AudioUtilTTS"), 4, "_tts_player")
         -- dialogue lines are played by the game as voice files: wav + lip pairs
         slots(path.join(os.projectdir(), "dist", "Sound", "Voice", "AudioUtilTTS"), 128, "_tts_dialog", true)
         -- the in-game menu's defaults and its "reset": the config as shipped, which

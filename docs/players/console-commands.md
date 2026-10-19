@@ -34,6 +34,8 @@ These send the mod events a mod would.
 | `autts voice` | The selected actor's voice type and the voice it gets |
 | `autts dialogue` | The state of unvoiced dialogue and this session's counts |
 | `autts dialogue 0` | Switch unvoiced dialogue off for this session (`1` = on) |
+| `autts player` | The state of your own lines with Dragonborn ReVoiced, the voice, and this session's counts |
+| `autts player 0` | Switch your own lines off for this session (`1` = on) |
 | `autts clearcache` | Delete the cached dialogue lines |
 | `autts status` | Whether speech is ready, and why not |
 | `autts reload` | Read the config again and reload the models |

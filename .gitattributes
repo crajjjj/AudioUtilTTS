@@ -8,3 +8,4 @@ tools/voicetrain/*.txt text eol=lf
 # AudioUtil's), and core.autocrlf would change them on checkout.
 vendor/SKSEMenuFramework/SKSEMenuFramework.h -text
 src/menu/TomlEdit.h -text
+include/API/DBReV_API.h -text

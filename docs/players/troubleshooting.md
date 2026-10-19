@@ -95,6 +95,30 @@ Still silent? See below.
 
 Speech that stops before the subtitle ends was cut at `[playback] max_chars`.
 
+## Your own lines are silent
+
+With Dragonborn ReVoiced installed, `autts player` first:
+
+| It says | Meaning |
+|---|---|
+| `player lines off` | `[player] enable = false` |
+| `player lines switched off` | `autts player 0` or `autts enable 0` |
+| `on, no DBReV` | Dragonborn ReVoiced's plugin is not loaded |
+| `DBReV is installed, but without the voice provider API` | Its version is 1.5.2 or older: update it |
+| `not registered` | Registration was refused; `AudioUtilTTS.log` and `DBReV.log` say why (another provider holds the slot) |
+| `player lines on` ... `lines offered 0` | DBReV never offered a line: no voice pack is selected in its menu, or every line you picked has a recording in the pack |
+| `slots 0 of 4` | The placeholder files were created at this launch: restart the game once |
+
+Then `AudioUtilTTS.log`, one line per offered line:
+
+| The log says | What to do |
+|---|---|
+| `declined: it would take about N s to generate, more than ...` | Raise `[player] max_wait` or `[model] threads`. The line is generated for the next time |
+| `declined: the default model is not loaded` | The voice by sex is on the default model: install it, or name a `[player] preset` on another model |
+| `declined: nothing in it to say` | The line is a stage direction only |
+| `generating, about N s` and then nothing | The line was dropped on the way: the next lines of the log say why (`Could not generate`, `No playable player slot`, `AudioUtil did not play`) |
+| `the conversation had moved on before the line started` | It was skipped, another topic was picked or DBReV's wait ran out while the line was generated |
+
 ## The mouth stays still
 
 - Character speech needs AudioUtil 0.9.26 or newer.

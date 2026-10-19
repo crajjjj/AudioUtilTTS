@@ -6,6 +6,7 @@
 - **[AudioUtil](https://github.com/crajjjj/AudioUtil) 0.9.29 or newer.**
 - **[ConsoleUtil Extended](https://www.nexusmods.com/skyrimspecialedition/mods/133569)** for the `autts` console commands, which is how you check an install.
 - **[SKSE Menu Framework](https://www.nexusmods.com/skyrimspecialedition/mods/120352)**, optional, for the [in-game menu](settings-menu.md).
+- **[Dragonborn ReVoiced](https://www.nexusmods.com/skyrimspecialedition/mods/184221)**, optional, newer than 1.5.2, for [your own lines](player-lines.md).
 
 ??? note "With an older AudioUtil"
     The plugin runs with AudioUtil 0.9.9 or newer, with less: before 0.9.26 the mouth stays still on character speech, before 0.9.28 a line that was cut short holds its place until it would have ended, and before 0.9.29 a line spoken late overlaps its speaker's next line.
@@ -32,7 +33,7 @@ The first four are on the [latest release](https://github.com/crajjjj/AudioUtilT
 | + voice archives named after voice types | The NPCs of those voice types, each in their own voice | Character lines of those NPCs. Narration needs the default voice |
 | + a voice type patch | Also the characters it names | The same |
 
-The rows add up in any combination.
+The rows add up in any combination. With Dragonborn ReVoiced installed and a voice pack selected in it, your own dialogue choices that the pack has no recording for are spoken too, in the generic female or male voice of the default model unless you name a [preset](player-lines.md#the-voice).
 
 **A voice archive named after a voice type needs no configuration**: `models\MaleNord` speaks for every `MaleNord` NPC. Only lines without a recording are spoken. A Kokoro voice takes about 0.3 GB on disk and 0.6 GB of memory while loaded; see [How many fit in memory](models.md#how-many-fit-in-memory).
 
@@ -84,6 +85,7 @@ autts sayactor "Not so loud."
 
 - Delays, dropped lines, memory: [What to Expect](what-to-expect.md).
 - Which dialogue lines get a voice, and when: [Unvoiced Dialogue](unvoiced-dialogue.md).
+- Your own dialogue choices, with Dragonborn ReVoiced: [Your Own Lines](player-lines.md).
 - An NPC has no voice, or the wrong one: [Voices, Presets & Voice Types](voices.md).
 - Settings in game: [In-Game Menu](settings-menu.md).
 - Something not working: [Troubleshooting & Logs](troubleshooting.md).

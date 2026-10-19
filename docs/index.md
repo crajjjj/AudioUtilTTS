@@ -3,6 +3,7 @@
 Live text-to-speech for Skyrim SE. It gives a voice to lines that have none:
 
 - **Dialogue without voice files.** Plenty of mod dialogue ships as text only. The plugin speaks those lines while you play. With a voice installed for the speaker's voice type, they sound like that kind of NPC.
+- **Your own lines**, with [Dragonborn ReVoiced](https://www.nexusmods.com/skyrimspecialedition/mods/184221): the lines of yours its voice pack has no recording for are spoken here, while it holds the conversation.
 - **Lines a mod hands it.** A mod sends a line of text and it is spoken a moment later, as narration or by a character, through [AudioUtil](https://github.com/crajjjj/AudioUtil).
 
 The voice model runs inside the plugin, on the CPU, with no internet connection and no helper program. Speech is generated on background threads, not on the game's own.
@@ -15,6 +16,7 @@ The voice model runs inside the plugin, on the CPU, with no internet connection 
 | | What it is | What it needs |
 |---|---|---|
 | **Unvoiced dialogue** | Game dialogue that has no voice file, spoken in the voice of the speaker's voice type | A voice for that voice type. Nothing has to be called or patched |
+| **Your own lines** | Your dialogue choices that Dragonborn ReVoiced's voice pack has no recording for, in your character's voice | Dragonborn ReVoiced with a voice pack selected. Nothing to configure |
 | **Narration** | A line with no speaker, played flat | A mod that sends it, with one mod event or one Papyrus call |
 | **Character speech** | A line said by an actor: positioned at them, with their mouth moving | A mod, the same way |
 
@@ -27,6 +29,7 @@ Install it, hear it, set it up. Start here if you just want to use the mod.
 - [Getting Started](players/getting-started.md): what to install, what each archive gives you, and a first check in the console
 - [What to Expect](players/what-to-expect.md): how soon a line is spoken, what happens to lines that arrive too fast, and what it costs in memory and CPU
 - [Unvoiced Dialogue](players/unvoiced-dialogue.md): how dialogue without voice files gets a voice, what happens to greetings, and the cache
+- [Your Own Lines](players/player-lines.md): your dialogue choices spoken through Dragonborn ReVoiced, and which voice they get
 - [Voices, Presets & Voice Types](players/voices.md): which NPC gets which voice, voice type patches, and naming voices of your own
 - [Voice Models](players/models.md): adding voices, when a model needs a file of its own, and how many fit in memory
 - [In-Game Menu](players/settings-menu.md): every setting in SKSE Menu Framework's Mod Control Panel, and a voice to try

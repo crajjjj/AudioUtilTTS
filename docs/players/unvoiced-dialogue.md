@@ -43,8 +43,8 @@ A line said right away cannot be ready in time. With `[dialogue] greetings = tru
 - **It plays as character speech**: at the NPC, mouth moving, on the `[speech]` group and channel.
 - **It goes first**: it is generated before every other waiting dialogue line.
 - **A long line starts with its first sentence** (`greetings_split`), and the rest follows. Only that first time.
-- **It stops** when its speaker goes on to another line, as the game's own lines do (needs AudioUtil 0.9.29).
-- **It is not spoken** when it would be later than `greetings_max_late` (4 seconds, counted from when the NPC begins the line; with DBVO that is after the player's own voiced line), when the speaker is gone or has moved on, or while another character line is spoken. It is in the cache for next time either way.
+- **It stops** when its speaker goes on to another line, or when you begin a line of your own with Dragonborn ReVoiced, as the game's own lines do (needs AudioUtil 0.9.29).
+- **It is not spoken** when it would be later than `greetings_max_late` (4 seconds, counted from when the NPC begins the line; with a voiced player, Dragonborn ReVoiced or DBVO, that is after your own line), when the speaker is gone or has moved on, or while another character line is spoken. It is in the cache for next time either way.
 - **Not for a line with further responses behind it.** That one stays unvoiced the first time, and the responses after it are generated while it plays.
 
 ## Greetings made ahead

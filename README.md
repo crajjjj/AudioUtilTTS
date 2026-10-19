@@ -5,6 +5,10 @@ Live text-to-speech for Skyrim SE. It gives a voice to lines that have none:
 - **Dialogue without voice files.** Plenty of mod dialogue ships as text only. The
   plugin speaks those lines while you play, in the voice set up for the
   speaker's voice type.
+- **Your own lines**, with
+  [Dragonborn ReVoiced](https://www.nexusmods.com/skyrimspecialedition/mods/184221):
+  the lines of yours its voice pack has no recording for are spoken here, while
+  it holds the conversation.
 - **Lines a mod hands it.** A mod sends a line of text and it is spoken a moment
   later, as narration or by a character, through
   [AudioUtil](https://github.com/crajjjj/AudioUtil).
@@ -22,6 +26,7 @@ Everything is on the docs site: **https://crajjjj.github.io/AudioUtilTTS/**
 | Install it and hear it | [Getting Started](https://crajjjj.github.io/AudioUtilTTS/players/getting-started/) |
 | Know what it costs and how it behaves | [What to Expect](https://crajjjj.github.io/AudioUtilTTS/players/what-to-expect/) |
 | Have dialogue without voice files spoken | [Unvoiced Dialogue](https://crajjjj.github.io/AudioUtilTTS/players/unvoiced-dialogue/) |
+| Have my own lines spoken, with Dragonborn ReVoiced | [Your Own Lines](https://crajjjj.github.io/AudioUtilTTS/players/player-lines/) |
 | Decide which NPC gets which voice | [Voices, Presets & Voice Types](https://crajjjj.github.io/AudioUtilTTS/players/voices/) |
 | Add voices | [Voice Models](https://crajjjj.github.io/AudioUtilTTS/players/models/) |
 | Change settings in game | [In-Game Menu](https://crajjjj.github.io/AudioUtilTTS/players/settings-menu/) |
@@ -40,7 +45,9 @@ Requirements: Skyrim SE / AE with SKSE64 and Address Library,
 [ConsoleUtil Extended](https://www.nexusmods.com/skyrimspecialedition/mods/133569)
 for the `autts` console commands, and optionally
 [SKSE Menu Framework](https://www.nexusmods.com/skyrimspecialedition/mods/120352)
-for the in-game menu.
+for the in-game menu and
+[Dragonborn ReVoiced](https://www.nexusmods.com/skyrimspecialedition/mods/184221)
+for your own lines.
 
 From the [latest release](https://github.com/crajjjj/AudioUtilTTS/releases/latest),
 installed like any mod:

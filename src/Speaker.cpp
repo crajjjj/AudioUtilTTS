@@ -1,6 +1,7 @@
 #include "Speaker.h"
 
 #include "Config.h"
+#include "DBReV.h"
 #include "Lip.h"
 #include "TtsEngine.h"
 
@@ -39,6 +40,7 @@ namespace Speaker
 		{
 			kNarration,
 			kSpeech,
+			kPlayer,
 			kDialogue,
 			kLaneCount
 		};
@@ -47,10 +49,16 @@ namespace Speaker
 		// line is played by the game itself as a voice file, so its placeholders
 		// sit where voice files do.
 		constexpr std::array<std::string_view, kLaneCount> SLOT_DIR_REL{ "Sound\\AudioUtilTTS"sv,
-			"Sound\\AudioUtilTTS"sv, "Sound\\Voice\\AudioUtilTTS"sv };
+			"Sound\\AudioUtilTTS"sv, "Sound\\AudioUtilTTS"sv, "Sound\\Voice\\AudioUtilTTS"sv };
 		constexpr std::array<std::string_view, kLaneCount> SLOT_PREFIX{ "_tts_slot"sv, "_tts_speech"sv,
-			"_tts_dialog"sv };
-		constexpr std::array<std::string_view, kLaneCount> LANE_NAME{ "narration"sv, "speech"sv, "dialogue"sv };
+			"_tts_player"sv, "_tts_dialog"sv };
+		constexpr std::array<std::string_view, kLaneCount> LANE_NAME{ "narration"sv, "speech"sv, "player"sv,
+			"dialogue"sv };
+
+		// What generating a character costs on a model not measured yet, for
+		// the one estimate that decides something before the first line: whether
+		// a player line can be ready while the conversation waits.
+		constexpr float UNMEASURED_MS_PER_CHAR = 25.0f;
 
 		constexpr std::size_t MAX_DIALOGUE_WAITING = 96;
 		// Greeting lines made ahead may fill this much of the queue and no more:
@@ -103,6 +111,46 @@ namespace Speaker
 			std::size_t                             fullChars = 0;
 		};
 
+		// What a player line owes the mod that holds the conversation open for it
+		// (see Speaker::PlayerLine): one answer, started or dropped, whichever
+		// comes first. The line carries it wherever it goes, and a line that dies
+		// anywhere on the way, in a queue a Cancel empties or a task never run,
+		// still answers: the destructor drops it.
+		struct PlayerTicket
+		{
+			enum State
+			{
+				kPending,
+				kStarted,
+				kDropped
+			};
+			std::uint32_t              id = 0;
+			std::string                holder;
+			std::function<bool(float)> started;
+			std::function<void()>      dropped;
+			std::atomic<State>         state{ kPending };
+
+			~PlayerTicket() { Drop(); }
+
+			// the line plays, a_seconds long; false = the holder does not want it
+			bool Start(float a_seconds)
+			{
+				State expected = kPending;
+				if (!state.compare_exchange_strong(expected, kStarted)) {
+					return false;
+				}
+				return started && started(a_seconds);
+			}
+
+			void Drop()
+			{
+				State expected = kPending;
+				if (state.compare_exchange_strong(expected, kDropped) && dropped) {
+					dropped();
+				}
+			}
+		};
+
 		struct Line
 		{
 			std::string     text;
@@ -130,6 +178,10 @@ namespace Speaker
 			std::uint64_t   epoch = 0;
 			float           estimateMs = 0.0f;         // expected generation time, 0 = unknown
 			std::shared_ptr<DialogueJob> job;          // dialogue lane only
+			// player lane only: what the line owes the mod holding the conversation
+			// for it (none = generated for the cache only), and its cache file
+			std::shared_ptr<PlayerTicket> ticket;
+			fs::path                      playerCache;
 		};
 
 		struct LaneState
@@ -312,6 +364,21 @@ namespace Speaker
 			std::int32_t handle = 0;  // the AudioUtil handle, 0 = none
 		};
 		LatePlaying g_latePlaying;  // g_lock
+
+		// The player's own lines (see PlayerLine). The holder waits for one line
+		// at a time: g_playerWanted is that line, 0 = none, and a line that is
+		// not it any more is not generated on or played (EndPlayerLine).
+		std::atomic<bool> g_playerOn{ true };  // session switch
+		std::uint32_t     g_playerWanted = 0;  // g_lock
+		struct PlayerPlaying
+		{
+			std::uint32_t id = 0;
+			std::int32_t  handle = 0;  // the AudioUtil handle, 0 = none
+		};
+		PlayerPlaying              g_playerPlaying;  // g_lock
+		std::atomic<std::uint32_t> g_playerSpoken{ 0 };   // lines played
+		std::atomic<std::uint32_t> g_playerCached{ 0 };   // of those, from the cache
+		std::atomic<std::uint32_t> g_playerStopped{ 0 };  // stopped before their end
 
 		std::array<std::atomic<int>, kLaneCount> g_usableSlots{};
 
@@ -1419,7 +1486,190 @@ namespace Speaker
 			g_wake.notify_all();
 		}
 
-		// a_quietAt = what the lane's quietAt was set to for this line
+		// Game thread. Hands a line that is in its slot to AudioUtil. a_quietAt =
+		// what the lane's quietAt was set to for this line; a_synthMs < 0 = the
+		// audio came from the cache. A player line's ticket answers its holder:
+		// started once it plays, dropped (by the ticket's own destructor) when it
+		// does not.
+		void PlayLine(const std::string& a_slotRel, Line a_line, float a_seconds, long long a_synthMs,
+			Clock::time_point a_quietAt)
+		{
+			auto&       line = a_line;
+			const auto& slotRel = a_slotRel;
+			if (line.epoch != g_epoch.load()) {
+				return;
+			}
+			// the line is not heard after all: its lane is not busy with it
+			const auto notSpoken = [&] {
+				std::scoped_lock lock{ g_lock };
+				if (auto& quietAt = g_lanes[line.lane].quietAt; quietAt == a_quietAt) {
+					quietAt = {};
+					g_laneHandle[line.lane].store(0);
+				}
+			};
+			const auto play = ResolvePlayFile();
+			if (!play) {
+				notSpoken();
+				return;
+			}
+			const auto settings = Config::Get();
+			const bool speech = line.lane == kSpeech;
+			const bool player = line.lane == kPlayer;
+
+			// a line said by someone needs them: keep them alive across the call
+			RE::NiPointer<RE::Actor> speaker;
+			if (speech || player) {
+				speaker = line.speaker.get();
+				if (!speaker || !speaker->Is3DLoaded()) {
+					logger::info("Speaker is gone or not loaded, a {}-char line{} was dropped", line.text.size(),
+						From(line.sender));
+					notSpoken();
+					return;
+				}
+			}
+			const bool lateGreeting = line.asked != Clock::time_point{};
+			if (lateGreeting) {
+				if (const auto why = LateGreetingStale(line.asked, speaker.get(), line.lateInfo, line.latePart > 0);
+					!why.empty()) {
+					LogLateGreetingSkipped(line.asked, why);
+					notSpoken();
+					return;
+				}
+				// the rest of a line whose beginning was stopped: the speaker went on
+				bool cut = false;
+				if (line.latePart > 0 && line.split) {
+					std::scoped_lock lock{ g_lock };
+					cut = line.split->cut;
+				}
+				if (cut) {
+					notSpoken();
+					return;
+				}
+			}
+			if (player) {
+				// a line its holder has let go of meanwhile (EndPlayerLine)
+				bool wanted = false;
+				{
+					std::scoped_lock lock{ g_lock };
+					wanted = line.ticket && g_playerWanted == line.ticket->id;
+				}
+				if (!wanted) {
+					notSpoken();
+					return;
+				}
+			}
+
+			auto call = play;
+			bool lipSync = false;
+			if ((speech || player) && line.lipSync) {
+				const auto withLipSync = g_playFileLipSync.load();
+				if (withLipSync && g_audioUtilVersion.load() >= LIPSYNC_FOLLOWS_REWRITES) {
+					call = withLipSync;
+					lipSync = true;
+				} else if (!g_warnedOldLipSync.exchange(true)) {
+					logger::warn("Character lines play without lipsync: that needs AudioUtil 0.9.26 or newer");
+				}
+			}
+
+			const auto& group = player ? settings->playerGroup : speech ? settings->speechGroup : settings->group;
+			const auto& channel = player ? settings->playerChannel : speech ? settings->speechChannel : settings->channel;
+			const auto  handle = call(slotRel.c_str(), speaker.get(), line.volume, group.c_str(), channel.c_str());
+			if (handle <= 0) {
+				logger::warn("AudioUtil did not play {} (see AudioUtil.log)", slotRel);
+				notSpoken();
+				return;
+			}
+			{
+				// unless a newer line has taken the lane meanwhile
+				std::scoped_lock lock{ g_lock };
+				if (auto& state = g_lanes[line.lane]; state.quietAt == a_quietAt) {
+					g_laneHandle[line.lane].store(handle);
+					state.startedAt = Clock::now();
+					// It ends its length from now: the worker reckoned from when it
+					// handed the line over, a frame or a hitch ago, and whoever waits
+					// for the end (the rest of a line in two parts) would start that
+					// much too early and cut into it.
+					state.quietAt = state.startedAt +
+									std::chrono::milliseconds(static_cast<long long>(a_seconds * 1000.0f));
+					g_wake.notify_all();
+				}
+				if (speech) {
+					// whatever played on the character lane before is over now
+					g_latePlaying =
+						lateGreeting ? LatePlaying{ speaker->GetFormID(), line.lateInfo, handle } : LatePlaying{};
+				}
+				if (player) {
+					g_playerPlaying = PlayerPlaying{ line.ticket->id, handle };
+				}
+				if (line.split && line.latePart == 0) {
+					// the beginning of a line in two parts plays: its rest follows the
+					// same way, now or as soon as it is generated
+					auto& split = *line.split;
+					split.playing = true;
+					split.spoken = line;
+					split.spoken.split.reset();
+					split.spoken.ready.reset();
+					split.spoken.cached.clear();
+					g_splitSpeaking = line.split;
+					QueueRestLocked(line.split);
+				}
+			}
+			// The holder of a player line is told it plays. Its no means the
+			// conversation moved on in the moment before: the line stops again.
+			if (player && !line.ticket->Start(a_seconds)) {
+				if (const auto stop = g_stopHandle.load(); stop) {
+					stop(handle);
+				}
+				{
+					std::scoped_lock lock{ g_lock };
+					if (g_laneHandle[kPlayer].load() == handle) {
+						g_lanes[kPlayer].quietAt = {};
+						g_laneHandle[kPlayer].store(0);
+					}
+					if (g_playerPlaying.handle == handle) {
+						g_playerPlaying = {};
+					}
+				}
+				g_playerStopped.fetch_add(1);
+				g_wake.notify_all();
+				return;
+			}
+			std::string late;
+			if (line.latePart > 0) {
+				late = ", the rest of a line spoken late";
+			} else if (lateGreeting) {
+				g_dialogueLate.fetch_add(1);
+				late = std::format(", late, {:.1f} s after it was said{}",
+					std::chrono::duration<float>(Clock::now() - line.asked).count(),
+					line.split ? ", its beginning: the rest follows" : "");
+			}
+			std::string by;
+			if (speech) {
+				by = std::format(" by {:08X}{}", speaker->GetFormID(), lipSync ? " with lipsync" : "");
+			} else if (player) {
+				g_playerSpoken.fetch_add(1);
+				if (a_synthMs < 0) {
+					g_playerCached.fetch_add(1);
+				}
+				by = std::format(" by the player{} for {} line {}", lipSync ? " with lipsync" : "", line.ticket->holder,
+					line.ticket->id);
+			}
+			logger::info("Spoke {} chars as {:.1f} s of speech, {} ({}{}{}{}, model {}, {}, {}, handle {})",
+				line.text.size(), a_seconds,
+				a_synthMs < 0 ? "from the cache"s : std::format("generated in {} ms", a_synthMs), LANE_NAME[line.lane],
+				From(line.sender), by, late, line.model.empty() ? "default"s : line.model, VoiceText(line), slotRel,
+				handle);
+			// A greeting spoken late is the game's line and a player line the
+			// holder's, not a mod's: no mod is told those started, as none is for
+			// any other dialogue line.
+			if (auto* source = (lateGreeting || player) ? nullptr : SKSE::GetModCallbackEventSource()) {
+				SKSE::ModCallbackEvent event{ RE::BSFixedString(SPOKEN_EVENT), RE::BSFixedString(line.text),
+					static_cast<float>(handle), speaker.get() };
+				source->SendEvent(&event);
+			}
+		}
+
+		// Plays the line on the game thread, a frame from now.
 		void PostPlay(std::string a_slotRel, Line a_line, float a_seconds, long long a_synthMs,
 			Clock::time_point a_quietAt)
 		{
@@ -1427,130 +1677,11 @@ namespace Speaker
 			if (!task) {
 				return;
 			}
-			task->AddTask([slotRel = std::move(a_slotRel), line = std::move(a_line), a_seconds, a_synthMs, a_quietAt]() {
-				if (line.epoch != g_epoch.load()) {
-					return;
-				}
-				// the line is not heard after all: its lane is not busy with it
-				const auto notSpoken = [&] {
-					std::scoped_lock lock{ g_lock };
-					if (auto& quietAt = g_lanes[line.lane].quietAt; quietAt == a_quietAt) {
-						quietAt = {};
-						g_laneHandle[line.lane].store(0);
-					}
-				};
-				const auto play = ResolvePlayFile();
-				if (!play) {
-					notSpoken();
-					return;
-				}
-				const auto settings = Config::Get();
-				const bool speech = line.lane == kSpeech;
-
-				// a character line needs its character: keep them alive across the call
-				RE::NiPointer<RE::Actor> speaker;
-				if (speech) {
-					speaker = line.speaker.get();
-					if (!speaker || !speaker->Is3DLoaded()) {
-						logger::info("Speaker is gone or not loaded, a {}-char line{} was dropped", line.text.size(),
-							From(line.sender));
-						notSpoken();
-						return;
-					}
-				}
-				const bool lateGreeting = line.asked != Clock::time_point{};
-				if (lateGreeting) {
-					if (const auto why = LateGreetingStale(line.asked, speaker.get(), line.lateInfo, line.latePart > 0);
-						!why.empty()) {
-						LogLateGreetingSkipped(line.asked, why);
-						notSpoken();
-						return;
-					}
-					// the rest of a line whose beginning was stopped: the speaker went on
-					bool cut = false;
-					if (line.latePart > 0 && line.split) {
-						std::scoped_lock lock{ g_lock };
-						cut = line.split->cut;
-					}
-					if (cut) {
-						notSpoken();
-						return;
-					}
-				}
-
-				auto call = play;
-				bool lipSync = false;
-				if (speech && line.lipSync) {
-					const auto withLipSync = g_playFileLipSync.load();
-					if (withLipSync && g_audioUtilVersion.load() >= LIPSYNC_FOLLOWS_REWRITES) {
-						call = withLipSync;
-						lipSync = true;
-					} else if (!g_warnedOldLipSync.exchange(true)) {
-						logger::warn("Character lines play without lipsync: that needs AudioUtil 0.9.26 or newer");
-					}
-				}
-
-				const auto& group = speech ? settings->speechGroup : settings->group;
-				const auto& channel = speech ? settings->speechChannel : settings->channel;
-				const auto  handle = call(slotRel.c_str(), speaker.get(), line.volume, group.c_str(), channel.c_str());
-				if (handle <= 0) {
-					logger::warn("AudioUtil did not play {} (see AudioUtil.log)", slotRel);
-					notSpoken();
-					return;
-				}
-				{
-					// unless a newer line has taken the lane meanwhile
-					std::scoped_lock lock{ g_lock };
-					if (auto& state = g_lanes[line.lane]; state.quietAt == a_quietAt) {
-						g_laneHandle[line.lane].store(handle);
-						state.startedAt = Clock::now();
-						// It ends its length from now: the worker reckoned from when it
-						// handed the line over, a frame or a hitch ago, and whoever waits
-						// for the end (the rest of a line in two parts) would start that
-						// much too early and cut into it.
-						state.quietAt = state.startedAt +
-										std::chrono::milliseconds(static_cast<long long>(a_seconds * 1000.0f));
-						g_wake.notify_all();
-					}
-					if (speech) {
-						// whatever played on the character lane before is over now
-						g_latePlaying =
-							lateGreeting ? LatePlaying{ speaker->GetFormID(), line.lateInfo, handle } : LatePlaying{};
-					}
-					if (line.split && line.latePart == 0) {
-						// the beginning of a line in two parts plays: its rest follows the
-						// same way, now or as soon as it is generated
-						auto& split = *line.split;
-						split.playing = true;
-						split.spoken = line;
-						split.spoken.split.reset();
-						split.spoken.ready.reset();
-						split.spoken.cached.clear();
-						g_splitSpeaking = line.split;
-						QueueRestLocked(line.split);
-					}
-				}
-				std::string late;
-				if (line.latePart > 0) {
-					late = ", the rest of a line spoken late";
-				} else if (lateGreeting) {
-					g_dialogueLate.fetch_add(1);
-					late = std::format(", late, {:.1f} s after it was said{}",
-						std::chrono::duration<float>(Clock::now() - line.asked).count(),
-						line.split ? ", its beginning: the rest follows" : "");
-				}
-				logger::info("Spoke {} chars as {:.1f} s of speech, generated in {} ms ({}{}{}{}, model {}, {}, {}, "
-							 "handle {})",
-					line.text.size(), a_seconds, a_synthMs, LANE_NAME[line.lane], From(line.sender),
-					speech ? std::format(" by {:08X}{}", speaker->GetFormID(), lipSync ? " with lipsync" : "") : ""s, late,
-					line.model.empty() ? "default"s : line.model, VoiceText(line), slotRel, handle);
-				// A greeting spoken late is the game's line, not a mod's: no mod is
-				// told it started, as none is for any other dialogue line.
-				if (auto* source = lateGreeting ? nullptr : SKSE::GetModCallbackEventSource()) {
-					SKSE::ModCallbackEvent event{ RE::BSFixedString(SPOKEN_EVENT), RE::BSFixedString(line.text),
-						static_cast<float>(handle), speaker.get() };
-					source->SendEvent(&event);
-				}
+			// shared, not copied: the task is copied on its way, and a player
+			// line's ticket must answer once
+			auto line = std::make_shared<Line>(std::move(a_line));
+			task->AddTask([slotRel = std::move(a_slotRel), line, a_seconds, a_synthMs, a_quietAt]() {
+				PlayLine(slotRel, std::move(*line), a_seconds, a_synthMs, a_quietAt);
 			});
 		}
 
@@ -2192,6 +2323,108 @@ namespace Speaker
 			PostPlay(SlotDataRel(lane, slot), std::move(a_line), seconds, synthMs, quietAt);
 		}
 
+		// The player's own line in a conversation (see PlayerLine): from the
+		// cache when it was said before, else generated, and kept in the cache
+		// either way, so that the next time it is said at once. It is played
+		// without waiting for the lane: the line before it is over, its holder
+		// having let the conversation go on from it (EndPlayerLine), or else its
+		// channel stops it. A line with no ticket is generated for the cache only.
+		void ProcessPlayer(Line a_line)
+		{
+			const auto settings = Config::Get();
+			// still the line the holder waits for? A line for the cache only
+			// answers to a Cancel alone.
+			const auto wanted = [&] {
+				if (a_line.epoch != g_epoch.load()) {
+					return false;
+				}
+				if (!a_line.ticket) {
+					return true;
+				}
+				std::scoped_lock lock{ g_lock };
+				return g_playerWanted == a_line.ticket->id;
+			};
+			if (!wanted()) {
+				return;  // the ticket, if any, answers when the line dies here
+			}
+
+			TtsEngine::Audio audio;
+			long long        synthMs = -1;  // stays -1 when the line was in the cache
+			if (!LoadCached(a_line.playerCache, audio)) {
+				bool        fellBack = false;
+				const auto* model = ModelFor(a_line.model, *settings, fellBack);
+				if (!model) {
+					LogOnce("A player line was dropped: its model is not loaded, and neither is the default one");
+					return;
+				}
+				if (fellBack) {
+					// the voice belonged to the model that is not there
+					a_line.model.clear();
+					a_line.voice = settings->voice;
+					a_line.clip = settings->voiceClip;
+				}
+				if (!wanted()) {
+					return;  // loading a model can take a second
+				}
+				const auto modelKey = ModelKeyOf(a_line, *settings);
+				MarkBusy(a_line.estimateMs);
+				std::string error;
+				const int   voice = VoiceNumberFor(*model, a_line, modelKey, error);
+				const auto  start = Clock::now();
+				const auto  result = voice < 0 ? TtsEngine::Result::Failed :
+				                                 model->Synthesize(a_line.text, voice, a_line.speed, wanted, audio, error);
+				MarkBusy(0.0f);
+				if (result == TtsEngine::Result::Cancelled) {
+					return;
+				}
+				if (result != TtsEngine::Result::Ok) {
+					logger::warn("Could not generate a {}-char player line: {}", a_line.text.size(), error);
+					return;
+				}
+				synthMs = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
+				NoteSpeed(modelKey, synthMs, a_line.text.size());
+				TtsEngine::Resample(audio, settings->outputRate);
+				// the cache file is named after the voice: after a fallback, another one
+				if (const auto cacheFile = CacheFileFor(modelKey, a_line, *settings); !cacheFile.empty()) {
+					StoreCached(cacheFile, audio);
+				}
+			}
+			if (!a_line.ticket) {
+				if (synthMs >= 0) {
+					logger::info("Player line generated in {} ms for the next time it is said: {} chars as {:.1f} s of speech",
+						synthMs, a_line.text.size(), audio.Seconds());
+				}
+				return;
+			}
+			if (!wanted()) {
+				return;
+			}
+
+			const int slot = TakeSlot(kPlayer);
+			if (slot < 0) {
+				logger::warn("No playable player slot (they work from the launch after they are created), the player's "
+							 "line was dropped");
+				return;
+			}
+			std::string error;
+			if (!TtsEngine::WriteWav(SlotDisk(kPlayer, slot), audio, error)) {
+				logger::warn("Could not write {}: {}", SlotDataRel(kPlayer, slot), error);
+				return;
+			}
+			const float       seconds = audio.Seconds();
+			Clock::time_point quietAt;
+			{
+				std::scoped_lock lock{ g_lock };
+				if (a_line.epoch != g_epoch.load() || g_playerWanted != a_line.ticket->id) {
+					return;
+				}
+				quietAt = Clock::now() + std::chrono::milliseconds(static_cast<long long>(seconds * 1000.0f));
+				g_lanes[kPlayer].quietAt = quietAt;
+				g_laneHandle[kPlayer].store(STARTING);
+			}
+			PostPlay(SlotDataRel(kPlayer, slot), std::move(a_line), seconds, synthMs, quietAt);
+		}
+
 		void Worker()
 		{
 			LoadDefaultModel();
@@ -2215,21 +2448,30 @@ namespace Speaker
 					// of it: generating that one can take seconds, and they would be
 					// heard as lateness. Not for long, the game may be busy.
 					const auto isLate = [](const Line& a_line) { return a_line.asked != Clock::time_point{}; };
+					// a player line a conversation waits for; one for the cache only is
+					// a line like any other
+					const auto isPlayer = [](const Line& a_line) { return a_line.lane == kPlayer && a_line.ticket; };
 					if (g_lateOnItsWay > 0) {
 						g_wake.wait_for(lock, LATE_HANDOVER_WAIT, [&] {
-							return g_lateOnItsWay <= 0 || std::any_of(g_waiting.begin(), g_waiting.end(), isLate);
+							return g_lateOnItsWay <= 0 || std::any_of(g_waiting.begin(), g_waiting.end(), isLate) ||
+								   std::any_of(g_waiting.begin(), g_waiting.end(), isPlayer);
 						});
 						// a Cancel or a load may have emptied the queues meanwhile
 						if (g_reloadWanted || (g_waiting.empty() && g_dialogueWaiting.empty())) {
 							continue;
 						}
 					}
-					// A greeting spoken late is already generated and only has to be
-					// put in place, and every moment it waits is heard: ahead of all.
-					// The rest of a line whose beginning is being spoken comes before
+					// The player's own line comes first of all: the conversation is
+					// held open, in silence, until it is said.
+					// Then a greeting spoken late, which is already generated and only
+					// has to be put in place, and every moment it waits is heard. The
+					// rest of a line whose beginning is being spoken comes before
 					// another late line: the two parts belong together.
-					auto late = std::find_if(g_waiting.begin(), g_waiting.end(),
-						[](const Line& a_line) { return a_line.latePart > 0; });
+					auto late = std::find_if(g_waiting.begin(), g_waiting.end(), isPlayer);
+					if (late == g_waiting.end()) {
+						late = std::find_if(g_waiting.begin(), g_waiting.end(),
+							[](const Line& a_line) { return a_line.latePart > 0; });
+					}
 					if (late == g_waiting.end()) {
 						late = std::find_if(g_waiting.begin(), g_waiting.end(), isLate);
 					}
@@ -2254,7 +2496,11 @@ namespace Speaker
 					ProcessDialogue(std::move(line));
 				} else {
 					const Lane lane = line.lane;
-					Process(std::move(line));
+					if (lane == kPlayer) {
+						ProcessPlayer(std::move(line));
+					} else {
+						Process(std::move(line));
+					}
 					std::scoped_lock lock{ g_lock };
 					g_lanes[lane].inWork = 0;
 				}
@@ -2813,37 +3059,28 @@ namespace Speaker
 			return race ? race->defaultVoiceTypes[a_female ? RE::SEXES::kFemale : RE::SEXES::kMale] : nullptr;
 		}
 
-		// The game reports a topic info as being said by a_actor: that is what
-		// names the speaker of a greeting spoken late (see LateGreeting).
-		void NoteSpeaker(RE::FormID a_info, RE::Actor* a_actor)
+		// Stops the line being spoken late on the character lane when it is
+		// a_speaker's, as the game stops its own lines when the speaker goes on
+		// to another or the player answers. Needs AudioUtil 0.9.29; with an older
+		// one the lines overlap. Not under g_lock. a_why goes into the log.
+		void CutLatePlaying(RE::Actor* a_speaker, std::string_view a_why)
 		{
-			std::int32_t             cut = 0;
-			std::vector<PendingSlot> early;  // responses of this info whose placeholder is still silent
+			if (!a_speaker) {
+				return;
+			}
+			std::int32_t cut = 0;
 			{
 				std::scoped_lock lock{ g_lock };
-				g_said[g_saidNext++ % g_said.size()] = SaidInfo{ a_actor->GetFormID(), a_info, Clock::now() };
-				for (const auto& pending : g_pendingSlots) {
-					if (pending.info == a_info) {
-						early.push_back(pending);
-					}
-				}
-				// Any line this speaker begins while one of theirs is being spoken
-				// late, the same topic info included: the game's report of the late
-				// line itself came before that started playing, so this is a repeat,
-				// which the game voices itself by now.
-				if (g_latePlaying.handle > 0 && g_latePlaying.speaker == a_actor->GetFormID()) {
+				if (g_latePlaying.handle > 0 && g_latePlaying.speaker == a_speaker->GetFormID()) {
 					cut = g_latePlaying.handle;
 					g_latePlaying = {};
 					// and should the line be one in two parts, its rest stays out
 					if (const auto split = g_splitSpeaking.lock();
-						split && split->spoken.speaker.native_handle() == a_actor->GetHandle().native_handle()) {
+						split && split->spoken.speaker.native_handle() == a_speaker->GetHandle().native_handle()) {
 						split->cut = true;
 					}
 				}
 			}
-			// The speaker goes on to another line while one of theirs is still being
-			// spoken late: that one stops, as the game stops its own. Needs AudioUtil
-			// 0.9.29; with an older one the two lines overlap.
 			if (const auto stop = g_stopHandle.load(); cut > 0 && stop && stop(cut)) {
 				{
 					// nothing plays on the lane any more: whoever waits for its end
@@ -2855,8 +3092,29 @@ namespace Speaker
 					}
 				}
 				g_wake.notify_all();
-				logger::info("A line spoken late was cut short: its speaker began another line");
+				logger::info("A line spoken late was cut short: {}", a_why);
 			}
+		}
+
+		// The game reports a topic info as being said by a_actor: that is what
+		// names the speaker of a greeting spoken late (see LateGreeting).
+		void NoteSpeaker(RE::FormID a_info, RE::Actor* a_actor)
+		{
+			std::vector<PendingSlot> early;  // responses of this info whose placeholder is still silent
+			{
+				std::scoped_lock lock{ g_lock };
+				g_said[g_saidNext++ % g_said.size()] = SaidInfo{ a_actor->GetFormID(), a_info, Clock::now() };
+				for (const auto& pending : g_pendingSlots) {
+					if (pending.info == a_info) {
+						early.push_back(pending);
+					}
+				}
+			}
+			// Any line this speaker begins while one of theirs is being spoken
+			// late, the same topic info included: the game's report of the late
+			// line itself came before that started playing, so this is a repeat,
+			// which the game voices itself by now.
+			CutLatePlaying(a_actor, "its speaker began another line");
 			bool        female = false;
 			const auto* voiceType = VoiceTypeOf(a_actor, female);
 			// The one case of silence the game cannot be told about: it reached a
@@ -3021,6 +3279,7 @@ namespace Speaker
 		const auto settings = Config::Get();
 		PrepareSlots(kNarration, settings->slots);
 		PrepareSlots(kSpeech, settings->speechSlots);
+		PrepareSlots(kPlayer, settings->playerSlots);
 		PrepareSlots(kDialogue, settings->dialogueSlots);
 		if (!ResolvePlayFile()) {
 			logger::error("AudioUtil.dll is not loaded: narration and character lines cannot be spoken. Install "
@@ -3055,6 +3314,7 @@ namespace Speaker
 			const auto settings = Config::Get();
 			PrepareSlots(kNarration, settings->slots);
 			PrepareSlots(kSpeech, settings->speechSlots);
+			PrepareSlots(kPlayer, settings->playerSlots);
 			PrepareSlots(kDialogue, settings->dialogueSlots);
 			{
 				std::scoped_lock lock{ g_lock };
@@ -3079,6 +3339,7 @@ namespace Speaker
 	{
 		const bool parsed = Config::Load();
 		Rebuild();
+		DBReV::Register();  // [player] enable or max_wait may have changed
 		return parsed;
 	}
 
@@ -3095,7 +3356,11 @@ namespace Speaker
 		                    before->family != after->family || before->threads != after->threads ||
 		                    before->lexicon != after->lexicon || before->lang != after->lang;
 		const bool slots = before->slots != after->slots || before->speechSlots != after->speechSlots ||
-		                   before->dialogueSlots != after->dialogueSlots;
+		                   before->playerSlots != after->playerSlots || before->dialogueSlots != after->dialogueSlots;
+		// the voice provider is registered with its wait time, and only while on
+		if (before->player != after->player || before->playerMaxWait != after->playerMaxWait) {
+			DBReV::Register();
+		}
 		if (models || slots) {
 			Rebuild();
 			return ApplyResult::kReloaded;
@@ -3110,10 +3375,12 @@ namespace Speaker
 
 	void Cancel()
 	{
+		// destroyed outside the lock: a player line's ticket answers its holder
+		std::deque<Line> dropped;
 		{
 			std::scoped_lock lock{ g_lock };
 			g_epoch.fetch_add(1);
-			g_waiting.clear();
+			dropped.swap(g_waiting);
 			for (auto& lane : g_lanes) {
 				lane.quietAt = {};
 			}
@@ -3247,6 +3514,46 @@ namespace Speaker
 		return g_defaultVoices.load();
 	}
 
+	namespace
+	{
+		// The player's voice: [player] preset, else the preset "female" /
+		// "male" by the player's sex, else the default voice. Never the player's
+		// voice type: that is a game actor's recorded voice, and the player is
+		// whoever the user plays. a_label says which, for the log.
+		Line PlayerVoice(const Config::Settings& a_settings, bool a_female, std::string& a_label)
+		{
+			auto       key = Config::Normalize(a_settings.playerPreset);
+			const bool own = !key.empty();
+			if (!own) {
+				key = a_female ? "female"s : "male"s;
+			}
+			if (const auto* preset = FindPreset(a_settings, key)) {
+				a_label = PresetLabel(key, *preset) + (own ? "" : " by sex");
+				return LineOf(a_settings, *preset);
+			}
+			if (own) {
+				WarnUnknownPreset(key);
+			}
+			a_label = "the default voice";
+			return Line{};
+		}
+
+		// The player's lines, in a word or two, for the status lines.
+		std::string PlayerState(const Config::Settings& a_settings)
+		{
+			if (!a_settings.player) {
+				return "off";
+			}
+			if (!g_playerOn.load()) {
+				return "switched off";
+			}
+			if (DBReV::IsRegistered()) {
+				return "on";
+			}
+			return DBReV::IsPresent() ? "on, but not registered with DBReV (see AudioUtilTTS.log)" : "on, no DBReV";
+		}
+	}
+
 	std::string Status()
 	{
 		const auto settings = Config::Get();
@@ -3265,12 +3572,243 @@ namespace Speaker
 				g_problem.empty() ? "see AudioUtilTTS.log"s : g_problem);
 		}
 		return std::format("{} | {} | {} presets | {} of {} models loaded | "
-						   "narration slots {} of {} | speech slots {} of {}, lipsync {} | dialogue {} | sherpa-onnx {}",
+						   "narration slots {} of {} | speech slots {} of {}, lipsync {} | dialogue {} | player lines {} | "
+						   "sherpa-onnx {}",
 			IsEnabled() ? "ready" : "switched off", model, settings->presets.size(), g_modelsLoaded.load(),
 			g_modelsInstalled.load(), g_usableSlots[kNarration].load(),
 			settings->slots, g_usableSlots[kSpeech].load(), settings->speechSlots,
 			lipSync ? "on" : (settings->speechLipSync ? "off (AudioUtil older than 0.9.26)" : "off"),
-			IsDialogueEnabled() ? "on" : "off", TtsEngine::RuntimeVersion());
+			IsDialogueEnabled() ? "on" : "off", PlayerState(*settings), TtsEngine::RuntimeVersion());
+	}
+
+	// ------------------------------------------------------------- player lines
+
+	std::string SayPlayerLine(std::string_view a_text, PlayerLine a_line)
+	{
+		const auto settings = Config::Get();
+		if (!settings->player) {
+			return "off in AudioUtilTTS.toml ([player] enable)";
+		}
+		if (!g_playerOn.load()) {
+			return "switched off for this session (autts player 1)";
+		}
+		if (!g_enabled.load() || !settings->enable) {
+			return "speech is switched off";
+		}
+		auto*       player = RE::PlayerCharacter::GetSingleton();
+		const auto* base = player ? player->GetActorBase() : nullptr;
+		if (!base) {
+			return "no player";
+		}
+		std::string label;
+		Line        line = PlayerVoice(*settings, base->IsFemale(), label);
+		// a voice with a model of its own needs no default model; one on the
+		// default model (the voices by sex) does
+		const bool named = !line.model.empty();
+		auto       reason = NotReadyReason(*settings, kPlayer, named ? Needs::kNoModel : Needs::kDefaultModel);
+		if (reason.empty() && named && g_modelState.load() != Models::kDefault) {
+			switch (ModelStateOf(line.model)) {
+			case ModelState::kReady:
+				break;
+			case ModelState::kLoading:
+				reason = "the model is still loading";
+				break;
+			case ModelState::kWouldNotLoad:
+				reason = std::format("its model '{}' could not be loaded, and there is no default model to fall back on",
+					line.model);
+				break;
+			default:
+				reason = std::format("its model '{}' is not installed, and there is no default model to fall back on",
+					line.model);
+				break;
+			}
+		}
+		if (!reason.empty()) {
+			return reason;
+		}
+		line.text = CleanDialogue(a_text, *settings);
+		if (line.text.empty()) {
+			return "nothing in it to say";
+		}
+		FillDefaults(line, *settings);
+		line.lane = kPlayer;
+		line.speaker = player->GetHandle();
+		line.lipSync = settings->speechLipSync;
+		const auto modelKey = ModelKeyOf(line, *settings);
+		line.playerCache = CacheFileFor(modelKey, line, *settings);
+		if (line.playerCache.empty()) {
+			return std::format("the model folder '{}' holds no model", modelKey);
+		}
+		const std::size_t chars = line.text.size();
+		const auto        ticketOf = [&](bool a_answersDropped) {
+			auto ticket = std::make_shared<PlayerTicket>();
+			ticket->id = a_line.id;
+			ticket->holder = a_line.holder;
+			ticket->started = a_line.started;
+			if (a_answersDropped) {
+				ticket->dropped = a_line.dropped;
+			}
+			return ticket;
+		};
+		// The holder waits for one line at a time: a player line still waiting
+		// is this one's predecessor, dropped (outside the lock, its ticket
+		// answers); a copy of this very line for the cache only is not needed
+		// twice.
+		std::deque<Line> dropped;
+		const auto       takeOver = [&] {
+			for (auto it = g_waiting.begin(); it != g_waiting.end();) {
+				if (it->lane == kPlayer && (it->ticket || it->playerCache == line.playerCache)) {
+					dropped.push_back(std::move(*it));
+					it = g_waiting.erase(it);
+				} else {
+					++it;
+				}
+			}
+		};
+
+		// 1. said before: from here, at once
+		std::error_code ec;
+		if (TtsEngine::Audio cached; fs::exists(line.playerCache, ec) && LoadCached(line.playerCache, cached)) {
+			const int slot = TakeSlot(kPlayer);
+			if (slot < 0) {
+				return "no playable player slot yet (restart the game once)";
+			}
+			std::string error;
+			if (!TtsEngine::WriteWav(SlotDisk(kPlayer, slot), cached, error)) {
+				return "its placeholder file could not be written: " + error;
+			}
+			// The holder learns of this line from the call it is making: it is
+			// told the line plays, or the call's own answer says it does not.
+			line.ticket = ticketOf(false);
+			const auto  ticket = line.ticket;
+			const float seconds = cached.Seconds();
+			Clock::time_point quietAt;
+			{
+				std::scoped_lock lock{ g_lock };
+				takeOver();
+				line.epoch = g_epoch.load();
+				g_playerWanted = a_line.id;
+				quietAt = Clock::now() + std::chrono::milliseconds(static_cast<long long>(seconds * 1000.0f));
+				g_lanes[kPlayer].quietAt = quietAt;
+				g_laneHandle[kPlayer].store(STARTING);
+			}
+			dropped.clear();
+			PlayLine(SlotDataRel(kPlayer, slot), std::move(line), seconds, -1, quietAt);
+			return ticket->state.load() == PlayerTicket::kStarted ? std::string{} : "it could not be played (see above)";
+		}
+
+		// 2. new: generated now when it can be ready while the conversation
+		// waits, else for the next time. It goes first, behind only the line
+		// being generated this moment.
+		float estimate = 0.0f;
+		{
+			std::scoped_lock lock{ g_lock };
+			estimate = EstimateMsLocked(modelKey, chars);
+			if (estimate <= 0.0f) {
+				estimate = UNMEASURED_MS_PER_CHAR * static_cast<float>(chars);
+			}
+			if (const auto now = Clock::now(); g_busyUntil > now) {
+				estimate += std::chrono::duration<float, std::milli>(g_busyUntil - now).count();
+			}
+		}
+		const bool inTime = estimate <= a_line.maxWaitSeconds * 1000.0f;
+		if (inTime) {
+			line.ticket = ticketOf(true);
+		}
+		{
+			std::scoped_lock lock{ g_lock };
+			takeOver();
+			line.epoch = g_epoch.load();
+			line.estimateMs = EstimateMsLocked(modelKey, chars);
+			if (inTime) {
+				g_playerWanted = a_line.id;
+			}
+			g_waiting.push_back(std::move(line));
+		}
+		g_wake.notify_all();
+		dropped.clear();
+		if (!inTime) {
+			return std::format("it would take about {:.1f} s to generate, more than the {:.0f} s the conversation "
+							   "waits: it is generated for the next time it is said",
+				estimate / 1000.0f, a_line.maxWaitSeconds);
+		}
+		logger::info("Player line {} of {} ({} chars, {}): generating, about {:.1f} s", a_line.id, a_line.holder, chars,
+			label, estimate / 1000.0f);
+		return {};
+	}
+
+	void EndPlayerLine(std::uint32_t a_id)
+	{
+		std::int32_t     stop = 0;
+		std::deque<Line> dropped;  // destroyed outside the lock, see Cancel
+		{
+			std::scoped_lock lock{ g_lock };
+			if (g_playerWanted == a_id) {
+				g_playerWanted = 0;
+			}
+			for (auto it = g_waiting.begin(); it != g_waiting.end();) {
+				if (it->lane == kPlayer && it->ticket && it->ticket->id == a_id) {
+					dropped.push_back(std::move(*it));
+					it = g_waiting.erase(it);
+				} else {
+					++it;
+				}
+			}
+			if (g_playerPlaying.id == a_id && g_playerPlaying.handle > 0) {
+				stop = g_playerPlaying.handle;
+				g_playerPlaying = {};
+				if (g_laneHandle[kPlayer].load() == stop) {
+					g_lanes[kPlayer].quietAt = {};
+					g_laneHandle[kPlayer].store(0);
+				}
+			}
+		}
+		g_wake.notify_all();
+		dropped.clear();
+		// a line that played to its end is over by now: stopping it does nothing
+		if (const auto stopHandle = g_stopHandle.load(); stop > 0 && stopHandle && stopHandle(stop)) {
+			g_playerStopped.fetch_add(1);
+			logger::info("The player's line was stopped: the conversation moved on");
+		}
+	}
+
+	void PlayerSpeaks()
+	{
+		// the player's conversation partner: their late line stops, nobody else's
+		const auto* topics = RE::MenuTopicManager::GetSingleton();
+		const auto  partner = topics ? topics->speaker.get() : RE::NiPointer<RE::TESObjectREFR>{};
+		if (auto* actor = partner ? partner->As<RE::Actor>() : nullptr) {
+			CutLatePlaying(actor, "the player began a line");
+		}
+	}
+
+	void SetPlayerEnabled(bool a_enabled)
+	{
+		g_playerOn.store(a_enabled);
+	}
+
+	bool IsPlayerEnabled()
+	{
+		return g_playerOn.load() && Config::Get()->player;
+	}
+
+	std::string PlayerStatus()
+	{
+		const auto  settings = Config::Get();
+		auto*       player = RE::PlayerCharacter::GetSingleton();
+		const auto* base = player ? player->GetActorBase() : nullptr;
+		std::string label = "no player";
+		Line        voice;
+		if (base) {
+			voice = PlayerVoice(*settings, base->IsFemale(), label);
+			FillDefaults(voice, *settings);
+			label += std::format(" (model {}, {})", voice.model.empty() ? settings->model : voice.model, VoiceText(voice));
+		}
+		return std::format("player lines {} | {} | voice: {} | this session: {} spoken ({} from the cache), {} stopped "
+						   "early | slots {} of {} | lipsync {}",
+			PlayerState(*settings), DBReV::Status(), label, g_playerSpoken.load(), g_playerCached.load(),
+			g_playerStopped.load(), g_usableSlots[kPlayer].load(), settings->playerSlots,
+			settings->speechLipSync ? "on" : "off");
 	}
 
 	// ------------------------------------------------------------------ dialogue
@@ -3819,6 +4357,10 @@ namespace Speaker
 		summary.modelsLoaded = g_modelsLoaded.load();
 		summary.modelsInstalled = g_modelsInstalled.load();
 		summary.dialogue = DialogueState(*settings);
+		summary.player = PlayerState(*settings);
+		if (summary.player == "on") {
+			summary.player = std::format("on: {} spoken this session", g_playerSpoken.load());
+		}
 		summary.given = g_dialogueGiven.load();
 		summary.unvoiced = g_dialogueUnvoiced.load();
 		summary.late = g_dialogueLate.load();

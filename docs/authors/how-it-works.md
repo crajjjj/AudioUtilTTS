@@ -6,7 +6,7 @@ Skyrim only plays loose files it saw at launch, but it re-reads a file's bytes e
 
 That is why a placeholder added by raising a `slots` setting only starts working after the next restart: the game has to see the file at launch first.
 
-## Three lanes
+## Four lanes
 
 Each kind of speech has its own placeholder files and its own exclusivity channel. A file is only rewritten once its channel has stopped the line that used it, which is why the lanes must not share one.
 
@@ -14,6 +14,7 @@ Each kind of speech has its own placeholder files and its own exclusivity channe
 |---|---|---|---|
 | Narration | `Data\Sound\AudioUtilTTS\_tts_slotNN.wav` | AudioUtil, flat | `[playback]` |
 | Character speech | `Data\Sound\AudioUtilTTS\_tts_speechNN.wav` | AudioUtil, at the actor, with lipsync | `[speech]` |
+| The player's lines | `Data\Sound\AudioUtilTTS\_tts_playerNN.wav` | AudioUtil, at the player, with lipsync | `[player]` |
 | Dialogue | `Data\Sound\Voice\AudioUtilTTS\_tts_dialogNN.wav` and `.lip` | The game's dialogue system | `[dialogue]` |
 
 ## The dialogue patch
@@ -48,6 +49,14 @@ A new greeting cannot be handed to the game in time, and the patch above is not 
 ### Greetings made ahead
 
 With `[dialogue] prepare_greetings` on, the plugin looks at nearby NPCs, picks the greetings each would say the way the game picks them, and builds those lines early so the patch above sees them. They are generated behind every line the game actually asked for, and only into the cache.
+
+## The player's lines
+
+Dragonborn ReVoiced holds a conversation open while the player's line is said, and offers the lines its voice pack has no recording for to a *voice provider*: another SKSE plugin, found through DBReV.dll's exports (`include/API/DBReV_API.h`, a declaration-only header that links against nothing). The plugin registers as that provider on the game's data-loaded message, when `[player] enable` is on.
+
+One line, from this side: DBReV calls the plugin on the main thread with the topic text; the plugin takes the line (and queues it) or declines it (DBReV then handles it as it always has), and returns. The line goes first on the worker, behind only the line being generated that moment; a line said before comes from the cache and starts from inside the call. When the audio starts, the plugin tells DBReV the line's length, and DBReV holds the dialogue for that long plus the user's post-line delay. A line that cannot be spoken after all is given back at once, so the conversation never waits for nothing. When DBReV lets the conversation go on, by a skip, another topic or the dialogue closing, the plugin stops the line where it plays and drops it where it waits.
+
+DBReV also announces every player line it plays, its own included, and the plugin listens: an NPC line being spoken late by the conversation partner stops when the player begins a line, as the game stops its own lines.
 
 ## Threads
 

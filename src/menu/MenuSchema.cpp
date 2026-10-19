@@ -89,7 +89,7 @@ namespace Core
 		Schema Make()
 		{
 			std::vector<PageSpec> pages{
-				{ "Dialogue", "Dialogue lines that have no voice file, spoken in the voice of the speaker's voice type.", { "dialogue" } },
+				{ "Dialogue", "Dialogue lines that have no voice file, spoken in the voice of the speaker's voice type; and your own lines, with Dragonborn ReVoiced.", { "dialogue", "player" } },
 				{ "Voice types", "Which preset speaks for a voice type. A voice archive named after a voice type needs no line here.", { "voicetype" } },
 				{ "Voice", "The default voice: narration, and lines that name no voice of their own.", { "general", "model", "voice" } },
 				{ "Presets", "Named voices mods ask for. A setting left out comes from the default voice.", { "preset.*" } },
@@ -124,6 +124,20 @@ namespace Core
 				Applying(Field(Advanced("dialogue.cache_max_mb", "Cache size limit", Control::Int,
 									"Generated lines are kept on disk; the ones used longest ago go first. 0 = no limit."),
 							 0, 16384, 256, "MB"),
+					Applies::Restart),
+				S("player.enable", "Your own lines (Dragonborn ReVoiced)", "On", Control::Flag,
+					"With Dragonborn ReVoiced installed, speak the lines of yours its voice pack has no recording for. The conversation waits while a new line is generated; from then on the line comes from the cache."),
+				S("player.preset", "Your own lines (Dragonborn ReVoiced)", "Voice preset", Control::Text,
+					"The preset your lines are spoken with. Empty: the preset female or male by your character's sex. Never a voice type."),
+				Unit(Range(S("player.max_wait", "Your own lines (Dragonborn ReVoiced)", "Wait at most", Control::Float,
+							  "The longest the conversation waits for a line to be generated. A line that would take longer stays silent that once and is generated for the next time."),
+						 1.0, 30.0),
+					"s"),
+				Advanced("player.group", "Your lines' volume group", Control::Text, "The AudioUtil volume group your lines play in."),
+				Advanced("player.channel", "Your lines' channel", Control::Text, "The AudioUtil channel your lines play on. Must differ from the narration and speech channels."),
+				Applying(Range(Advanced("player.slots", "Your lines' placeholder files", Control::Int,
+									"Placeholder wav files your lines are written into."),
+							 1, 16),
 					Applies::Restart),
 
 				// ---------------------------------------------------------- Voice types

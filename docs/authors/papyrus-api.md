@@ -14,7 +14,7 @@ If SKSE.GetPluginVersion("AudioUtilTTS") >= 0
 EndIf
 ```
 
-`GetAPIVersion()` tells what the installed plugin offers: `1` is the first release, `2` (0.2.0) added the dialogue functions and `GetActorVoice`, `3` (0.2.1) added `SpeakFrom`, `SpeakActorFrom`, `IsNarrationFree` and `IsSpeechFree`.
+`GetAPIVersion()` tells what the installed plugin offers: `1` is the first release, `2` (0.2.0) added the dialogue functions and `GetActorVoice`, `3` (0.2.1) added `SpeakFrom`, `SpeakActorFrom`, `IsNarrationFree` and `IsSpeechFree`, `4` (0.5.2) added the player line functions.
 
 ## Speaking
 
@@ -100,6 +100,16 @@ API 2. Nothing here has to be called for dialogue to be spoken: the plugin does 
 | `bool IsDialogueEnabled()` | True when unvoiced dialogue is being spoken: enabled in the config, patched into the game and not switched off |
 | `string GetDialogueStatus()` | One line of status text: on or off and why, lines voiced and left unvoiced this session, and the size of the cache |
 | `int ClearDialogueCache()` | Deletes every cached dialogue line, so each is generated afresh the next time it is said. Returns the number of files removed. Not needed after replacing a model: lines are cached per model file, and `ReloadConfig` picks up the change |
+
+## The player's lines
+
+API 4. Nothing here has to be called either: with Dragonborn ReVoiced installed, the player's lines its voice pack has no recording for are spoken by the plugin while DBReV holds the conversation. See [Your Own Lines](../players/player-lines.md).
+
+| Function | Does |
+|---|---|
+| `Function SetPlayerEnabled(bool abEnabled)` | Session switch on top of `[player] enable`. Off: every such line is declined, and Dragonborn ReVoiced handles it as before |
+| `bool IsPlayerEnabled()` | True when the player's lines are spoken for: enabled in the config and not switched off. It does not tell whether Dragonborn ReVoiced is installed |
+| `string GetPlayerStatus()` | One line of status text: on or off and why, whether Dragonborn ReVoiced is there and the plugin is registered with it, the voice, and this session's counts |
 
 ## When a line starts
 

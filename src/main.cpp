@@ -2,6 +2,7 @@
 #include <spdlog/sinks/msvc_sink.h>
 
 #include "Config.h"
+#include "DBReV.h"
 #include "DialogueHook.h"
 #include "Greetings.h"
 #include "PapyrusAPI.h"
@@ -49,9 +50,15 @@ namespace
 	void OnMessage(MessagingInterface::Message* a_msg)
 	{
 		switch (a_msg->type) {
+		case MessagingInterface::kPostLoad:
+			// every plugin is loaded by now, DBReV.dll included
+			DBReV::Listen();
+			break;
 		case MessagingInterface::kDataLoaded:
 			Config::Load();
 			Speaker::Start();
+			// the player's lines Dragonborn ReVoiced has no recording for
+			DBReV::Register();
 			// the game code is only patched when the feature is wanted at launch
 			if (Config::Get()->dialogue) {
 				const bool hooked = DialogueHook::Install();

@@ -8,8 +8,8 @@ namespace PapyrusAPI
 	{
 		constexpr auto         SCRIPT_NAME = "AudioUtilTTS"sv;
 		// 2 added the dialogue group and GetActorVoice; 3 SpeakFrom, SpeakActorFrom,
-		// IsNarrationFree and IsSpeechFree
-		constexpr std::int32_t API_VERSION = 3;
+		// IsNarrationFree and IsSpeechFree; 4 the player line group
+		constexpr std::int32_t API_VERSION = 4;
 
 		std::int32_t GetAPIVersion(RE::StaticFunctionTag*)
 		{
@@ -140,6 +140,22 @@ namespace PapyrusAPI
 		{
 			return Speaker::DescribeVoice(a_actor);
 		}
+
+		// the player's own lines, with Dragonborn ReVoiced (API 4)
+		void SetPlayerEnabled(RE::StaticFunctionTag*, bool a_enabled)
+		{
+			Speaker::SetPlayerEnabled(a_enabled);
+		}
+
+		bool IsPlayerEnabled(RE::StaticFunctionTag*)
+		{
+			return Speaker::IsPlayerEnabled();
+		}
+
+		RE::BSFixedString GetPlayerStatus(RE::StaticFunctionTag*)
+		{
+			return Speaker::PlayerStatus();
+		}
 	}
 
 	bool RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm)
@@ -168,6 +184,9 @@ namespace PapyrusAPI
 		REGISTERFUNC(SpeakActorFrom, SCRIPT_NAME);
 		REGISTERFUNC(IsNarrationFree, SCRIPT_NAME);
 		REGISTERFUNC(IsSpeechFree, SCRIPT_NAME);
+		REGISTERFUNC(SetPlayerEnabled, SCRIPT_NAME);
+		REGISTERFUNC(IsPlayerEnabled, SCRIPT_NAME);
+		REGISTERFUNC(GetPlayerStatus, SCRIPT_NAME);
 		return true;
 	}
 }

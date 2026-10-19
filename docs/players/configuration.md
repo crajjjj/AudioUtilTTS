@@ -78,6 +78,19 @@ Dialogue lines that have no voice file. See [Unvoiced Dialogue](unvoiced-dialogu
 | `slots` | `128` | Placeholder voice files, 64 to 256. A line that finds none free stays unvoiced. New ones work after the next restart |
 | `cache_max_mb` | `1024` | Size limit of the line cache in MB; the lines used longest ago go first. `0` = no limit |
 
+## [player]
+
+Your own lines, with Dragonborn ReVoiced. See [Your Own Lines](player-lines.md).
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enable` | `true` | `false`: Dragonborn ReVoiced handles the lines its pack lacks as before, in silence. `autts player 0` switches it off for one session |
+| `preset` | `""` | The voice your lines are spoken with. Empty = the preset `female` or `male` by your character's sex. A voice type is never used |
+| `max_wait` | `5.0` | The longest the conversation waits for a line to be generated, in seconds, 1 to 30. A line that would take longer stays silent that once and is generated for the next time |
+| `group` | `"speech"` | AudioUtil volume group |
+| `channel` | `"player"` | AudioUtil channel. Must differ from the `[playback]` and `[speech]` ones |
+| `slots` | `4` | Placeholder wav files, 1 to 16. New ones work after the next restart |
+
 ## [playback]
 
 Narration, plus four keys that reach further: `interrupt` and `max_pending` also govern character speech, `max_chars` and `output_rate` every line, dialogue included.

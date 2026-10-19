@@ -229,6 +229,35 @@ slots = 128
 # after "autts reload".
 cache_max_mb = 1024
 
+# Your own lines, with Dragonborn ReVoiced (DBReV). DBReV voices your character
+# from a voice pack and holds the conversation while the line is said. A line
+# the pack has no recording for it hands to this plugin, which speaks it in
+# your character's voice: generated the first time (the conversation waits
+# for it), from the cache every time after. It plays at your character with
+# the mouth moving ([speech] lipsync), and DBReV's post-line delay follows it.
+# Needs a DBReV with the voice provider API (newer than 1.5.2) and a voice
+# pack selected in its menu. "autts player" shows the state.
+[player]
+# false = DBReV is left to handle those lines as before (silence).
+# Can be switched with "autts reload"; "autts player 0" switches it off for
+# the session.
+enable = true
+# The voice: a preset name from this file or a preset file. Empty = the preset
+# "female" or "male" by your character's sex. A voice type is never used, not
+# even your character's: that is a game actor's recorded voice.
+preset = ""
+# The longest the conversation waits for a line to be generated, in seconds
+# (1 to 30). A line that would take longer stays silent that once and is
+# generated for the next time. A cached line never waits.
+max_wait = 5.0
+# AudioUtil volume group and exclusivity channel. The channel must differ from
+# the [playback] and [speech] ones.
+group = "speech"
+channel = "player"
+# Placeholder wav files for your lines (Data\Sound\AudioUtilTTS). A slot added
+# by raising this number starts working after the next restart.
+slots = 4
+
 # Voice types: which voice speaks for which of the game's voice types. This is
 # what makes an NPC's generated lines sound like that NPC. Used for unvoiced
 # dialogue, and for character speech that names no preset.

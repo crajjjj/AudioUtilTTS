@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 // Turns text into speech in the running game.
 //
 // A line goes to one background worker, which generates the audio (TtsEngine),
@@ -11,14 +13,16 @@
 // in Data\Sound\AudioUtilTTS and overwrites one per line. AudioUtil itself
 // needs nothing special for this: it goes through its public C exports.
 //
-// Two lanes go through AudioUtil, and share neither files nor a channel:
+// Three lanes go through AudioUtil, and share neither files nor a channel:
 //   narration  flat, no speaker, no mouth     _tts_slotNN.wav    [playback]
 //   speech     at an actor, their mouth moves _tts_speechNN.wav  [speech]
+//   player     the player's own line in a     _tts_playerNN.wav  [player]
+//              conversation (see PlayerLine)
 // Inside a lane the files are used round-robin on that lane's one AudioUtil
 // channel, so the file being rewritten belongs to a line the channel stopped
 // several lines ago. That is why the lanes must not share a channel.
 //
-// A third lane does not: dialogue. When the game is about to say a response
+// A fourth lane does not: dialogue. When the game is about to say a response
 // that has no recorded voice file (DialogueHook), the line is generated in the
 // voice of the speaker's voice type and the game is handed a placeholder under
 // Sound\Voice\AudioUtilTTS (_tts_dialogNN.wav, with a .lip beside it) as that
@@ -136,6 +140,43 @@ namespace Speaker
 	// before working out what to prepare.
 	bool CanPrepareDialogue(int a_lines);
 
+	// The player's own line in a conversation, for a voice mod that holds the
+	// conversation open while it is said (Dragonborn ReVoiced, see DBReV.cpp):
+	// the mod offers a line it has no recording for; the plugin generates it in
+	// the player's voice, plays it at the player with their mouth moving, and
+	// tells the mod when it starts and how long it is. A line said before comes
+	// from the cache and starts from inside the call. The voice is [player]
+	// preset, else the preset "female" or "male" by the player's sex: never the
+	// player's voice type, which is a game actor's recorded voice.
+	struct PlayerLine
+	{
+		std::uint32_t id = 0;                 // the holder's name for the line, for the log
+		std::string   holder;                 // the holder's name, for the log
+		float         maxWaitSeconds = 0.0f;  // how long the holder waits for the line to start
+		// Exactly one of the two is called, once. started: on the game thread,
+		// the moment the line plays, with its length in seconds; false = the
+		// holder has let the conversation go on meanwhile, and the line is
+		// stopped again. dropped: on any thread, when a line that was taken will
+		// not be spoken after all (cancelled, not generated, not played).
+		// Neither may call back into Speaker.
+		std::function<bool(float a_seconds)> started;
+		std::function<void()>                dropped;
+	};
+	// Game thread. "" = taken: one of the two callbacks follows. Otherwise why
+	// not, and neither is called; a line that is only too slow to be ready
+	// within maxWaitSeconds is still generated for the cache, so it is said at
+	// once the next time.
+	std::string SayPlayerLine(std::string_view a_text, PlayerLine a_line);
+	// The holder has let the conversation go on without the line: it is dropped
+	// where it waits or is being generated, and stopped where it plays.
+	void EndPlayerLine(std::uint32_t a_id);
+	// The player begins a line, any voice mod's: an NPC line being spoken late
+	// by the player's conversation partner stops, as the game stops its own.
+	void PlayerSpeaks();
+	void SetPlayerEnabled(bool a_enabled);  // session switch on top of [player] enable
+	bool IsPlayerEnabled();                 // switched on and enabled in the config
+	std::string PlayerStatus();             // one line, for the console
+
 	void SetDialogueHooked(bool a_hooked);    // DialogueHook reports whether its patch is in place
 	void SetDialogueEnabled(bool a_enabled);  // session switch on top of [dialogue] enable
 	bool IsDialogueEnabled();                 // hooked, switched on and enabled in the config
@@ -176,6 +217,7 @@ namespace Speaker
 		int           modelsLoaded = 0;
 		int           modelsInstalled = 0;
 		std::string   dialogue;              // "on", or why it is off
+		std::string   player;                // the player's lines: on and how many, or why not
 		std::uint32_t given = 0;             // this session: responses given a voice
 		std::uint32_t unvoiced = 0;          // left unvoiced
 		std::uint32_t late = 0;              // spoken late

@@ -9,6 +9,7 @@ Speech is generated on your CPU when it is asked for. That shapes how the mod be
 - **One line at a time.** A line that arrives while another is being generated or spoken is dropped, so a mod that sends lines faster than they can be spoken is not read out back to back. `AudioUtilTTS.log` notes each dropped line. Narration and character speech count separately. `[playback] max_pending` lets lines wait instead.
 - **Narration plays flat**, with no speaker and no subtitles.
 - **Unvoiced dialogue is played by the game** like a recorded line, with its subtitles and voice volume. See [Unvoiced Dialogue](unvoiced-dialogue.md).
+- **Your own lines make the conversation wait** the first time, with Dragonborn ReVoiced: it holds the dialogue while the line is generated, about a second for a short line. From then on the line comes from the cache at once. See [Your Own Lines](player-lines.md).
 
 ## Character speech
 

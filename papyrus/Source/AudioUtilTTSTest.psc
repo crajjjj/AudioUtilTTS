@@ -128,6 +128,18 @@ string Function Dialogue(int on) global
     return AudioUtilTTS.GetDialogueStatus()
 EndFunction
 
+; Your own lines, with Dragonborn ReVoiced: show the status, or switch them
+; for this session.
+;   autts player          status
+;   autts player 0        off
+;   autts player 1        on
+string Function Player(int on) global
+    if on >= 0
+        AudioUtilTTS.SetPlayerEnabled(on != 0)
+    endif
+    return AudioUtilTTS.GetPlayerStatus()
+EndFunction
+
 ; Delete the cached dialogue lines, so each is generated afresh.
 ;   autts clearcache
 string Function ClearCache() global

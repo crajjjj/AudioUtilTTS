@@ -666,6 +666,17 @@ namespace Config
 		settings->dialogueLateMax = std::clamp(settings->dialogueLateMax, 0.5f, 10.0f);
 		settings->dialogueCacheMb = std::clamp(settings->dialogueCacheMb, 0, 16384);
 
+		if (const auto* player = root["player"].as_table()) {
+			settings->player = (*player)["enable"].value_or(settings->player);
+			settings->playerPreset = (*player)["preset"].value_or(settings->playerPreset);
+			settings->playerMaxWait = (*player)["max_wait"].value_or(settings->playerMaxWait);
+			settings->playerGroup = (*player)["group"].value_or(settings->playerGroup);
+			settings->playerChannel = (*player)["channel"].value_or(settings->playerChannel);
+			settings->playerSlots = (*player)["slots"].value_or(settings->playerSlots);
+		}
+		settings->playerMaxWait = std::clamp(settings->playerMaxWait, 1.0f, 30.0f);
+		settings->playerSlots = std::clamp(settings->playerSlots, 1, 16);
+
 		if (const auto* voiceTypes = root["voicetype"].as_table()) {
 			for (auto&& [name, node] : *voiceTypes) {
 				const auto key = Normalize(name.str());
@@ -695,6 +706,11 @@ namespace Config
 			// to have stopped a line before that line's file is rewritten
 			logger::warn("[speech] channel must differ from [playback] channel, using 'speech'");
 			settings->speechChannel = Normalize(settings->channel) == "speech" ? "speech2" : "speech";
+		}
+		if (const auto key = Normalize(settings->playerChannel);
+			key == Normalize(settings->channel) || key == Normalize(settings->speechChannel)) {
+			logger::warn("[player] channel must differ from the [playback] and [speech] channels, using 'player'");
+			settings->playerChannel = key == "player" ? "player2" : "player";
 		}
 		settings->outputRate = settings->outputRate <= 0 ? 0 : std::clamp(settings->outputRate, 8000, 96000);
 
@@ -752,6 +768,9 @@ namespace Config
 			settings->dialogueSkipDirections,
 			settings->dialogueCacheMb, settings->voiceTypes.size(), settings->patchVoiceTypes.size(),
 			settings->modelVoiceTypes.size(), fillIns, settings->fillInVoices ? "on" : "off");
+		logger::info("Config: player lines {}, preset '{}', max_wait {:.1f} s, group '{}', channel '{}', slots {}",
+			settings->player, settings->playerPreset, settings->playerMaxWait, settings->playerGroup,
+			settings->playerChannel, settings->playerSlots);
 
 		std::scoped_lock lock{ g_lock };
 		g_settings = std::move(settings);
