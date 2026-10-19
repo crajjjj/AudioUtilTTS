@@ -49,6 +49,7 @@ Data\
   SKSE\Plugins\AudioUtilTTS\models\<folder>\           one folder per voice model
   SKSE\Plugins\AudioUtilTTS\voicetypes\                voice type patches
   SKSE\Plugins\AudioUtilTTS\presets\                   preset files that mods bring
+  SKSE\Plugins\AudioUtilTTS\replacements\              text replacements, yours and mods'
   SKSE\Plugins\AudioUtilTTS\cache\                     generated dialogue lines, made while you play
   SKSE\CustomConsole\AudioUtilTTSTest.yaml             the autts console commands
   Scripts\                                             AudioUtilTTS.pex, AudioUtilTTSTest.pex

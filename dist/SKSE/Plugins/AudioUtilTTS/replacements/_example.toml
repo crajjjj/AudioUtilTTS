@@ -1,0 +1,22 @@
+# Text replacements: words and phrases replaced in every line before it is
+# spoken (dialogue, your own lines, narration, character speech). For text a
+# mod writes that should not be read out as it is: a race renamed by a body
+# mod, an abbreviation, a name the voice mispronounces.
+#
+# Every .toml file in this folder is read, in file name order, so a mod can
+# ship a file of its own and you can keep yours. A phrase two files replace
+# goes to the later file. Reload with "autts reload".
+#
+# A phrase matches whole, never inside another word ("UBE" leaves "tube"
+# alone), and ignores case. Longer phrases are applied first. Put a phrase
+# with spaces in quotes.
+#
+# This file holds no rule. Copy it under a name of your own and fill it in:
+#
+# [replace]
+# "Nord UBE" = "Nord"       # what the text says = what is spoken
+# UBE = ""                  # or dropped
+# "Dr." = "Doctor"
+# Dibella = "Dibelluh"      # a pronunciation hint
+
+[replace]

@@ -817,11 +817,13 @@ namespace Speaker
 
 		// --------------------------------------------------------------------- text
 
-		// One line of plain text: control characters and runs of whitespace become
-		// single spaces, and anything past a_maxChars is cut at a sentence end.
-		std::string Clean(std::string_view a_text, int a_maxChars)
+		// One line of plain text: the configured replacements applied, control
+		// characters and runs of whitespace become single spaces, and anything
+		// past [playback] max_chars is cut at a sentence end.
+		std::string Clean(std::string_view a_text, const Config::Settings& a_settings)
 		{
-			const auto  text = TtsEngine::ToSpeakable(a_text);
+			const int   a_maxChars = a_settings.maxChars;
+			const auto  text = TextReplace::Apply(TtsEngine::ToSpeakable(a_text), a_settings.replacements);
 			std::string out;
 			out.reserve(text.size());
 			bool space = false;
@@ -924,7 +926,7 @@ namespace Speaker
 				}
 				spoken += c;
 			}
-			auto out = Clean(spoken, a_settings.maxChars);
+			auto out = Clean(spoken, a_settings);
 			return IsPlaceholder(out) ? std::string{} : out;
 		}
 
@@ -2658,7 +2660,7 @@ namespace Speaker
 				return false;
 			}
 
-			a_line.text = Clean(a_text, settings->maxChars);
+			a_line.text = Clean(a_text, *settings);
 			if (a_line.text.empty()) {
 				return false;
 			}

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "TextReplace.h"
+
 // Data\SKSE\Plugins\AudioUtilTTS\AudioUtilTTS.toml, read at kDataLoaded and on
 // ReloadConfig. Every key is optional; the defaults below are the shipped file.
 namespace Config
@@ -12,6 +14,8 @@ namespace Config
 	inline constexpr std::string_view PATCH_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\voicetypes\\";
 	// Where the preset files are (see Preset::source).
 	inline constexpr std::string_view PRESET_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\presets\\";
+	// Where the text replacement files are (see Settings::replacements).
+	inline constexpr std::string_view REPLACE_DIR = "Data\\SKSE\\Plugins\\AudioUtilTTS\\replacements\\";
 
 	// A named voice a caller asks for by name: [preset.<name>]. Anything left out
 	// is inherited from the defaults.
@@ -155,6 +159,17 @@ namespace Config
 		// model offers for it. Asked after the maps above, so the main config
 		// always has the last word.
 		std::unordered_map<std::string, ModelVoice> modelVoiceTypes;
+
+		// Words and phrases replaced in every line before it is spoken, from
+		// the files replacements\*.toml (all of them, in file name order):
+		//   [replace]
+		//   "Nord UBE" = "Nord"   # what the text says = what is spoken
+		//   UBE = ""              # or dropped
+		// A phrase two files replace goes to the later one. Matched whole and
+		// ignoring ASCII case (TextReplace.h); longer phrases are applied first,
+		// so "Nord UBE" wins over "UBE" where both match.
+		std::vector<TextReplace::Rule> replacements;
+		std::size_t                    replacementFiles = 0;  // files the rules came from
 	};
 
 	// false = the file did not parse and the previous settings were kept

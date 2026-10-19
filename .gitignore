@@ -35,6 +35,8 @@ dist/**
 dist/SKSE/Plugins/AudioUtilTTS/licenses/GPL-3.0.txt
 !dist/SKSE/CustomConsole/
 !dist/SKSE/CustomConsole/*.yaml
+!dist/SKSE/Plugins/AudioUtilTTS/replacements/
+!dist/SKSE/Plugins/AudioUtilTTS/replacements/_example.toml
 
 # Machine-local: the Pyro project holds absolute paths to the game and to
 # AudioUtil's sources

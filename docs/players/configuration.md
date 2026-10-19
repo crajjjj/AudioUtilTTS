@@ -123,8 +123,28 @@ Character speech: a line an actor says.
 | `lipsync` | `true` | Move the speaker's mouth. Needs AudioUtil 0.9.26 or newer |
 | `slots` | `4` | Placeholder wav files, 1 to 16. New ones work after the next restart |
 
+## Text replacements
+
+Words and phrases replaced in every line before it is spoken: dialogue, your own lines, narration and character speech. For text a mod writes that should not be read out as it is: a race renamed by a body mod ("Nord UBE"), an abbreviation, a name the voice mispronounces.
+
+They live in files of their own, `Data\SKSE\Plugins\AudioUtilTTS\replacements\*.toml`, so a mod can ship one and you keep yours. Every file there is read, in file name order; a phrase two files replace goes to the later file.
+
+```toml
+[replace]
+"Nord UBE" = "Nord"      # what the text says = what is spoken
+UBE = ""                 # or dropped
+"Dr." = "Doctor"
+Dibella = "Dibelluh"     # a pronunciation hint
+```
+
+- A phrase matches **whole**, never inside another word: `UBE` leaves "tube" alone. A phrase that starts or ends with punctuation needs no word boundary on that side.
+- Case is ignored. Longer phrases are applied first, so `"Nord UBE"` wins over `UBE` where both match.
+- The replaced text is what gets cached, so a changed rule reaches a line the next time it is generated; `autts clearcache` forces that.
+- `autts reload` reads the files again. The shipped `_example.toml` holds no rule, only the format.
+
 ## Files beside it
 
 - `presets\*.toml`: [preset files](voices.md#preset-files) that mods bring.
 - `voicetypes\*.toml`: [voice type patches](voices.md#voice-type-patches).
+- `replacements\*.toml`: [text replacements](#text-replacements).
 - `models\<folder>\model.toml`: the voice types a model [speaks for](models.md#models-that-bring-their-own-voice-types).

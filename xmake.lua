@@ -153,6 +153,16 @@ target("menu-tests")
     add_cxxflags("cl::/utf-8")
 target_end()
 
+-- The text replacement matching, no game needed:
+--   xmake build text-tests && xmake run text-tests
+target("text-tests")
+    set_kind("binary")
+    set_default(false)
+    add_files("tests/text_tests.cpp")
+    add_includedirs("src")
+    add_cxxflags("cl::/utf-8")
+target_end()
+
 -- Release archives: xmake build package
 -- Zips dist\ into Release\ as the plugin archive plus one archive per voice
 -- model (see scripts\package.lua). Build the plugin and the scripts first.

@@ -10,7 +10,7 @@ Nothing to set up: with both installed, it is on. DBReV needs a version with its
 - **The first time, the conversation waits** while the line is generated: about a second for a short line with the default model, longer for a long line or while another line is being generated. The line is then kept in the cache and said at once every time after.
 - **A line that would take longer than `[player] max_wait`** (5 seconds) stays silent that once and is generated for the next time.
 - **Skips work.** Skipping the line, picking another topic or leaving the dialogue stops it.
-- **Stage directions are left out**, as for NPC lines: `(Persuade)`, `(Intimidate)` and the like are not spoken (`[dialogue] skip_directions`).
+- **Stage directions are left out**, as for NPC lines: `(Persuade)`, `(Intimidate)` and the like are not spoken (`[dialogue] skip_directions`). A line that is nothing but a bracketed action stays silent. Your [text replacements](configuration.md#text-replacements) apply too, for a race name a body mod has changed, say.
 - **Camera and expression mods see an ordinary player line.** DBReV announces it as it does its own, with the length this plugin reports.
 - **An NPC line spoken late stops** when you begin a line, any line, as the game stops its own lines when you answer. See [Greetings spoken late](unvoiced-dialogue.md#greetings-spoken-late).
 

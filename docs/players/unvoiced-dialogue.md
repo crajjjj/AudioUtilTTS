@@ -15,7 +15,7 @@ Any other voice type stays unvoiced. `autts voice` on an NPC shows which case th
 
 - **Only lines with no voice file**, loose or in an archive. A line that has one is never touched, even a silent one another mod ships.
 - **Not a line with nothing to say**, such as `...` or `(sighs)`.
-- **Text is cleaned first.** Markup and stage directions are left out (`[dialogue] skip_directions`), and accented letters and curly quotes are read correctly.
+- **Text is cleaned first.** Markup and stage directions are left out (`[dialogue] skip_directions`), accented letters and curly quotes are read correctly, and your [text replacements](configuration.md#text-replacements) apply.
 - **Very long lines are cut** at the last sentence that fits into `[playback] max_chars` (400 characters); the subtitle still shows all of it.
 
 ## How a spoken line behaves

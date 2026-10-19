@@ -559,6 +559,53 @@ namespace Config
 				}
 			}
 		}
+
+		// replacements\*.toml: the text replacements (see Settings::replacements).
+		// Every file is read in file name order; a phrase two files give goes to
+		// the later one. The rules end up longest phrase first.
+		void LoadReplacementFiles(Settings& a_settings)
+		{
+			std::map<std::string, TextReplace::Rule> rules;  // by Normalize(phrase)
+			for (const auto& [fileKey, file] : TomlFilesIn(REPLACE_DIR)) {
+				const auto& [name, path] = file;
+				toml::table root;
+				if (!ParseTomlFile(path, "the text replacement file", name, root)) {
+					continue;
+				}
+				WarnOtherTables(root, "replace", "Text replacement file", name,
+					"Replacements are listed under [replace], as \"what the text says\" = \"what is spoken\".");
+				std::size_t given = 0;
+				if (const auto* table = root["replace"].as_table()) {
+					for (auto&& [phrase, node] : *table) {
+						const auto key = Normalize(phrase.str());
+						const auto spoken = node.value<std::string>();
+						if (key.empty() || !spoken) {
+							logger::warn("Text replacement file {}: \"{}\" must be given what is spoken, in quotes "
+										 "(\"\" to drop it); ignored",
+								name, phrase.str());
+							continue;
+						}
+						if (const auto it = rules.find(key); it != rules.end()) {
+							logger::info("Text replacement \"{}\" is given by two files: the one in {} is used", phrase.str(),
+								name);
+						}
+						rules[key] = TextReplace::Rule{ std::string(phrase.str()), *spoken };
+						++given;
+					}
+				}
+				++a_settings.replacementFiles;
+				if (given > 0) {
+					logger::info("Text replacement file {}: {} {}", name, given, given == 1 ? "phrase" : "phrases");
+				}
+			}
+			for (auto& [key, rule] : rules) {
+				a_settings.replacements.push_back(std::move(rule));
+			}
+			// longest first, so that "Nord UBE" is seen before "UBE" eats its tail;
+			// the map's order breaks ties, so the result does not change between loads
+			std::stable_sort(a_settings.replacements.begin(), a_settings.replacements.end(),
+				[](const TextReplace::Rule& a_a, const TextReplace::Rule& a_b) { return a_a.from.size() > a_b.from.size(); });
+		}
 	}
 
 	bool IsFolderName(const std::string& a_name)
@@ -738,6 +785,7 @@ namespace Config
 		LoadPresetFiles(*settings, installed);
 		LoadModelFiles(*settings, installed);
 		LoadPatchFiles(*settings, installed);
+		LoadReplacementFiles(*settings);
 
 		std::size_t fillIns = 0;
 		for (const auto* map : { &settings->patchVoiceTypes, &settings->modelVoiceTypes }) {
@@ -768,9 +816,10 @@ namespace Config
 			settings->dialogueSkipDirections,
 			settings->dialogueCacheMb, settings->voiceTypes.size(), settings->patchVoiceTypes.size(),
 			settings->modelVoiceTypes.size(), fillIns, settings->fillInVoices ? "on" : "off");
-		logger::info("Config: player lines {}, preset '{}', max_wait {:.1f} s, group '{}', channel '{}', slots {}",
+		logger::info("Config: player lines {}, preset '{}', max_wait {:.1f} s, group '{}', channel '{}', slots {}; {} "
+					 "text replacements from {} files",
 			settings->player, settings->playerPreset, settings->playerMaxWait, settings->playerGroup,
-			settings->playerChannel, settings->playerSlots);
+			settings->playerChannel, settings->playerSlots, settings->replacements.size(), settings->replacementFiles);
 
 		std::scoped_lock lock{ g_lock };
 		g_settings = std::move(settings);
