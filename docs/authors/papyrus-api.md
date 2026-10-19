@@ -14,7 +14,7 @@ If SKSE.GetPluginVersion("AudioUtilTTS") >= 0
 EndIf
 ```
 
-`GetAPIVersion()` tells what the installed plugin offers: `1` is the first release, `2` (0.2.0) added the dialogue functions and `GetActorVoice`, `3` (0.2.1) added `SpeakFrom`, `SpeakActorFrom`, `IsNarrationFree` and `IsSpeechFree`, `4` (0.5.2) added the player line functions.
+`GetAPIVersion()` tells what the installed plugin offers: `1` is the first release, `2` (0.2.0) added the dialogue functions and `GetActorVoice`, `3` (0.2.1) added `SpeakFrom`, `SpeakActorFrom`, `IsNarrationFree` and `IsSpeechFree`, `4` (0.6.0) added the player line functions.
 
 ## Speaking
 
