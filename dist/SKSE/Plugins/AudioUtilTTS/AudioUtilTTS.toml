@@ -242,9 +242,11 @@ cache_max_mb = 1024
 # Can be switched with "autts reload"; "autts player 0" switches it off for
 # the session.
 enable = true
-# The voice: a preset name from this file or a preset file. Empty = the preset
-# "female" or "male" by your character's sex. A voice type is never used, not
-# even your character's: that is a game actor's recorded voice.
+# The voice: a preset name from this file or a preset file. Empty = by your
+# character's sex: the preset "female" (af_bella, voice 1 of the default
+# model, the voice closest to the Bella voice packs) or "male" (bm_george).
+# A voice type is never used, not even your character's: that is a game
+# actor's recorded voice.
 preset = ""
 # The longest the conversation waits for a line to be generated, in seconds
 # (1 to 30). A line that would take longer stays silent that once and is

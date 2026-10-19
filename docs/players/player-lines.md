@@ -16,7 +16,7 @@ Nothing to set up: with both installed, it is on. DBReV needs a version with its
 
 ## The voice
 
-Your character's voice is `[player] preset`, or with that empty the preset `female` or `male` by your character's sex. A voice type is never used, not even your character's: that is a game actor's recorded voice, and your character is whoever you play.
+Your character's voice is `[player] preset`, or with that empty the preset `female` or `male` by your character's sex. As shipped those are `af_bella` (voice 1 of the default model, the voice closest to the Bella voice packs) and `bm_george` (voice 9). A voice type is never used, not even your character's: that is a game actor's recorded voice, and your character is whoever you play.
 
 To use a voice of your own, name a preset:
 

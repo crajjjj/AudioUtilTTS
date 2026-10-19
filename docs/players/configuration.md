@@ -85,7 +85,7 @@ Your own lines, with Dragonborn ReVoiced. See [Your Own Lines](player-lines.md).
 | Key | Default | Meaning |
 |---|---|---|
 | `enable` | `true` | `false`: Dragonborn ReVoiced handles the lines its pack lacks as before, in silence. `autts player 0` switches it off for one session |
-| `preset` | `""` | The voice your lines are spoken with. Empty = the preset `female` or `male` by your character's sex. A voice type is never used |
+| `preset` | `""` | The voice your lines are spoken with. Empty = the preset `female` (af_bella as shipped) or `male` (bm_george) by your character's sex. A voice type is never used |
 | `max_wait` | `5.0` | The longest the conversation waits for a line to be generated, in seconds, 1 to 30. A line that would take longer stays silent that once and is generated for the next time |
 | `group` | `"speech"` | AudioUtil volume group |
 | `channel` | `"player"` | AudioUtil channel. Must differ from the `[playback]` and `[speech]` ones |
