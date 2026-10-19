@@ -48,11 +48,19 @@ namespace DBReV
 			return true;
 		}
 
+		// Is DBReV.dll still mapped? At process exit it may be gone before a line
+		// still waiting here is destroyed, and that line's ticket would call into
+		// it. GetModuleHandle is safe under the loader lock.
+		bool Mapped()
+		{
+			return GetModuleHandleA(::DBReV::kModuleName) != nullptr;
+		}
+
 		// The audio for a_id plays now, a_seconds long. Game thread.
 		bool StartLine(std::uint32_t a_id, float a_seconds)
 		{
 			const auto started = g_lineStarted.load();
-			if (!started || !Release(a_id)) {
+			if (!started || !Release(a_id) || !Mapped()) {
 				return false;
 			}
 			const bool wanted = started(a_id, a_seconds);
@@ -67,7 +75,7 @@ namespace DBReV
 		void FailLine(std::uint32_t a_id)
 		{
 			const auto failed = g_lineFailed.load();
-			if (!failed || !Release(a_id)) {
+			if (!failed || !Release(a_id) || !Mapped()) {
 				return;
 			}
 			g_failed.fetch_add(1);
@@ -79,13 +87,13 @@ namespace DBReV
 		// recording for the line.
 		bool OnLineMissing(const ::DBReV::MissingLine* a_line)
 		{
+			if (!a_line || a_line->version < 1 || a_line->lineId == 0) {
+				return false;
+			}
+			const std::uint32_t id = a_line->lineId;
 			try {
-				if (!a_line || a_line->version < 1 || a_line->lineId == 0) {
-					return false;
-				}
 				g_offered.fetch_add(1);
-				const std::uint32_t id = a_line->lineId;
-				const std::string   text = a_line->text ? a_line->text : "";
+				const std::string text = a_line->text ? a_line->text : "";
 				if (!g_loggedPack.exchange(true)) {
 					logger::info("DBReV offers the player lines its voice pack '{}' has no recording for; the first "
 								 "one it looked for was '{}'",
@@ -113,7 +121,8 @@ namespace DBReV
 				return true;
 			} catch (...) {
 				// neither callback may throw: the line is DBReV's to handle as a
-				// line with no file
+				// line with no file, and nothing here answers for it later
+				Release(id);
 				return false;
 			}
 		}

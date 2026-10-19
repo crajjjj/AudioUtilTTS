@@ -3403,6 +3403,10 @@ namespace Speaker
 		g_said = {};
 		g_latePlaying = {};
 		g_splitSpeaking.reset();
+		// a player line on its way answers its holder through Cancel above; the
+		// one that played is over with the game being loaded
+		g_playerWanted = 0;
+		g_playerPlaying = {};
 		// the lines on their way will not come: no line has a slot any more,
 		// so each is asked for afresh
 		g_slotOfKey.clear();
@@ -3694,7 +3698,17 @@ namespace Speaker
 			}
 			dropped.clear();
 			PlayLine(SlotDataRel(kPlayer, slot), std::move(line), seconds, -1, quietAt);
-			return ticket->state.load() == PlayerTicket::kStarted ? std::string{} : "it could not be played (see above)";
+			if (ticket->state.load() == PlayerTicket::kStarted) {
+				return {};
+			}
+			{
+				// declined after all: nobody waits for this id
+				std::scoped_lock lock{ g_lock };
+				if (g_playerWanted == a_line.id) {
+					g_playerWanted = 0;
+				}
+			}
+			return "it could not be played (see above)";
 		}
 
 		// 2. new: generated now when it can be ready while the conversation
