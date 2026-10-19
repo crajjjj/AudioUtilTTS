@@ -46,7 +46,7 @@ A named voice mods ask for. See [Presets](voices.md#presets).
 | `speed` | the `[voice]` one | 0.5 to 2.0 |
 | `volume` | the `[voice]` one | 0.0 to 1.0 |
 
-The shipped file defines `narrator` (voice 7), `female` (1), `male` (9) and `whisper` (2). Mods can bring more in `presets\*.toml`; yours win over theirs. See [Preset files](voices.md#preset-files).
+The shipped file defines `narrator` (voice 7), `female` (1), `male` (9), `whisper` (2) and `bella` (1, for [your own lines](player-lines.md#the-voice)). Mods can bring more in `presets\*.toml`; yours win over theirs. See [Preset files](voices.md#preset-files).
 
 ## [voicetype]
 
@@ -85,7 +85,7 @@ Your own lines, with Dragonborn ReVoiced. See [Your Own Lines](player-lines.md).
 | Key | Default | Meaning |
 |---|---|---|
 | `enable` | `true` | `false`: Dragonborn ReVoiced handles the lines its pack lacks as before, in silence. `autts player 0` switches it off for one session |
-| `preset` | `""` | The voice your lines are spoken with. Empty = the preset `female` (af_bella as shipped) or `male` (bm_george) by your character's sex. A voice type is never used |
+| `preset` | `"bella"` | The voice your lines are spoken with: as shipped the preset `bella`, af_bella. Empty = the preset `female` or `male` by your character's sex. A voice type is never used |
 | `max_wait` | `5.0` | The longest the conversation waits for a line to be generated, in seconds, 1 to 30. A line that would take longer stays silent that once and is generated for the next time |
 | `group` | `"speech"` | AudioUtil volume group |
 | `channel` | `"player"` | AudioUtil channel. Must differ from the `[playback]` and `[speech]` ones |

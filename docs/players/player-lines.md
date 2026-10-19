@@ -16,7 +16,7 @@ Nothing to set up: with both installed, it is on. DBReV needs a version with its
 
 ## The voice
 
-Your character's voice is `[player] preset`, or with that empty the preset `female` or `male` by your character's sex. As shipped those are `af_bella` (voice 1 of the default model, the voice closest to the Bella voice packs) and `bm_george` (voice 9). A voice type is never used, not even your character's: that is a game actor's recorded voice, and your character is whoever you play.
+Your character's voice is `[player] preset`. As shipped that is the preset `bella`: `af_bella`, voice 1 of the default model, the voice closest to the Bella voice packs, whatever your character's sex. With the key empty you get the preset `female` or `male` by your character's sex instead. A voice type is never used, not even your character's: that is a game actor's recorded voice, and your character is whoever you play.
 
 To use a voice of your own, name a preset:
 
@@ -38,7 +38,7 @@ All under `[player]` in `AudioUtilTTS.toml`; see [Configuration Reference](confi
 | Key | Default | Meaning |
 |---|---|---|
 | `enable` | `true` | `false`: DBReV handles those lines as before, in silence |
-| `preset` | `""` | The voice. Empty = `female` or `male` by your character's sex |
+| `preset` | `"bella"` | The voice. Empty = `female` or `male` by your character's sex |
 | `max_wait` | `5.0` | The longest the conversation waits for a line, in seconds, 1 to 30 |
 
 ## Checking on it

@@ -83,7 +83,7 @@ volume = 1.0
 # edit it. A preset from such a file is for lines that ask for it by name; it
 # does not speak for a voice type by being named like one.
 #
-# The four below all use the default model, so they cost no extra memory.
+# The five below all use the default model, so they cost no extra memory.
 
 [preset.narrator]
 voice = 7    # bf_emma
@@ -96,6 +96,11 @@ voice = 9    # bm_george
 
 [preset.whisper]
 voice = 2    # af_nicole
+
+# Your own lines, with Dragonborn ReVoiced (see [player] below): the voice
+# closest to the Bella voice packs.
+[preset.bella]
+voice = 1    # af_bella
 
 # A preset on another model. Put the model folder under models\ first; it is
 # loaded on first use. With no "voice" it uses that model's first voice.
@@ -242,12 +247,11 @@ cache_max_mb = 1024
 # Can be switched with "autts reload"; "autts player 0" switches it off for
 # the session.
 enable = true
-# The voice: a preset name from this file or a preset file. Empty = by your
-# character's sex: the preset "female" (af_bella, voice 1 of the default
-# model, the voice closest to the Bella voice packs) or "male" (bm_george).
-# A voice type is never used, not even your character's: that is a game
-# actor's recorded voice.
-preset = ""
+# The voice: a preset name from this file or a preset file. "bella" is the
+# preset above, af_bella, whatever your character's sex. Empty = the preset
+# "female" or "male" by your character's sex. A voice type is never used,
+# not even your character's: that is a game actor's recorded voice.
+preset = "bella"
 # The longest the conversation waits for a line to be generated, in seconds
 # (1 to 30). A line that would take longer stays silent that once and is
 # generated for the next time. A cached line never waits.
