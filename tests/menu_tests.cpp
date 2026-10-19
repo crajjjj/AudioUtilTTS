@@ -238,7 +238,8 @@ namespace
 			for (const auto& group : presets->groups) {
 				titles.push_back(group.title);
 			}
-			Check(titles == std::vector<std::string>{ "Preset narrator", "Preset female", "Preset male", "Preset whisper" },
+			Check(titles == std::vector<std::string>{ "Preset narrator", "Preset female", "Preset male", "Preset whisper",
+									"Preset bella" },
 				"one group per preset, in file order");
 			for (const auto& group : presets->groups) {
 				std::vector<std::string> names;
