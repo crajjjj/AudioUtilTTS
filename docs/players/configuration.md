@@ -140,7 +140,7 @@ Dibella = "Dibelluh"     # a pronunciation hint
 - A phrase matches **whole**, never inside another word: `UBE` leaves "tube" alone. A phrase that starts or ends with punctuation needs no word boundary on that side.
 - Case is ignored. Longer phrases are applied first, so `"Nord UBE"` wins over `UBE` where both match.
 - The replaced text is what gets cached, so a changed rule reaches a line the next time it is generated; `autts clearcache` forces that.
-- `autts reload` reads the files again. The shipped `_example.toml` holds no rule, only the format.
+- `autts reload` reads the files again. The shipped `_example.toml` shows the format and holds one rule: `UBE = ""`, for the race names a body mod of that name appends it to ("Nord UBE" is spoken as "Nord").
 
 ## Files beside it
 

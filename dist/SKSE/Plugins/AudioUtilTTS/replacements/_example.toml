@@ -11,12 +11,12 @@
 # alone), and ignores case. Longer phrases are applied first. Put a phrase
 # with spaces in quotes.
 #
-# This file holds no rule. Copy it under a name of your own and fill it in:
-#
-# [replace]
-# "Nord UBE" = "Nord"       # what the text says = what is spoken
-# UBE = ""                  # or dropped
-# "Dr." = "Doctor"
-# Dibella = "Dibelluh"      # a pronunciation hint
+# More examples:
+#   "Nord UBE" = "Nord"       # what the text says = what is spoken
+#   "Dr." = "Doctor"
+#   Dibella = "Dibelluh"      # a pronunciation hint
 
 [replace]
+# UBE 2.0 names its races "Nord UBE", "Imperial UBE" and so on, and a line
+# with a race alias shows that name: the suffix is not spoken.
+UBE = ""
