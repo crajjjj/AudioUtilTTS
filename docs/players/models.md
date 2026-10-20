@@ -38,10 +38,10 @@ To make a voice of your own, see [Training a Voice](../authors/training-voices.m
 
 ## Pocket voices
 
-A Pocket model has no voices built in. It speaks like a recording: each wav file in its `voices` folder is one voice.
+A Pocket model has no voices built in. It speaks like a recording: each wav file in its `voices` folder is one voice. For adding one of your own, step by step, see [A Voice from a Recording](voice-from-recording.md).
 
 ```
-models\pocket-tts\
+Data\SKSE\Plugins\AudioUtilTTS\models\pocket-tts\
   lm_main.int8.onnx  lm_flow.int8.onnx  encoder.onnx  decoder.int8.onnx  text_conditioner.onnx
   vocab.json  token_scores.json
   voices\
@@ -52,7 +52,7 @@ models\pocket-tts\
 
 - **Get the model** as `AudioUtilTTS-Voice-pocket-tts.zip` from the [latest release](https://github.com/crajjjj/AudioUtilTTS/releases/latest), which installs it as `models\pocket-tts`, the folder the [fill-in voices](voices.md#fill-in-voices) archive and the examples here use. It is the `sherpa-onnx-pocket-tts-int8-2026-01-26` model from the [sherpa-onnx model list](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models); unpacked by hand, the folder name is yours to pick, but recordings and presets made for `pocket-tts` then need that name.
 - **A recording is named by its file name**, without `.wav`: `voice = "old-woman"`. A number works too (the recording's place in name order, from 0), but a name stays right when recordings are added. `AudioUtilTTS.log` lists them when the model loads.
-- **Anyone can add recordings.** A mod that needs a voice ships only its `voices\mymod-anna.wav` into the same folder (a mod manager merges the folders) and a preset or patch that names it. The model is loaded once for all of them, and a recording added or replaced leaves the cached lines of the others as they are.
+- **Anyone can add recordings** to that `voices` folder: a player a wav of their own ([A Voice from a Recording](voice-from-recording.md)), a mod its `voices\mymod-anna.wav` plus a preset or patch that names it ([Shipping a Voice Model](../authors/voice-models.md)). The model is loaded once for all of them, and a recording added or replaced leaves the cached lines of the others as they are.
 - **A good recording** is 5 to 10 seconds of one person speaking, clean, with no music and no other voices. Only the first 10 seconds are used. Any wav works: 8 to 32-bit or float, mono or stereo, any sample rate.
 - **The manner of the recording carries over.** A whispered recording gives whispered lines. So one speaker recorded in several moods can be several presets.
 - **Speed has no effect on Pocket voices.** A slower or faster voice is a slower or faster recording.

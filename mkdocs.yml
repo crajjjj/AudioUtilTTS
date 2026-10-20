@@ -44,6 +44,7 @@ nav:
     - Your Own Lines: players/player-lines.md
     - Voices, Presets & Voice Types: players/voices.md
     - Voice Models: players/models.md
+    - A Voice from a Recording: players/voice-from-recording.md
     - In-Game Menu: players/settings-menu.md
     - Configuration Reference: players/configuration.md
     - Console Commands: players/console-commands.md

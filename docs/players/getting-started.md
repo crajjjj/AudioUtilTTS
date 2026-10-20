@@ -17,7 +17,7 @@
 |---|---|
 | `AudioUtilTTS-<version>.zip` | The plugin. The only required archive |
 | `AudioUtilTTS-Voice-kokoro-en-v0_19.zip` | The default voice model, 11 English voices: narration, and the generic voices for dialogue |
-| `AudioUtilTTS-Voice-pocket-tts.zip` | Optional: the [Pocket](models.md#pocket-voices) model, which speaks like a short recording. No voices of its own |
+| `AudioUtilTTS-Voice-pocket-tts.zip` | Optional: the [Pocket](models.md#pocket-voices) model, which speaks like a short recording, [one of yours too](voice-from-recording.md). No voices of its own |
 | `AudioUtilTTS-Voices-FillIn.zip` | Optional: [fill-in voices](voices.md#fill-in-voices), one Pocket recording for each of 38 vanilla voice types, used only where nothing else gives a voice. Needs the Pocket model |
 | A voice archive named after a voice type, such as `AudioUtilTTS-Voice-MaleNord.zip` | A voice for the NPCs of that voice type |
 | A voice type patch | Voices for a mod's characters who have voice types of their own |
