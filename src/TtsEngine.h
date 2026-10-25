@@ -60,6 +60,11 @@ namespace TtsEngine
 	// a folder that holds none, which every model but a Pocket one is.
 	std::vector<Clip> Clips(const std::string& a_dir);
 
+	// A recording to speak like, read as a Pocket model reads its own: any plain
+	// wav (PCM of 8 to 32 bits or 32-bit float, any channel count), its first 10
+	// seconds, at least half a second of it. false and a_error for anything else.
+	bool ReadRecording(const std::filesystem::path& a_path, Audio& a_out, std::string& a_error);
+
 	// One loaded voice model. Several can be alive at once; each is used from
 	// one thread at a time (the plugin's worker owns them all).
 	//
@@ -95,6 +100,12 @@ namespace TtsEngine
 		// a_keepGoing is polled between sentences; returning false abandons the line.
 		Result Synthesize(const std::string& a_text, int a_voice, float a_speed,
 			const std::function<bool()>& a_keepGoing, Audio& a_out, std::string& a_error) const;
+
+		// A Pocket model only: the line in the voice of a_clip, a recording that
+		// is not one of the model's own (see ReadRecording). Fails on any other
+		// model, which cannot speak like a recording.
+		Result SynthesizeLike(const std::string& a_text, const Audio& a_clip, const std::function<bool()>& a_keepGoing,
+			Audio& a_out, std::string& a_error) const;
 
 	private:
 		Model() = default;

@@ -1,6 +1,9 @@
 #pragma once
 
+#include <chrono>
+#include <filesystem>
 #include <functional>
+#include <vector>
 
 // Turns text into speech in the running game.
 //
@@ -178,6 +181,35 @@ namespace Speaker
 	bool IsPlayerEnabled();                 // switched on and enabled in the config
 	std::string PlayerStatus();             // one line, for the console
 
+	// A line for SkyrimNet (XttsServer.h), which plays the audio itself: made on
+	// the worker and handed back as a wav file, never played here. It goes
+	// ahead of every line still to be generated except the player's own, which
+	// a conversation is held open for.
+	//   a_voiceType  the speaker as SkyrimNet names it, a voice type's editor
+	//                ID ("malenord", case ignored). Its voice is found as an
+	//                unvoiced dialogue line's is, else it is the preset
+	//                "female" / "male" by the sex the name says, else the
+	//                default voice.
+	//   a_clip       when not empty: a recording to speak like instead, on the
+	//                Pocket model [skyrimnet] clone_model
+	// Waits for the line at most a_wait. A line with nothing to say, or for a
+	// voice type the config never speaks for, is a moment of silence.
+	struct Rendered
+	{
+		std::vector<char> wav;            // a mono 16-bit wav; empty = no line
+		std::string       voice;          // which voice it is in, for the log
+		std::string       error;          // why there is no line
+		bool              later = false;  // not now (busy, loading, given up), rather than never
+		std::size_t       chars = 0;
+		float             seconds = 0.0f;
+		long long         ms = 0;         // what generating it took
+	};
+	Rendered RenderLine(std::string_view a_text, std::string_view a_voiceType, const std::filesystem::path& a_clip,
+		std::chrono::milliseconds a_wait);
+	// Every SkyrimNet line waiting or being made is given up, and its request
+	// answered at once.
+	void DropRenderedLines();
+
 	void SetDialogueHooked(bool a_hooked);    // DialogueHook reports whether its patch is in place
 	void SetDialogueEnabled(bool a_enabled);  // session switch on top of [dialogue] enable
 	bool IsDialogueEnabled();                 // hooked, switched on and enabled in the config
@@ -219,6 +251,7 @@ namespace Speaker
 		int           modelsInstalled = 0;
 		std::string   dialogue;              // "on", or why it is off
 		std::string   player;                // the player's lines: on and how many, or why not
+		std::string   skyrimnet;             // SkyrimNet's lines: where they are answered and how many, or why not
 		std::uint32_t given = 0;             // this session: responses given a voice
 		std::uint32_t unvoiced = 0;          // left unvoiced
 		std::uint32_t late = 0;              // spoken late

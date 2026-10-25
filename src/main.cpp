@@ -7,6 +7,7 @@
 #include "Greetings.h"
 #include "PapyrusAPI.h"
 #include "Speaker.h"
+#include "XttsServer.h"
 #include "menu/Menu.h"
 
 using namespace SKSE;
@@ -59,6 +60,8 @@ namespace
 			Speaker::Start();
 			// the player's lines Dragonborn ReVoiced has no recording for
 			DBReV::Register();
+			// SkyrimNet's lines, at the address its XTTS voice engine talks to
+			XttsServer::Apply();
 			// the game code is only patched when the feature is wanted at launch
 			if (Config::Get()->dialogue) {
 				const bool hooked = DialogueHook::Install();

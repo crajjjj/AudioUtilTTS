@@ -2,7 +2,7 @@ set_xmakever("3.0.0")  -- the commonlibsse-ng submodule requires 3.0
 
 -- Globals
 PROJECT_NAME = "AudioUtilTTS"
-PROJECT_VERSION = "0.6.0"
+PROJECT_VERSION = "0.7.0"
 PROJECT_AUTHOR = "crajjjj"
 
 -- Project
@@ -22,6 +22,8 @@ option_end()
 includes("lib/commonlibsse-ng")
 
 add_requires("toml++")
+-- the local XTTS endpoint SkyrimNet talks to (src\XttsServer.cpp)
+add_requires("cpp-httplib v0.34.0", "nlohmann_json v3.12.0")
 
 -- policies
 set_policy("package.requires_lock", true)
@@ -59,12 +61,25 @@ local function use_sherpa()
     end
 end
 
+-- The HTTP side of the endpoint SkyrimNet talks to (src\XttsHttp.cpp): no game
+-- in it, and a library of its own because cpp-httplib needs winsock2.h ahead of
+-- <Windows.h>, which the plugin's precompiled header (CommonLib) cannot allow.
+-- tests\xtts_tests.cpp links it too.
+target("xtts-http")
+    set_kind("static")
+    set_default(false)
+    add_packages("cpp-httplib", "nlohmann_json")
+    add_files("src/XttsHttp.cpp")
+    add_includedirs("src", { public = true })
+    add_cxxflags("cl::/utf-8")
+target_end()
+
 -- Target
 target(PROJECT_NAME)
     set_kind("shared")
 
     -- CommonLibSSE-NG
-    add_deps("commonlibsse-ng")
+    add_deps("commonlibsse-ng", "xtts-http")
     add_rules("commonlibsse-ng.plugin", {
         name = PROJECT_NAME,
         author = PROJECT_AUTHOR,
@@ -75,8 +90,8 @@ target(PROJECT_NAME)
     add_packages("toml++")
     use_sherpa()
 
-    -- Source files
-    add_files("src/**.cpp")
+    -- Source files (XttsHttp.cpp is the xtts-http library's)
+    add_files("src/**.cpp|XttsHttp.cpp")
     add_headerfiles("src/**.h")
     -- vendor\SKSEMenuFramework: the in-game menu's client header (src\menu\Ui.h)
     add_includedirs("src", "include", "vendor/SKSEMenuFramework")
@@ -160,6 +175,17 @@ target("text-tests")
     set_default(false)
     add_files("tests/text_tests.cpp")
     add_includedirs("src")
+    add_cxxflags("cl::/utf-8")
+target_end()
+
+-- The endpoint SkyrimNet talks to, over a real socket, no game needed:
+--   xmake build xtts-tests && xmake run xtts-tests
+target("xtts-tests")
+    set_kind("binary")
+    set_default(false)
+    add_deps("xtts-http")
+    add_packages("cpp-httplib", "nlohmann_json")
+    add_files("tests/xtts_tests.cpp")
     add_cxxflags("cl::/utf-8")
 target_end()
 

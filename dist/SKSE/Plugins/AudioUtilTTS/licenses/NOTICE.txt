@@ -44,6 +44,18 @@ toml++
     MIT License (MIT-tomlplusplus.txt in this folder)
     https://github.com/marzer/tomlplusplus
 
+cpp-httplib
+    Answers SkyrimNet at the address of its XTTS voice engine.
+    Copyright (c) 2017 yhirose
+    MIT License (MIT-cpp-httplib.txt in this folder)
+    https://github.com/yhirose/cpp-httplib
+
+JSON for Modern C++
+    Reads SkyrimNet's requests.
+    Copyright (c) 2013-2025 Niels Lohmann
+    MIT License (MIT-nlohmann-json.txt in this folder)
+    https://github.com/nlohmann/json
+
 sherpa-onnx and ONNX Runtime bundle further libraries of their own (among them
 kaldi-native-fbank, kaldifst, piper-phonemize, protobuf and abseil). Their
 notices are in the two projects' repositories, linked above.

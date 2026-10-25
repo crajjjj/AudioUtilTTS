@@ -6,12 +6,13 @@ With [SKSE Menu Framework](https://www.nexusmods.com/skyrimspecialedition/mods/1
 
 | Page | What it holds |
 |---|---|
-| **Status** | Whether speech is ready, the default voice, the voice models loaded and installed, this session's dialogue, the line cache. A voice to try, reload, clearing the cache |
+| **Status** | Whether speech is ready, the default voice, the voice models loaded and installed, this session's dialogue, your lines, SkyrimNet's lines, the line cache. A voice to try, reload, clearing the cache |
 | **Dialogue** | Unvoiced dialogue, new lines said right away, the mouth |
 | **Voice types** | The `[voicetype]` lines of your file, and a form to add one |
 | **Voice** | The master switch, the default voice, threads and models in memory |
 | **Presets** | Each preset of your file: model, voice, speed, volume |
 | **Narration & speech** | Lines that wait, the longest line, the speaker's mouth |
+| **SkyrimNet** | Speaking SkyrimNet's lines, voice cloning, the port ([SkyrimNet](skyrimnet.md)) |
 
 Rare settings (placeholder counts, AudioUtil groups and channels, a model's language) sit in each page's closed **Advanced** group. Hover over a setting for what it does, its default and its key.
 

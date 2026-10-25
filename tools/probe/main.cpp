@@ -1,6 +1,8 @@
 // Offline check of the speech core, no game needed.
 //   probe <model dir> "text" [voice] [out.wav] [threads] [output rate]
-// voice is a number, or on a Pocket model the name of one of its recordings.
+// voice is a number, or on a Pocket model the name of one of its recordings,
+// or the path of any .wav to speak like (a Pocket model, as the plugin speaks
+// a voice sample SkyrimNet sends).
 // Loads the model through the same TtsEngine the plugin uses, speaks one line
 // and writes it as a wav, printing how long each step took. Beside the wav it
 // writes the mouth animation the plugin would hand the game for that line
@@ -199,13 +201,24 @@ int main(int argc, char** argv)
 		TtsEngine::RuntimeVersion().c_str(), model->Family().c_str(), model->VoiceCount(), model->SampleRate(), ms(t0, t1),
 		static_cast<unsigned long long>(TtsEngine::ModelStamp(spec.dir)));
 	PrintVoiceNames(*model);
-	const int voice = VoiceArg(*model, voiceArg);
+
+	// a .wav that is there: spoken like, as a voice sample is
+	const std::filesystem::path recording = voiceArg;
+	std::error_code             ec;
+	const bool                  like = recording.extension() == ".wav" && std::filesystem::is_regular_file(recording, ec);
+	TtsEngine::Audio            clip;
+	if (like && !TtsEngine::ReadRecording(recording, clip, error)) {
+		std::printf("recording %s: %s\n", voiceArg, error.c_str());
+		return 1;
+	}
+	const int voice = like ? 0 : VoiceArg(*model, voiceArg);
 	if (voice < 0) {
 		return 1;
 	}
 
 	TtsEngine::Audio audio;
-	const auto       result = model->Synthesize(text, voice, 1.0f, {}, audio, error);
+	const auto       result = like ? model->SynthesizeLike(text, clip, {}, audio, error) :
+									 model->Synthesize(text, voice, 1.0f, {}, audio, error);
 	const auto       t2 = std::chrono::steady_clock::now();
 	if (result != TtsEngine::Result::Ok) {
 		std::printf("synthesis failed: %s\n", error.c_str());

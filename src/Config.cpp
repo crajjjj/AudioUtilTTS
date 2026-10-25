@@ -724,6 +724,19 @@ namespace Config
 		settings->playerMaxWait = std::clamp(settings->playerMaxWait, 1.0f, 30.0f);
 		settings->playerSlots = std::clamp(settings->playerSlots, 1, 16);
 
+		if (const auto* skyrimnet = root["skyrimnet"].as_table()) {
+			settings->skyrimnet = (*skyrimnet)["enable"].value_or(settings->skyrimnet);
+			settings->skyrimnetPort = (*skyrimnet)["port"].value_or(settings->skyrimnetPort);
+			settings->skyrimnetCloning = (*skyrimnet)["voice_cloning"].value_or(settings->skyrimnetCloning);
+			settings->skyrimnetCloneModel = (*skyrimnet)["clone_model"].value_or(settings->skyrimnetCloneModel);
+		}
+		settings->skyrimnetPort = std::clamp(settings->skyrimnetPort, 1024, 65535);
+		if (!IsFolderName(settings->skyrimnetCloneModel)) {
+			logger::warn("[skyrimnet] clone_model = '{}' is not a plain folder name, using the default",
+				settings->skyrimnetCloneModel);
+			settings->skyrimnetCloneModel = Settings{}.skyrimnetCloneModel;
+		}
+
 		if (const auto* voiceTypes = root["voicetype"].as_table()) {
 			for (auto&& [name, node] : *voiceTypes) {
 				const auto key = Normalize(name.str());
@@ -820,6 +833,8 @@ namespace Config
 					 "text replacements from {} files",
 			settings->player, settings->playerPreset, settings->playerMaxWait, settings->playerGroup,
 			settings->playerChannel, settings->playerSlots, settings->replacements.size(), settings->replacementFiles);
+		logger::info("Config: SkyrimNet lines {}, port {}, voice_cloning {} (model '{}')", settings->skyrimnet,
+			settings->skyrimnetPort, settings->skyrimnetCloning, settings->skyrimnetCloneModel);
 
 		std::scoped_lock lock{ g_lock };
 		g_settings = std::move(settings);

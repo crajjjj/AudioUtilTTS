@@ -91,6 +91,19 @@ Your own lines, with Dragonborn ReVoiced. See [Your Own Lines](player-lines.md).
 | `channel` | `"player"` | AudioUtil channel. Must differ from the `[playback]` and `[speech]` ones |
 | `slots` | `4` | Placeholder wav files, 1 to 16. New ones work after the next restart |
 
+## [skyrimnet]
+
+SkyrimNet's NPC lines, at the address of its XTTS voice engine. See [SkyrimNet](skyrimnet.md).
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enable` | `true` | Answer SkyrimNet at `http://localhost:<port>`, only while it is installed. A port another program holds is left to it |
+| `port` | `8020` | The port of SkyrimNet's XTTS address, 1024 to 65535. Change it together with that address |
+| `voice_cloning` | `false` | Keep the voice samples SkyrimNet sends and speak each of those speakers like its sample, with the Pocket model below. `false`: SkyrimNet names its speakers by voice type and the voices installed here speak |
+| `clone_model` | `"pocket-tts"` | The Pocket model folder voice samples are spoken with |
+
+`enable` and `port` take effect when changed in the menu or with `autts reload`; the other two from the next line on.
+
 ## [playback]
 
 Narration, plus four keys that reach further: `interrupt` and `max_pending` also govern character speech, `max_chars` and `output_rate` every line, dialogue included.

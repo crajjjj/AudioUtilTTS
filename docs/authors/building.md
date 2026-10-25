@@ -35,6 +35,7 @@ xmake build package        # release archives -> Release\
 | `xmake build probe` | The offline probe; see [Tools](tools.md#the-probe) |
 | `xmake build voicetrain` | `Release\AudioUtilTTS-VoiceTraining-<version>.zip`: the [voice training kit](tools.md#the-voice-training-kit) as a download of its own |
 | `xmake build menu-tests` | Checks for the in-game menu, run with `xmake run menu-tests` from the repo root: the schema describes every key of the shipped config, a change touches one line, a hand edit survives a write, and every framework function the menu calls is probed at load |
+| `xmake build xtts-tests` | Checks for the endpoint SkyrimNet talks to, run with `xmake run xtts-tests`: an HTTP client sends what SkyrimNet sends (a line, a ping, a voice sample) to the server on a spare port, and a port another server holds is refused |
 
 `xmake f --copy_to_mod=y` with the environment variable `XSE_TES5_MODS_PATH` set also copies `dist\*` into `<mods>\AudioUtilTTS` after each build.
 
@@ -50,7 +51,7 @@ xmake build package        # release archives -> Release\
 src/                              C++ SKSE plugin (CommonLibSSE-NG)
   menu/                           the in-game menu: the config writer (from SLO VE's menu), the schema, the pages
 vendor/SKSEMenuFramework/         SKSE Menu Framework's client header, vendored verbatim (hash in its README)
-tests/                            menu_tests.cpp, the menu's checks
+tests/                            menu_tests.cpp, text_tests.cpp, xtts_tests.cpp: offline checks
 include/API/AudioUtilAPI.h        AudioUtil's C API header (resolved at run time)
 papyrus/Source/                   Papyrus sources (.psc)
 dist/                             the mod as installed; maps onto Data\
@@ -85,4 +86,4 @@ The workflow builds with `mkdocs build --strict`, so a broken link fails the bui
 
 ## Licenses
 
-AudioUtilTTS is GPLv3 (see `LICENSE`). It links [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG) (GPLv3 or later, with a modding and a linking exception), [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache 2.0), [ONNX Runtime](https://github.com/microsoft/onnxruntime) (MIT) and, through sherpa-onnx, [espeak-ng](https://github.com/espeak-ng/espeak-ng) (GPLv3). The plugin archive carries the full notices and license texts in `SKSE\Plugins\AudioUtilTTS\licenses`. Voice models carry their own license, in the model folder.
+AudioUtilTTS is GPLv3 (see `LICENSE`). It links [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG) (GPLv3 or later, with a modding and a linking exception), [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache 2.0), [ONNX Runtime](https://github.com/microsoft/onnxruntime) (MIT), [cpp-httplib](https://github.com/yhirose/cpp-httplib) (MIT), [JSON for Modern C++](https://github.com/nlohmann/json) (MIT) and, through sherpa-onnx, [espeak-ng](https://github.com/espeak-ng/espeak-ng) (GPLv3). The plugin archive carries the full notices and license texts in `SKSE\Plugins\AudioUtilTTS\licenses`. Voice models carry their own license, in the model folder.

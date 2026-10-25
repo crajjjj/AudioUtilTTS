@@ -5,6 +5,8 @@
 #include "Lip.h"
 #include "TtsEngine.h"
 
+#include "XttsServer.h"
+
 #include <API/AudioUtilAPI.h>
 
 #include <Windows.h>
@@ -14,6 +16,8 @@
 #include <condition_variable>
 #include <cstring>
 #include <deque>
+#include <future>
+#include <limits>
 #include <optional>
 #include <thread>
 #include <tuple>
@@ -216,6 +220,28 @@ namespace Speaker
 			std::string   text;  // seeds the mouth shapes
 		};
 
+		// A line for SkyrimNet (see RenderLine): the request that asked for it
+		// waits on `done`, which is answered exactly once, by the worker or by
+		// DropRenderedLines, whichever comes first.
+		struct RenderJob
+		{
+			Line                    line;
+			fs::path                clip;   // a recording to speak like, "" = the voice of line
+			std::string             label;  // whose voice, for the log
+			std::uint64_t           epoch = 0;  // g_renderEpoch when it was queued
+			std::atomic<bool>       gaveUp{ false };  // its request stopped waiting
+			std::atomic<bool>       answered{ false };
+			std::promise<Rendered>  done;
+
+			void Answer(Rendered a_out)
+			{
+				bool expected = false;
+				if (answered.compare_exchange_strong(expected, true)) {
+					done.set_value(std::move(a_out));
+				}
+			}
+		};
+
 		std::mutex                        g_lock;  // guards the block below
 		std::condition_variable           g_wake;
 		std::condition_variable           g_fillWake;
@@ -236,6 +262,7 @@ namespace Speaker
 		std::unordered_set<std::string>      g_failedLines;    // lines that could not be generated, by cache key
 		std::unordered_set<std::string>      g_unusableModels;  // models that would not load
 		std::deque<FillJob>                  g_fills;          // cached lines on their way into slots
+		std::deque<std::shared_ptr<RenderJob>> g_renderWaiting;  // SkyrimNet's lines, oldest first
 		Clock::time_point                    g_lastDialogueEnd{};  // when the last dialogue response was handled
 		// per model (normalized folder name), all cleared by a reload:
 		std::unordered_map<std::string, float>         g_msPerChar;    // measured generation time per character
@@ -245,6 +272,7 @@ namespace Speaker
 
 		std::atomic<std::uint64_t> g_epoch{ 1 };  // bumped by Cancel: lines from an older epoch are dropped
 		std::atomic<std::uint64_t> g_dialogueEpoch{ 1 };  // the same for dialogue lines, bumped by Reset
+		std::atomic<std::uint64_t> g_renderEpoch{ 1 };    // the same for SkyrimNet's lines, bumped by DropRenderedLines
 		std::atomic<bool>          g_enabled{ true };
 		std::atomic<bool>          g_working{ false };
 		std::atomic<bool>          g_warnedOldLipSync{ false };
@@ -819,10 +847,10 @@ namespace Speaker
 
 		// One line of plain text: the configured replacements applied, control
 		// characters and runs of whitespace become single spaces, and anything
-		// past [playback] max_chars is cut at a sentence end.
-		std::string Clean(std::string_view a_text, const Config::Settings& a_settings)
+		// past a_maxChars is cut at a sentence end. a_maxChars 0 = [playback]
+		// max_chars.
+		std::string Clean(std::string_view a_text, const Config::Settings& a_settings, std::size_t a_maxChars = 0)
 		{
-			const int   a_maxChars = a_settings.maxChars;
 			const auto  text = TextReplace::Apply(TtsEngine::ToSpeakable(a_text), a_settings.replacements);
 			std::string out;
 			out.reserve(text.size());
@@ -840,7 +868,7 @@ namespace Speaker
 				out += c;
 			}
 
-			const auto cap = static_cast<std::size_t>(a_maxChars);
+			const auto cap = a_maxChars ? a_maxChars : static_cast<std::size_t>(a_settings.maxChars);
 			if (out.size() <= cap) {
 				return out;
 			}
@@ -905,7 +933,8 @@ namespace Speaker
 		// What a dialogue line says aloud. Markup in <angle brackets> is dropped,
 		// and so are stage directions such as (sighs), [laughs] and *coughs* when
 		// the config says so. "" when nothing is left to say (see IsPlaceholder).
-		std::string CleanDialogue(std::string_view a_text, const Config::Settings& a_settings)
+		// a_maxChars as for Clean.
+		std::string CleanDialogue(std::string_view a_text, const Config::Settings& a_settings, std::size_t a_maxChars = 0)
 		{
 			std::string spoken;
 			spoken.reserve(a_text.size());
@@ -926,7 +955,7 @@ namespace Speaker
 				}
 				spoken += c;
 			}
-			auto out = Clean(spoken, a_settings);
+			auto out = Clean(spoken, a_settings, a_maxChars);
 			return IsPlaceholder(out) ? std::string{} : out;
 		}
 
@@ -2427,17 +2456,110 @@ namespace Speaker
 			PostPlay(SlotDataRel(kPlayer, slot), std::move(a_line), seconds, synthMs, quietAt);
 		}
 
+		// A line for SkyrimNet: generated, made into a wav and handed to the
+		// request waiting for it. Nothing is played and nothing is cached: an AI
+		// line is seldom said twice.
+		void ProcessRender(RenderJob& a_job)
+		{
+			const auto current = [&] { return !a_job.gaveUp.load() && a_job.epoch == g_renderEpoch.load(); };
+			Rendered   out;
+			out.voice = a_job.label;
+			out.chars = a_job.line.text.size();
+			const auto fail = [&](std::string a_error, bool a_later) {
+				out.error = std::move(a_error);
+				out.later = a_later;
+				a_job.Answer(std::move(out));
+			};
+			if (!current()) {
+				return fail("given up before it was generated", true);
+			}
+			const auto settings = Config::Get();
+			const auto& line = a_job.line;
+
+			TtsEngine::Audio  audio;
+			std::string       error;
+			std::string       modelKey;
+			TtsEngine::Result result = TtsEngine::Result::Failed;
+			const auto        start = Clock::now();
+			if (!a_job.clip.empty()) {
+				// a voice sample SkyrimNet sent, spoken like on the Pocket model
+				modelKey = Config::Normalize(settings->skyrimnetCloneModel);
+				bool        fellBack = false;
+				const auto* model = ModelFor(modelKey, *settings, fellBack);
+				if (!model || fellBack) {
+					return fail(std::format("the Pocket model '{}' could not be loaded", modelKey), false);
+				}
+				TtsEngine::Audio clip;
+				if (!TtsEngine::ReadRecording(a_job.clip, clip, error)) {
+					return fail(std::format("its voice sample {}: {}", a_job.clip.filename().string(), error), false);
+				}
+				MarkBusy(line.estimateMs);
+				result = model->SynthesizeLike(line.text, clip, current, audio, error);
+			} else {
+				modelKey = ModelKeyOf(line, *settings);
+				bool        fellBack = false;
+				const auto* model = ModelFor(line.model, *settings, fellBack);
+				if (!model) {
+					return fail(std::format("model '{}' could not be loaded, and there is no default model", modelKey), false);
+				}
+				// SkyrimNet waits for a line in any voice rather than none: one whose
+				// model would not load is said in the default voice
+				Line spoken = line;
+				if (fellBack) {
+					LogOnce(std::format("SkyrimNet lines of model '{}' are spoken in the default voice: it could not be "
+										"loaded",
+						modelKey), true);
+					spoken.model.clear();
+					spoken.voice = -1;
+					spoken.clip.clear();
+					FillDefaults(spoken, *settings);
+					modelKey = ModelKeyOf(spoken, *settings);
+				}
+				const int voice = VoiceNumberFor(*model, spoken, modelKey, error);
+				if (voice < 0) {
+					return fail(error, false);
+				}
+				MarkBusy(line.estimateMs);
+				result = model->Synthesize(line.text, voice, spoken.speed, current, audio, error);
+			}
+			MarkBusy(0.0f);
+			if (result == TtsEngine::Result::Cancelled || (result == TtsEngine::Result::Ok && !current())) {
+				return fail("given up while it was generated", true);
+			}
+			if (result != TtsEngine::Result::Ok) {
+				return fail(error, false);
+			}
+			out.ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
+			NoteSpeed(modelKey, out.ms, line.text.size());
+			// a voice's volume is part of how it sounds next to the others; SkyrimNet
+			// plays the file, so it goes into the samples
+			if (line.volume >= 0.0f && line.volume < 1.0f) {
+				for (auto& sample : audio.samples) {
+					sample *= line.volume;
+				}
+			}
+			TtsEngine::Resample(audio, settings->outputRate);
+			out.seconds = audio.Seconds();
+			out.wav = TtsEngine::EncodeWav(audio);
+			if (out.wav.empty()) {
+				return fail("the audio could not be written", false);
+			}
+			a_job.Answer(std::move(out));
+		}
+
 		void Worker()
 		{
 			LoadDefaultModel();
 			TrimCache(Config::Get()->dialogueCacheMb);
 			for (;;) {
-				Line line;
-				bool dialogue = false;
+				Line                       line;
+				bool                       dialogue = false;
+				std::shared_ptr<RenderJob> render;
 				{
 					std::unique_lock lock{ g_lock };
-					g_wake.wait(lock,
-						[] { return g_reloadWanted || !g_waiting.empty() || !g_dialogueWaiting.empty(); });
+					g_wake.wait(lock, [] {
+						return g_reloadWanted || !g_waiting.empty() || !g_dialogueWaiting.empty() || !g_renderWaiting.empty();
+					});
 					if (g_reloadWanted) {
 						g_reloadWanted = false;
 						lock.unlock();
@@ -2459,7 +2581,7 @@ namespace Speaker
 								   std::any_of(g_waiting.begin(), g_waiting.end(), isPlayer);
 						});
 						// a Cancel or a load may have emptied the queues meanwhile
-						if (g_reloadWanted || (g_waiting.empty() && g_dialogueWaiting.empty())) {
+						if (g_reloadWanted || (g_waiting.empty() && g_dialogueWaiting.empty() && g_renderWaiting.empty())) {
 							continue;
 						}
 					}
@@ -2477,10 +2599,17 @@ namespace Speaker
 					if (late == g_waiting.end()) {
 						late = std::find_if(g_waiting.begin(), g_waiting.end(), isLate);
 					}
-					dialogue = late == g_waiting.end() && DialogueGoesFirstLocked();
+					// Then SkyrimNet's lines: SkyrimNet waits for each before it
+					// goes on, while every line below is either made ahead or
+					// spoken whenever it is ready.
+					if (late == g_waiting.end() && !g_renderWaiting.empty()) {
+						render = std::move(g_renderWaiting.front());
+						g_renderWaiting.pop_front();
+					}
+					dialogue = !render && late == g_waiting.end() && DialogueGoesFirstLocked();
 					if (dialogue) {
 						line = TakeDialogueLocked();
-					} else {
+					} else if (!render) {
 						const auto next = late != g_waiting.end() ? late : g_waiting.begin();
 						line = std::move(*next);
 						g_waiting.erase(next);
@@ -2494,7 +2623,9 @@ namespace Speaker
 						}
 					}
 				}
-				if (dialogue) {
+				if (render) {
+					ProcessRender(*render);
+				} else if (dialogue) {
 					ProcessDialogue(std::move(line));
 				} else {
 					const Lane lane = line.lane;
@@ -2924,14 +3055,11 @@ namespace Speaker
 			std::string label;  // "MaleNord: preset 'malenord'", for the log and the console
 		};
 
-		VoiceChoice VoiceForType(const Config::Settings& a_settings, const RE::BGSVoiceType* a_type, bool a_female,
-			bool a_fallback)
+		// a_name is the voice type's editor ID, "" = none
+		VoiceChoice VoiceForType(const Config::Settings& a_settings, std::string_view a_name, bool a_female, bool a_fallback)
 		{
-			VoiceChoice choice;
-			// the editor ID is read off the form's own field: the virtual getter can
-			// hand back a null pointer
-			const char*       rawId = a_type ? a_type->formEditorID.c_str() : nullptr;
-			const std::string name = rawId ? rawId : "";
+			VoiceChoice       choice;
+			const std::string name(a_name);
 			const auto        id = Config::Normalize(name);
 			choice.label = name.empty() ? "no voice type"s : name;
 
@@ -3045,6 +3173,15 @@ namespace Speaker
 				choice.source = VoiceChoice::kBySex;
 			}
 			return choice;
+		}
+
+		VoiceChoice VoiceForType(const Config::Settings& a_settings, const RE::BGSVoiceType* a_type, bool a_female,
+			bool a_fallback)
+		{
+			// the editor ID is read off the form's own field: the virtual getter can
+			// hand back a null pointer
+			const char* rawId = a_type ? a_type->formEditorID.c_str() : nullptr;
+			return VoiceForType(a_settings, rawId ? std::string_view(rawId) : std::string_view{}, a_female, a_fallback);
 		}
 
 		const RE::BGSVoiceType* VoiceTypeOf(RE::Actor* a_actor, bool& a_female)
@@ -3341,7 +3478,8 @@ namespace Speaker
 	{
 		const bool parsed = Config::Load();
 		Rebuild();
-		DBReV::Register();  // [player] enable or max_wait may have changed
+		DBReV::Register();    // [player] enable or max_wait may have changed
+		XttsServer::Apply();  // and [skyrimnet] enable or port
 		return parsed;
 	}
 
@@ -3362,6 +3500,11 @@ namespace Speaker
 		// the voice provider is registered with its wait time, and only while on
 		if (before->player != after->player || before->playerMaxWait != after->playerMaxWait) {
 			DBReV::Register();
+		}
+		// SkyrimNet's endpoint is opened, closed or moved; the other [skyrimnet]
+		// keys are read again for every request
+		if (before->skyrimnet != after->skyrimnet || before->skyrimnetPort != after->skyrimnetPort) {
+			XttsServer::Apply();
 		}
 		if (models || slots) {
 			Rebuild();
@@ -3393,6 +3536,7 @@ namespace Speaker
 	void Reset()
 	{
 		Cancel();
+		DropRenderedLines();
 		std::scoped_lock lock{ g_lock };
 		g_dialogueEpoch.fetch_add(1);
 		g_dialogueWaiting.clear();
@@ -3474,6 +3618,100 @@ namespace Speaker
 		line.sender = SenderTag(a_sender);
 		line.lipSync = a_lipSync && settings->speechLipSync;
 		return Queue(a_text, std::move(line));
+	}
+
+	Rendered RenderLine(std::string_view a_text, std::string_view a_voiceType, const std::filesystem::path& a_clip,
+		std::chrono::milliseconds a_wait)
+	{
+		Rendered   out;
+		const auto settings = Config::Get();
+		if (!g_enabled.load() || !settings->enable) {
+			out.error = "speech is switched off";
+			return out;
+		}
+		{
+			std::scoped_lock lock{ g_lock };
+			if (!g_started) {
+				out.error = "still starting";
+				out.later = true;
+				return out;
+			}
+		}
+		// a moment of silence: what an XTTS server says when there is nothing to say
+		const auto silence = [&](std::string a_why) {
+			TtsEngine::Audio quiet;
+			quiet.sampleRate = 24000;
+			quiet.samples.assign(2400, 0.0f);
+			out.wav = TtsEngine::EncodeWav(quiet);
+			out.seconds = quiet.Seconds();
+			out.voice = std::move(a_why);
+			return out;
+		};
+
+		auto job = std::make_shared<RenderJob>();
+		// SkyrimNet shows the whole line as a subtitle: it is never cut short
+		auto text = CleanDialogue(a_text, *settings, std::numeric_limits<std::size_t>::max());
+		if (text.empty()) {
+			return silence("nothing to say");
+		}
+		if (!a_clip.empty()) {
+			job->clip = a_clip;
+			job->label = std::format("SkyrimNet's voice sample '{}' on model '{}'", a_voiceType,
+				Config::Normalize(settings->skyrimnetCloneModel));
+		} else {
+			// the name is all there is to go on; vanilla voice types say the sex
+			// in it (FemaleNord, MaleBrute), checked for "female" first since
+			// that holds "male" too
+			const auto lower = Config::Normalize(a_voiceType);
+			const bool female = lower.find("female") != std::string::npos;
+			auto       choice = VoiceForType(*settings, a_voiceType, female, true);
+			if (choice.source == VoiceChoice::kSilent) {
+				return silence(choice.label);
+			}
+			job->line = std::move(choice.line);
+			job->label = std::move(choice.label);
+		}
+		job->line.text = std::move(text);
+		job->line.sender = "SkyrimNet";
+		FillDefaults(job->line, *settings);
+		out.voice = job->label;
+		out.chars = job->line.text.size();
+
+		auto done = job->done.get_future();
+		{
+			std::scoped_lock lock{ g_lock };
+			job->epoch = g_renderEpoch.load();
+			job->line.estimateMs = EstimateMsLocked(
+				a_clip.empty() ? ModelKeyOf(job->line, *settings) : Config::Normalize(settings->skyrimnetCloneModel),
+				job->line.text.size());
+			g_renderWaiting.push_back(job);
+		}
+		g_wake.notify_all();
+		if (done.wait_for(a_wait) != std::future_status::ready) {
+			// the worker leaves it, or stops generating it, as soon as it looks
+			job->gaveUp.store(true);
+			out.error = std::format("not ready within {} s", a_wait.count() / 1000);
+			out.later = true;
+			return out;
+		}
+		return done.get();
+	}
+
+	void DropRenderedLines()
+	{
+		std::deque<std::shared_ptr<RenderJob>> dropped;
+		{
+			std::scoped_lock lock{ g_lock };
+			g_renderEpoch.fetch_add(1);  // and the one being generated stops
+			dropped.swap(g_renderWaiting);
+		}
+		for (const auto& job : dropped) {
+			Rendered out;
+			out.voice = job->label;
+			out.error = "given up: the plugin is reloading, or a game is being loaded";
+			out.later = true;
+			job->Answer(std::move(out));
+		}
 	}
 
 	bool IsReady()
@@ -3579,12 +3817,13 @@ namespace Speaker
 		}
 		return std::format("{} | {} | {} presets | {} of {} models loaded | "
 						   "narration slots {} of {} | speech slots {} of {}, lipsync {} | dialogue {} | player lines {} | "
-						   "sherpa-onnx {}",
+						   "SkyrimNet {} | sherpa-onnx {}",
 			IsEnabled() ? "ready" : "switched off", model, settings->presets.size(), g_modelsLoaded.load(),
 			g_modelsInstalled.load(), g_usableSlots[kNarration].load(),
 			settings->slots, g_usableSlots[kSpeech].load(), settings->speechSlots,
 			lipSync ? "on" : (settings->speechLipSync ? "off (AudioUtil older than 0.9.26)" : "off"),
-			IsDialogueEnabled() ? "on" : "off", PlayerState(*settings), TtsEngine::RuntimeVersion());
+			IsDialogueEnabled() ? "on" : "off", PlayerState(*settings), XttsServer::Status(),
+			TtsEngine::RuntimeVersion());
 	}
 
 	// ------------------------------------------------------------- player lines
@@ -4380,6 +4619,7 @@ namespace Speaker
 		} else if (!DBReV::IsPresent()) {
 			summary.player = "need Dragonborn ReVoiced, which is not installed";
 		}
+		summary.skyrimnet = XttsServer::Status();
 		summary.given = g_dialogueGiven.load();
 		summary.unvoiced = g_dialogueUnvoiced.load();
 		summary.late = g_dialogueLate.load();

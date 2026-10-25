@@ -310,6 +310,7 @@ namespace Menu
 				Fact("Dialogue", a_summary.dialogue, &kWarn);
 			}
 			Fact("Your lines", a_summary.player);
+			Fact("SkyrimNet", a_summary.skyrimnet);
 			Fact("Line cache", std::format("{} lines, {:.0f} MB", a_summary.cacheLines, a_summary.cacheMb));
 		}
 

@@ -264,6 +264,29 @@ channel = "player"
 # by raising this number starts working after the next restart.
 slots = 4
 
+# SkyrimNet: its NPCs' lines in the voices installed here. SkyrimNet sends each
+# line to a voice engine; this plugin answers at the address of its XTTS
+# engine (http://localhost:8020), so choosing XTTS in SkyrimNet is all it
+# takes. Every speaker gets the voice of their voice type, found as for
+# unvoiced dialogue below, else the preset "female" or "male", else the
+# default voice. SkyrimNet plays the line itself. "autts status" shows the
+# state; AudioUtilTTS.log has a line per line.
+[skyrimnet]
+# Answer SkyrimNet, only while it is installed. A port another program holds
+# (another XTTS server) is left to it. Can be switched with "autts reload".
+enable = true
+# SkyrimNet's XTTS address names this port. Change it together with that
+# address in SkyrimNet, or when another program uses this one (1024 to 65535).
+port = 8020
+# Keep the voice samples SkyrimNet sends for its speakers, and speak each of
+# those like its sample, with the Pocket model below. Off, SkyrimNet names its
+# speakers by voice type instead and the voices installed here speak.
+# Kyutai's terms for Pocket ask for the speaker's consent to copy a voice.
+# Kept in Data\SKSE\Plugins\AudioUtilTTS\skyrimnet, one wav per speaker.
+voice_cloning = false
+# The Pocket model folder (under models) voice samples are spoken with.
+clone_model = "pocket-tts"
+
 # Voice types: which voice speaks for which of the game's voice types. This is
 # what makes an NPC's generated lines sound like that NPC. Used for unvoiced
 # dialogue, and for character speech that names no preset.

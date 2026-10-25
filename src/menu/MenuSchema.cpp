@@ -94,6 +94,7 @@ namespace Core
 				{ "Voice", "The default voice: narration, and lines that name no voice of their own.", { "general", "model", "voice" } },
 				{ "Presets", "Named voices mods ask for. A setting left out comes from the default voice.", { "preset.*" } },
 				{ "Narration & speech", "Lines mods send: narration has no speaker, character speech is said by an actor.", { "playback", "speech" } },
+				{ "SkyrimNet", "SkyrimNet's NPC lines in the voices installed here: choose XTTS as SkyrimNet's voice engine, at its usual address.", { "skyrimnet" } },
 			};
 
 			std::vector<SettingSpec> settings{
@@ -215,6 +216,17 @@ namespace Core
 				Field(Advanced("playback.output_rate", "Output sample rate", Control::Int,
 						  "0 = the model's own. Set 44100 if speech plays at the wrong pitch or speed. Every line, dialogue too."),
 					0, 48000, 100, "Hz"),
+
+				// ------------------------------------------------------------ SkyrimNet
+				S("skyrimnet.enable", "SkyrimNet", "Speak SkyrimNet's lines", Control::Flag,
+					"Answers SkyrimNet at the address of its XTTS voice engine, so its NPCs speak in the voice of their voice type here, as unvoiced dialogue does. Only while SkyrimNet is installed. A port another XTTS server already holds is left to it."),
+				S("skyrimnet.voice_cloning", "SkyrimNet", "Voice cloning", Control::Flag,
+					"Keeps the voice samples SkyrimNet sends, and speaks those speakers like their sample with the Pocket model. Off: SkyrimNet names its speakers by voice type and the voices here speak. Kyutai's terms for Pocket ask for the speaker's consent to copy a voice."),
+				Field(Advanced("skyrimnet.port", "Port", Control::Int,
+						  "The port SkyrimNet's XTTS address names (http://localhost:8020). Change it together with SkyrimNet's, or when another program uses this one."),
+					1024, 65535, 1),
+				Advanced("skyrimnet.clone_model", "Voice cloning model", Control::Text,
+					"The Pocket model folder voice samples are spoken with."),
 			};
 			return Schema{ std::move(pages), std::move(settings) };
 		}

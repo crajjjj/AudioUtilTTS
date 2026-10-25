@@ -30,7 +30,7 @@ xmake run probe dist\SKSE\Plugins\AudioUtilTTS\models\kokoro-en-v0_19 "Some text
 
 It prints how long the line took to generate and writes `out.lip` beside the wav: the mouth animation a dialogue line with that audio would get. AudioUtil's LipSim plays the pair.
 
-`voice` defaults to 0, `out.wav` to `probe.wav`, `threads` to 2.
+`voice` defaults to 0, `out.wav` to `probe.wav`, `threads` to 2. On a Pocket model `voice` may also be the name of one of its recordings, or the path of any `.wav`: the line is then spoken like that recording, as a voice sample SkyrimNet sends is with voice cloning on.
 
 ### Speak a whole list
 

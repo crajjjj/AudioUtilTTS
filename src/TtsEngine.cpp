@@ -536,16 +536,33 @@ namespace TtsEngine
 		return version ? version : "";
 	}
 
+	bool ReadRecording(const std::filesystem::path& a_path, Audio& a_out, std::string& a_error)
+	{
+		return ReadClip(a_path, CLIP_SECONDS, a_out, a_error);
+	}
+
+	namespace
+	{
+		SherpaOnnxGenerationConfig GenerationConfig()
+		{
+			SherpaOnnxGenerationConfig gen;
+			std::memset(&gen, 0, sizeof(gen));
+			gen.silence_scale = 0.2f;
+			return gen;
+		}
+
+		Result Generate(const SherpaOnnxOfflineTts* a_tts, const std::string& a_text, const SherpaOnnxGenerationConfig& a_gen,
+			const std::function<bool()>& a_keepGoing, Audio& a_out, std::string& a_error);
+	}
+
 	Result Model::Synthesize(const std::string& a_text, int a_voice, float a_speed,
 		const std::function<bool()>& a_keepGoing, Audio& a_out, std::string& a_error) const
 	{
 		a_out = {};
 
-		SherpaOnnxGenerationConfig gen;
-		std::memset(&gen, 0, sizeof(gen));
+		auto gen = GenerationConfig();
 		gen.sid = std::clamp(a_voice, 0, std::max(0, _voices - 1));
 		gen.speed = std::clamp(a_speed, 0.5f, 2.0f);
-		gen.silence_scale = 0.2f;
 		if (!_clips.empty()) {
 			// the clip of the voice used last stays read: lines mostly come in runs
 			if (_clipVoice != gen.sid) {
@@ -562,36 +579,64 @@ namespace TtsEngine
 			gen.reference_audio_len = static_cast<int32_t>(_clip.samples.size());
 			gen.reference_sample_rate = _clip.sampleRate;
 		}
+		return Generate(_tts, a_text, gen, a_keepGoing, a_out, a_error);
+	}
 
-		const SherpaOnnxGeneratedAudio* audio = nullptr;
-		try {
-			audio = SherpaOnnxOfflineTtsGenerateWithConfig(_tts, a_text.c_str(), &gen, OnProgress,
-				const_cast<void*>(static_cast<const void*>(&a_keepGoing)));
-		} catch (const std::exception& e) {
-			a_error = std::string("speech runtime error: ") + e.what();
-			return Result::Failed;
-		} catch (...) {
-			a_error = "speech runtime error";
+	Result Model::SynthesizeLike(const std::string& a_text, const Audio& a_clip, const std::function<bool()>& a_keepGoing,
+		Audio& a_out, std::string& a_error) const
+	{
+		a_out = {};
+		if (_family != "pocket") {
+			a_error = "a " + _family + " model cannot speak like a recording, only a Pocket model can";
 			return Result::Failed;
 		}
-		if (!audio) {
-			a_error = "the speech runtime returned nothing";
+		if (a_clip.samples.empty() || a_clip.sampleRate <= 0) {
+			a_error = "the recording holds no audio";
 			return Result::Failed;
 		}
-		if (audio->samples && audio->n > 0) {
-			a_out.samples.assign(audio->samples, audio->samples + audio->n);
-		}
-		a_out.sampleRate = audio->sample_rate;
-		SherpaOnnxDestroyOfflineTtsGeneratedAudio(audio);
+		auto gen = GenerationConfig();
+		gen.speed = 1.0f;
+		gen.reference_audio = a_clip.samples.data();
+		gen.reference_audio_len = static_cast<int32_t>(a_clip.samples.size());
+		gen.reference_sample_rate = a_clip.sampleRate;
+		return Generate(_tts, a_text, gen, a_keepGoing, a_out, a_error);
+	}
 
-		if (a_keepGoing && !a_keepGoing()) {
-			return Result::Cancelled;
+	namespace
+	{
+		Result Generate(const SherpaOnnxOfflineTts* a_tts, const std::string& a_text, const SherpaOnnxGenerationConfig& a_gen,
+			const std::function<bool()>& a_keepGoing, Audio& a_out, std::string& a_error)
+		{
+			const SherpaOnnxGeneratedAudio* audio = nullptr;
+			try {
+				audio = SherpaOnnxOfflineTtsGenerateWithConfig(a_tts, a_text.c_str(), &a_gen, OnProgress,
+					const_cast<void*>(static_cast<const void*>(&a_keepGoing)));
+			} catch (const std::exception& e) {
+				a_error = std::string("speech runtime error: ") + e.what();
+				return Result::Failed;
+			} catch (...) {
+				a_error = "speech runtime error";
+				return Result::Failed;
+			}
+			if (!audio) {
+				a_error = "the speech runtime returned nothing";
+				return Result::Failed;
+			}
+			if (audio->samples && audio->n > 0) {
+				a_out.samples.assign(audio->samples, audio->samples + audio->n);
+			}
+			a_out.sampleRate = audio->sample_rate;
+			SherpaOnnxDestroyOfflineTtsGeneratedAudio(audio);
+
+			if (a_keepGoing && !a_keepGoing()) {
+				return Result::Cancelled;
+			}
+			if (a_out.samples.empty() || a_out.sampleRate <= 0) {
+				a_error = "the speech runtime returned no audio";
+				return Result::Failed;
+			}
+			return Result::Ok;
 		}
-		if (a_out.samples.empty() || a_out.sampleRate <= 0) {
-			a_error = "the speech runtime returned no audio";
-			return Result::Failed;
-		}
-		return Result::Ok;
 	}
 
 	void Resample(Audio& a_audio, int a_targetRate)

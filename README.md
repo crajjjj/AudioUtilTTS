@@ -27,6 +27,7 @@ Everything is on the docs site: **https://crajjjj.github.io/AudioUtilTTS/**
 | Know what it costs and how it behaves | [What to Expect](https://crajjjj.github.io/AudioUtilTTS/players/what-to-expect/) |
 | Have dialogue without voice files spoken | [Unvoiced Dialogue](https://crajjjj.github.io/AudioUtilTTS/players/unvoiced-dialogue/) |
 | Have my own lines spoken, with Dragonborn ReVoiced | [Your Own Lines](https://crajjjj.github.io/AudioUtilTTS/players/player-lines/) |
+| Have SkyrimNet's NPCs speak in these voices | [SkyrimNet](https://crajjjj.github.io/AudioUtilTTS/players/skyrimnet/) |
 | Decide which NPC gets which voice | [Voices, Presets & Voice Types](https://crajjjj.github.io/AudioUtilTTS/players/voices/) |
 | Add voices | [Voice Models](https://crajjjj.github.io/AudioUtilTTS/players/models/) |
 | Change settings in game | [In-Game Menu](https://crajjjj.github.io/AudioUtilTTS/players/settings-menu/) |
@@ -99,7 +100,9 @@ AudioUtilTTS is GPLv3 (see `LICENSE`). It links
 [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG) (GPLv3 or
 later, with a modding and a linking exception),
 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache 2.0),
-[ONNX Runtime](https://github.com/microsoft/onnxruntime) (MIT) and, through
+[ONNX Runtime](https://github.com/microsoft/onnxruntime) (MIT),
+[cpp-httplib](https://github.com/yhirose/cpp-httplib) (MIT),
+[JSON for Modern C++](https://github.com/nlohmann/json) (MIT) and, through
 sherpa-onnx, [espeak-ng](https://github.com/espeak-ng/espeak-ng) (GPLv3). The
 plugin archive carries the full notices and license texts in
 `SKSE\Plugins\AudioUtilTTS\licenses`. Voice models carry their own license, in

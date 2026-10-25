@@ -11,6 +11,14 @@
             },
             version = "4.2.1"
         },
+        ["cpp-httplib v0.34.0#f56260b5"] = {
+            repo = {
+                branch = "master",
+                commit = "78e21c2de813bd4847004807dda0e793e1159c05",
+                url = "https://gitlab.com/tboox/xmake-repo.git"
+            },
+            version = "v0.34.0"
+        },
         ["directxmath 2024.02#f56260b5"] = {
             repo = {
                 branch = "master",
@@ -34,6 +42,14 @@
                 url = "https://gitlab.com/tboox/xmake-repo.git"
             },
             version = "v1.13.1"
+        },
+        ["nlohmann_json v3.12.0#f56260b5"] = {
+            repo = {
+                branch = "master",
+                commit = "78e21c2de813bd4847004807dda0e793e1159c05",
+                url = "https://gitlab.com/tboox/xmake-repo.git"
+            },
+            version = "v3.12.0"
         },
         ["rapidcsv v8.92#f56260b5"] = {
             repo = {

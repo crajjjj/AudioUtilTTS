@@ -58,6 +58,12 @@ One line, from this side: DBReV calls the plugin on the main thread with the top
 
 DBReV also announces every player line it plays, its own included, and the plugin listens: an NPC line being spoken late by the conversation partner stops when the player begins a line, as the game stops its own lines.
 
+## SkyrimNet's lines
+
+SkyrimNet sends each NPC line to a voice engine over HTTP. For its XTTS engine that is a server at `http://localhost:8020`, and the plugin is that server: `src/XttsHttp.cpp` answers the requests an XTTS server answers (`/tts_to_audio/`, `/create_and_store_latents`, `/health`) on 127.0.0.1 only, and `src/XttsServer.cpp` opens it while SkyrimNet.dll is loaded and `[skyrimnet] enable` is on. The socket is opened for exclusive use, so a port another XTTS server holds is refused and left to it.
+
+A request names the speaker by voice type. The line goes onto the worker ahead of every other line but the player's own, is generated in that voice type's voice, and goes back to SkyrimNet as a wav, which SkyrimNet plays itself; nothing is played or cached here. A voice sample SkyrimNet sends is answered 404 while voice cloning is off, which is how an XTTS server says it takes none: SkyrimNet then names its speakers by voice type. With voice cloning on, the sample is kept, and that speaker's lines are spoken like it on the Pocket model.
+
 ## Threads
 
 Models are loaded and lines are generated on background threads. The game's own thread only hands over the text and starts the finished audio. One worker generates lines, dialogue and the other two lanes in turn; a second thread copies cached dialogue lines into their placeholders.
