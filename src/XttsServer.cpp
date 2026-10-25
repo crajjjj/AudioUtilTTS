@@ -24,6 +24,11 @@ namespace XttsServer
 		std::mutex           g_control;          // one Reconcile at a time
 		XttsHttp::Server*    g_http = nullptr;   // never destroyed: lives as long as the process
 		int                  g_port = 0;         // the port g_http listens on
+		// set while the endpoint closes: requests still in the server's hands end
+		// at once, so that closing does not wait for their lines
+		std::atomic<bool>    g_closing{ false };
+		std::mutex           g_sampleLock;       // one voice sample written at a time
+		std::uint64_t        g_sampleCount = 0;  // names their temporary files; g_sampleLock
 		std::mutex           g_stateLock;        // guards g_state and g_warned
 		std::string          g_state = "not started";
 		std::unordered_set<std::string> g_warned;  // see WarnOnce
@@ -60,24 +65,39 @@ namespace XttsServer
 			return fs::current_path() / SAMPLE_DIR / (a_speaker + ".wav");
 		}
 
-		// The model voice samples are spoken with is there to load, as far as the
-		// files tell.
-		bool CloneModelInstalled(const Config::Settings& a_settings)
+		// The model voice samples are spoken with is an installed Pocket model, as
+		// far as its files tell. Looked at once per config: each line asks.
+		bool CloneModelUsable(const std::shared_ptr<const Config::Settings>& a_settings)
 		{
-			return TtsEngine::ModelStamp(std::string(Config::MODELS_DIR) + Config::Normalize(a_settings.skyrimnetCloneModel)) != 0;
+			static std::mutex                               lock;
+			static std::shared_ptr<const Config::Settings> lookedAt;
+			static bool                                     usable = false;
+			std::scoped_lock                                hold{ lock };
+			if (lookedAt != a_settings) {
+				const auto dir = std::string(Config::MODELS_DIR) + Config::Normalize(a_settings->skyrimnetCloneModel);
+				usable = TtsEngine::ModelStamp(dir) != 0 && TtsEngine::IsPocketModel(dir);
+				lookedAt = a_settings;
+			}
+			return usable;
 		}
 
 		XttsHttp::SpeakResult Speak(const XttsHttp::SpeakRequest& a_request)
 		{
+			if (g_closing.load()) {
+				return { 503, {}, "the server is closing" };
+			}
 			const auto settings = Config::Get();
 			fs::path   clip;
-			if (settings->skyrimnetCloning && !a_request.speaker.empty() && CloneModelInstalled(*settings)) {
+			if (settings->skyrimnetCloning && !a_request.speaker.empty() && CloneModelUsable(settings)) {
 				std::error_code ec;
 				if (const auto file = SampleFile(a_request.speaker); fs::is_regular_file(file, ec)) {
 					clip = file;
 				}
 			}
-			auto line = Speaker::RenderLine(a_request.text, a_request.speaker, clip, WAIT);
+			const auto stillWanted = [&] {
+				return !g_closing.load() && (!a_request.connected || a_request.connected());
+			};
+			auto line = Speaker::RenderLine(a_request.text, a_request.speaker, clip, WAIT, stillWanted);
 			if (line.wav.empty()) {
 				g_failed.fetch_add(1);
 				logger::warn("SkyrimNet: no line for '{}' ({}): {}", a_request.speaker,
@@ -105,9 +125,9 @@ namespace XttsServer
 					false);
 				return { 404, "voice cloning is off" };
 			}
-			if (!CloneModelInstalled(*settings)) {
-				LogOnce(std::format("SkyrimNet: voice cloning is on, but the Pocket model '{}' ([skyrimnet] clone_model) is "
-									"not installed: SkyrimNet's voice samples are not kept",
+			if (!CloneModelUsable(settings)) {
+				LogOnce(std::format("SkyrimNet: voice cloning is on, but '{}' ([skyrimnet] clone_model) is not an installed "
+									"Pocket model: SkyrimNet's voice samples are not kept",
 							settings->skyrimnetCloneModel),
 					true);
 				return { 404, "no Pocket model to clone with" };
@@ -118,25 +138,43 @@ namespace XttsServer
 			if (a_request.bytes.empty()) {
 				return { 400, "wav_file is required" };
 			}
-			// written under another name first, and read back the way it will be
-			// used: a sample that cannot be spoken like is never kept
-			const auto      file = SampleFile(a_request.speaker);
-			auto            part = file;
+			// Read the way it will be used, and kept as only what is used: the
+			// first 10 seconds, mono 16-bit, so a long or odd upload costs no
+			// disk and a sample that cannot be spoken like is never kept. One at
+			// a time: SkyrimNet may send a speaker's sample twice at once.
+			std::scoped_lock lock{ g_sampleLock };
+			const auto       file = SampleFile(a_request.speaker);
+			auto             upload = file;
+			upload += std::format(".{}.upload", ++g_sampleCount);
 			std::error_code ec;
-			part += ".part";
 			fs::create_directories(file.parent_path(), ec);
 			std::string error;
-			if (!TtsEngine::WriteBytes(part, a_request.bytes.data(), a_request.bytes.size(), error)) {
+			if (!TtsEngine::WriteBytes(upload, a_request.bytes.data(), a_request.bytes.size(), error)) {
 				logger::warn("SkyrimNet: the voice sample for '{}' could not be written: {}", a_request.speaker, error);
 				return { 500, error };
 			}
 			TtsEngine::Audio sample;
-			if (!TtsEngine::ReadRecording(part, sample, error)) {
-				fs::remove(part, ec);
+			const bool       read = TtsEngine::ReadRecording(upload, sample, error);
+			fs::remove(upload, ec);
+			if (!read) {
 				logger::warn("SkyrimNet: the voice sample for '{}' is not kept: {}", a_request.speaker, error);
 				return { 400, "Only WAV files are supported: " + error };
 			}
-			fs::rename(part, file, ec);
+			auto part = file;
+			part += ".part";
+			if (!TtsEngine::WriteWav(part, sample, error)) {
+				logger::warn("SkyrimNet: the voice sample for '{}' could not be written: {}", a_request.speaker, error);
+				return { 500, error };
+			}
+			// the worker may be reading the old one this instant: a moment later
+			// it is not
+			for (int attempt = 0;; ++attempt) {
+				fs::rename(part, file, ec);
+				if (!ec || attempt == 4) {
+					break;
+				}
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
+			}
 			if (ec) {
 				fs::remove(part, ec);
 				return { 500, "the voice sample could not be kept" };
@@ -154,10 +192,13 @@ namespace XttsServer
 			const bool wanted = settings->skyrimnet && installed;
 			const int  port = settings->skyrimnetPort;
 			if (g_http && g_http->Running() && (!wanted || port != g_port)) {
-				// a request still waiting for its line is answered at once, so the
-				// server's threads end and Stop does not wait for them
+				// Requests waiting for their line are answered at once, and so is
+				// every one the server still takes before it stops (they see
+				// g_closing), so the server's threads end and Stop waits for none.
+				g_closing.store(true);
 				Speaker::DropRenderedLines();
 				g_http->Stop();
+				g_closing.store(false);
 				logger::info("SkyrimNet: no longer answered at http://localhost:{}", g_port);
 			}
 			if (!wanted) {

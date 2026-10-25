@@ -541,6 +541,11 @@ namespace TtsEngine
 		return ReadClip(a_path, CLIP_SECONDS, a_out, a_error);
 	}
 
+	bool IsPocketModel(const std::string& a_dir)
+	{
+		return !FindPart(U8(a_dir), "lm_main").empty();
+	}
+
 	namespace
 	{
 		SherpaOnnxGenerationConfig GenerationConfig()

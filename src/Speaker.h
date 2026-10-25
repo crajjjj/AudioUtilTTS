@@ -182,18 +182,23 @@ namespace Speaker
 	std::string PlayerStatus();             // one line, for the console
 
 	// A line for SkyrimNet (XttsServer.h), which plays the audio itself: made on
-	// the worker and handed back as a wav file, never played here. It goes
-	// ahead of every line still to be generated except the player's own, which
-	// a conversation is held open for.
+	// the worker and handed back as a wav file, never played here. Of the lines
+	// still to be generated it goes first, but for the player's own, which a
+	// conversation is held open for; only lines generated already and waiting
+	// to play (greetings spoken late) are put in place before it. A narration
+	// or character line waiting for its lane to fall quiet lets it through.
 	//   a_voiceType  the speaker as SkyrimNet names it, a voice type's editor
 	//                ID ("malenord", case ignored). Its voice is found as an
 	//                unvoiced dialogue line's is, else it is the preset
-	//                "female" / "male" by the sex the name says, else the
-	//                default voice.
+	//                "female" / "male" by the voice type's sex (by the name
+	//                when no voice type is called that), else the default voice.
 	//   a_clip       when not empty: a recording to speak like instead, on the
-	//                Pocket model [skyrimnet] clone_model
-	// Waits for the line at most a_wait. A line with nothing to say, or for a
-	// voice type the config never speaks for, is a moment of silence.
+	//                Pocket model [skyrimnet] clone_model; when that cannot be
+	//                done, the voice of a_voiceType speaks after all
+	// Waits for the line at most a_wait, and gives it up as soon as
+	// a_stillWanted says no (the request's client went away). A line with
+	// nothing to say, or for a voice type the config never speaks for, is a
+	// moment of silence.
 	struct Rendered
 	{
 		std::vector<char> wav;            // a mono 16-bit wav; empty = no line
@@ -205,7 +210,7 @@ namespace Speaker
 		long long         ms = 0;         // what generating it took
 	};
 	Rendered RenderLine(std::string_view a_text, std::string_view a_voiceType, const std::filesystem::path& a_clip,
-		std::chrono::milliseconds a_wait);
+		std::chrono::milliseconds a_wait, const std::function<bool()>& a_stillWanted);
 	// Every SkyrimNet line waiting or being made is given up, and its request
 	// answered at once.
 	void DropRenderedLines();

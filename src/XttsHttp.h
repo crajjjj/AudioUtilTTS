@@ -27,6 +27,9 @@ namespace XttsHttp
 		std::string text;
 		std::string speaker;   // SpeakerName of speaker_wav: "malenord"
 		std::string language;  // as sent, "" = not given
+		// false once the client has gone away: a handler waiting for a line can
+		// give it up. Cheap enough to poll a few times a second.
+		std::function<bool()> connected;
 	};
 
 	struct SpeakResult
@@ -69,7 +72,9 @@ namespace XttsHttp
 		Server& operator=(const Server&) = delete;
 
 		// Listens on a_host:a_port. false with a_error when the port cannot be
-		// had (another server holds it). Only one Start at a time: Stop first.
+		// had: anything already answers a connection to it (another server, also
+		// one listening on every address, which a bind alone would not notice),
+		// or the bind fails. Only one Start at a time: Stop first.
 		bool Start(const std::string& a_host, int a_port, Handlers a_handlers, std::string& a_error);
 		// Closes the socket and waits for the requests being answered to end.
 		void Stop();
@@ -82,7 +87,9 @@ namespace XttsHttp
 
 	// The name a speaker is known by: speaker_wav without its folder and its
 	// extension, lowercase ("malenord" from "speakers\en\MaleNord.wav"). Only
-	// letters, digits, '_', '-' and '.' are kept, so it can name a file.
+	// ASCII letters, digits, '_', '-' and '.' are kept, so it can name a file; a
+	// name with letters outside ASCII gets a hash of the whole name after them
+	// instead, so that two such names stay two speakers.
 	std::string SpeakerName(std::string_view a_speakerWav);
 
 	// a_ms of silence as a mono 16-bit wav

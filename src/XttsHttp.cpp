@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <thread>
 
 namespace XttsHttp
@@ -22,9 +23,15 @@ namespace XttsHttp
 		// What a request may carry: a line of text, a voice sample of a few
 		// seconds. Far below this either way.
 		constexpr std::size_t MAX_BODY = 32u * 1024u * 1024u;
-		// Requests answered at once. Lines are made one at a time anyway; the
-		// rest wait their turn inside the plugin, not in the socket.
-		constexpr std::size_t THREADS = 4;
+		// Threads that answer requests: a few kept, more made while every one is
+		// busy. A line request blocks its thread until the line is made, and a
+		// ping or a health check must not queue up behind those.
+		constexpr std::size_t THREADS = 2;
+		constexpr std::size_t MAX_THREADS = 16;
+		// How long a connection to the port may take to be accepted before the
+		// port counts as free. Loopback accepts at once; a refused connection
+		// can take Windows seconds to report.
+		constexpr long PROBE_USEC = 500000;
 
 		std::string Lower(std::string a_text)
 		{
@@ -59,6 +66,50 @@ namespace XttsHttp
 				a_out.push_back(static_cast<char>((a_v >> (8 * i)) & 0xFF));
 			}
 		}
+
+		// Does anything accept a connection at a_host:a_port? A server on every
+		// address (0.0.0.0, or [::] taking both) is not in the way of a bind to
+		// one address, exclusive or not, and Windows would then hand the
+		// loopback traffic to the narrower bind: the other server would go quiet
+		// without a word. Asking the port itself sees any such server.
+		bool Answers(const std::string& a_host, int a_port)
+		{
+			sockaddr_in address{};
+			address.sin_family = AF_INET;
+			address.sin_port = htons(static_cast<u_short>(a_port));
+			if (inet_pton(AF_INET, a_host.c_str(), &address.sin_addr) != 1) {
+				return false;
+			}
+			const SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			if (sock == INVALID_SOCKET) {
+				return false;
+			}
+			u_long nonBlocking = 1;
+			ioctlsocket(sock, FIONBIO, &nonBlocking);
+			bool answered = connect(sock, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0;
+			if (!answered && WSAGetLastError() == WSAEWOULDBLOCK) {
+				fd_set writable, failed;
+				FD_ZERO(&writable);
+				FD_ZERO(&failed);
+				FD_SET(sock, &writable);
+				FD_SET(sock, &failed);
+				timeval wait{ 0, PROBE_USEC };
+				answered = select(0, nullptr, &writable, &failed, &wait) > 0 && FD_ISSET(sock, &writable);
+			}
+			closesocket(sock);
+			return answered;
+		}
+
+		// FNV-1a, 64 bits
+		std::uint64_t Hash(std::string_view a_text)
+		{
+			std::uint64_t hash = 0xCBF29CE484222325ull;
+			for (const char c : a_text) {
+				hash ^= static_cast<unsigned char>(c);
+				hash *= 0x100000001B3ull;
+			}
+			return hash;
+		}
 	}
 
 	std::string SpeakerName(std::string_view a_speakerWav)
@@ -76,9 +127,12 @@ namespace XttsHttp
 			}
 		}
 		std::string out;
+		bool        foreign = false;  // letters outside ASCII, which a file name here does not keep
 		for (const char c : lower) {
 			const auto u = static_cast<unsigned char>(c);
-			if (u < 0x80 && (std::isalnum(u) != 0 || c == '_' || c == '-' || c == '.')) {
+			if (u >= 0x80) {
+				foreign = true;
+			} else if (std::isalnum(u) != 0 || c == '_' || c == '-' || c == '.') {
 				out += c;
 			}
 		}
@@ -86,15 +140,24 @@ namespace XttsHttp
 		while (!out.empty() && out.front() == '.') {
 			out.erase(out.begin());
 		}
-		if (out.size() > 64) {
-			out.resize(64);
+		if (!foreign) {
+			if (out.size() > 64) {
+				out.resize(64);
+			}
+			return out;
 		}
-		return out;
+		// "Лидия" and "Ульфрик" would both be "": the whole name's hash keeps
+		// them apart, after what ASCII there is
+		if (out.size() > 47) {
+			out.resize(47);
+		}
+		return std::format("{}{}{:016x}", out, out.empty() ? "" : "_", Hash(lower));
 	}
 
 	std::vector<char> Silence(int a_rate, int a_ms)
 	{
-		const auto        frames = static_cast<std::uint32_t>(std::max(a_rate, 1) / 1000 * std::max(a_ms, 0));
+		const auto frames = static_cast<std::uint32_t>(
+			static_cast<std::uint64_t>(std::max(a_rate, 1)) * static_cast<std::uint64_t>(std::max(a_ms, 0)) / 1000);
 		const auto        bytes = frames * 2;
 		std::vector<char> out;
 		out.reserve(44 + bytes);
@@ -134,9 +197,22 @@ namespace XttsHttp
 			a_error = "already running";
 			return false;
 		}
+		if (Answers(a_host, a_port)) {
+			a_error = "another program, likely another XTTS server, answers on that port already";
+			return false;
+		}
 		auto http = std::make_unique<httplib::Server>();
-		http->new_task_queue = [] { return new httplib::ThreadPool(THREADS); };
+		http->new_task_queue = [] { return new httplib::ThreadPool(THREADS, MAX_THREADS); };
 		http->set_payload_max_length(MAX_BODY);
+		// A web page can post to localhost too, a form needing no preflight. A
+		// browser always names the page it comes from; SkyrimNet sends no Origin.
+		http->set_pre_routing_handler([](const httplib::Request& a_req, httplib::Response& a_res) {
+			if (a_req.has_header("Origin")) {
+				Fail(a_res, 403, "requests from web pages are not answered");
+				return httplib::Server::HandlerResponse::Handled;
+			}
+			return httplib::Server::HandlerResponse::Unhandled;
+		});
 		// httplib's own default, SO_REUSEADDR, lets a socket on Windows take a port
 		// another program is listening on, and a real XTTS server would lose its
 		// requests to this one. Exclusive: a port that is taken is refused, and
@@ -161,6 +237,7 @@ namespace XttsHttp
 			request.text = Field(body, "text");
 			request.speaker = SpeakerName(Field(body, "speaker_wav"));
 			request.language = Field(body, "language");
+			request.connected = [&a_req] { return !a_req.is_connection_closed(); };
 			if (request.text.empty()) {
 				return Fail(a_res, 400, "Text is required");
 			}
@@ -224,7 +301,7 @@ namespace XttsHttp
 		});
 
 		if (!http->bind_to_port(a_host, a_port)) {
-			a_error = "the port is taken: another program, likely another XTTS server, listens on it";
+			a_error = "the port could not be opened: another program, likely another XTTS server, holds it";
 			return false;
 		}
 		auto* raw = http.get();

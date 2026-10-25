@@ -10,6 +10,7 @@
 #include <iostream>
 #include <mutex>
 #include <string>
+#include <thread>
 
 namespace
 {
@@ -57,10 +58,19 @@ int main()
 	Same(XttsHttp::SpeakerName("..."), "", "dots alone are nothing");
 	Same(XttsHttp::SpeakerName("Male Nord: old"), "malenordold", "only name characters are kept");
 	Same(XttsHttp::SpeakerName(""), "", "no name");
+	{
+		const auto lydia = XttsHttp::SpeakerName("Лидия");
+		const auto ulfric = XttsHttp::SpeakerName("Ульфрик");
+		Check(!lydia.empty() && !ulfric.empty() && lydia != ulfric, "names outside ASCII stay apart: " + lydia + " " + ulfric);
+		Check(XttsHttp::SpeakerName("Лидия_1") != XttsHttp::SpeakerName("Ульфрик_1"), "also with the same ASCII left over");
+		Same(XttsHttp::SpeakerName("Лидия"), lydia, "and are the same name each time");
+		Check(XttsHttp::SpeakerName(std::string(80, 'a') + "Лидия").size() <= 64, "a long one is cut to 64");
+	}
 
-	// a silence is a real wav
+	// a silence is a real wav, as long as asked
 	const auto silence = XttsHttp::Silence(24000, 100);
 	Check(silence.size() == 44 + 4800 && IsWav(std::string(silence.begin(), silence.end())), "100 ms of 24 kHz silence");
+	Check(XttsHttp::Silence(22050, 500).size() == 44 + 11025 * 2, "a rate that is no multiple of 1000 keeps its length");
 
 	// ------------------------------------------------------------------ server
 	std::mutex                last;  // guards the two below
@@ -68,10 +78,14 @@ int main()
 	XttsHttp::CloneRequest    lastClone;
 	std::atomic<bool>         cloning{ false };
 	XttsHttp::Handlers        handlers;
+	std::atomic<bool> sawConnected{ false };
 	handlers.speak = [&](const XttsHttp::SpeakRequest& a_request) {
 		{
 			std::scoped_lock lock{ last };
 			lastSpeak = a_request;
+		}
+		if (a_request.connected && a_request.connected()) {
+			sawConnected.store(true);
 		}
 		if (a_request.speaker == "busy") {
 			return XttsHttp::SpeakResult{ 503, {}, "not ready within 60 s" };
@@ -107,6 +121,13 @@ int main()
 		Same(lastSpeak.text, "Never should have come here.", "the text arrives whole");
 		Same(lastSpeak.speaker, "malenord", "the speaker by name");
 		Same(lastSpeak.language, "en", "the language");
+		Check(sawConnected.load(), "the handler can tell its client is still there");
+	}
+	// a web page posting to localhost
+	{
+		httplib::Headers origin{ { "Origin", "https://example.com" } };
+		const auto res = client.Post("/tts_to_audio/", origin, R"({"text":"Hi.","speaker_wav":"malenord"})", "application/json");
+		Check(res && res->status == 403, "a request from a web page: 403");
 	}
 	// the path without its trailing slash, as some clients write it
 	{
@@ -198,6 +219,24 @@ int main()
 		Check(!why.empty(), "with a reason");
 		const auto res = client.Post("/tts_to_audio/", R"({"text":"Still here.","speaker_wav":"malenord"})", "application/json");
 		Check(res && res->status == 200, "the first server still answers");
+	}
+
+	// a server that does not ask for the port exclusively, as another XTTS
+	// server would not: one listening on every address is in the way the same
+	// way, and only asking the port finds either
+	{
+		constexpr int   OTHER = PORT + 1;
+		httplib::Server other;
+		other.Get("/health", [](const httplib::Request&, httplib::Response& a_res) { a_res.set_content("{}", "application/json"); });
+		Check(other.bind_to_port("127.0.0.1", OTHER), "the other server binds");
+		std::thread runs([&] { other.listen_after_bind(); });
+		other.wait_until_ready();
+		XttsHttp::Server mine;
+		std::string      why;
+		Check(!mine.Start("127.0.0.1", OTHER, handlers, why), "a port another server answers on is refused");
+		Check(why.find("answers") != std::string::npos, "because it answers: " + why);
+		other.stop();
+		runs.join();
 	}
 
 	// stop, and the port can be had again

@@ -9,7 +9,7 @@
 
 That is all. `autts status` shows `SkyrimNet answered at http://localhost:8020` once the game has loaded.
 
-Run no other XTTS server on that port at the same time. One that is already running when the game starts keeps the port, and SkyrimNet goes on using it: AudioUtilTTS logs that the port is taken and stays out of the way. To use both, give AudioUtilTTS another port (`[skyrimnet] port`) and point SkyrimNet's XTTS address at the one you want.
+Run no other XTTS server on that port at the same time. One that is already running when the game starts keeps the port, and SkyrimNet goes on using it: AudioUtilTTS finds that something answers there, logs it and stays out of the way. To use both, give AudioUtilTTS another port (`[skyrimnet] port`) and point SkyrimNet's XTTS address at the one you want.
 
 ## Which voice
 
@@ -20,7 +20,8 @@ The line is cleaned as dialogue is: stage directions such as `*smiles*` are left
 ## What happens
 
 - **Each line is generated when SkyrimNet asks for it**, on your CPU: about a second for a short line with the default model, more for a long one (see [What to Expect](what-to-expect.md)).
-- **SkyrimNet's lines go first.** SkyrimNet waits for each line, so it is generated ahead of narration and unvoiced dialogue waiting their turn. Only your own lines with Dragonborn ReVoiced come before it.
+- **SkyrimNet's lines go first.** SkyrimNet waits for each line, so it is generated ahead of narration and unvoiced dialogue waiting their turn. Only your own lines with Dragonborn ReVoiced come before it, and greetings that are generated already and only wait to be played.
+- **A line SkyrimNet stops waiting for is dropped**, so a withdrawn request never holds up the next one.
 - **SkyrimNet plays the line**, with its own subtitles, mouth movement and volume. AudioUtilTTS only makes the audio, so `[speech]` and the AudioUtil groups do not apply. The volume of a preset or a `model.toml` is part of the audio.
 - **Nothing is cached.** An AI line is seldom said twice.
 - **A line that is not ready within 60 seconds is given up**, and loading a save gives up the lines on their way.
@@ -30,7 +31,7 @@ The line is cleaned as dialogue is: stage directions such as `*smiles*` are left
 SkyrimNet can send a short voice sample for a speaker, and an XTTS server then speaks that speaker like the sample. This is off unless you switch it on.
 
 - **Off**: the samples are declined, and SkyrimNet names its speakers by voice type instead. The voices installed here speak.
-- **On** (`[skyrimnet] voice_cloning = true`, or **Voice cloning** on the menu's SkyrimNet page): the samples are kept in `Data\SKSE\Plugins\AudioUtilTTS\skyrimnet\`, one wav per speaker, and each of those speakers is spoken like its sample with the Pocket model (`[skyrimnet] clone_model`, see [Pocket voices](models.md#pocket-voices)). Without the Pocket model installed, the samples are declined as if cloning were off.
+- **On** (`[skyrimnet] voice_cloning = true`, or **Voice cloning** on the menu's SkyrimNet page): the samples are kept in `Data\SKSE\Plugins\AudioUtilTTS\skyrimnet\`, one wav per speaker (the 10 seconds Pocket uses), and each of those speakers is spoken like its sample with the Pocket model (`[skyrimnet] clone_model`, see [Pocket voices](models.md#pocket-voices)). Without the Pocket model installed, the samples are declined as if cloning were off. A sample that cannot be spoken like for any reason leaves that speaker with their voice type's voice, and the log says why.
 
 Kyutai's terms for Pocket ask for the consent of the person whose voice is copied. Samples kept stay in the folder when cloning is switched off again, unused; delete the folder to remove them.
 

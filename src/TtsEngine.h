@@ -65,6 +65,10 @@ namespace TtsEngine
 	// seconds, at least half a second of it. false and a_error for anything else.
 	bool ReadRecording(const std::filesystem::path& a_path, Audio& a_out, std::string& a_error);
 
+	// Is a_dir a Pocket model's folder, the only kind that speaks like a
+	// recording? Read off its files, as Model::Load's family "auto" does.
+	bool IsPocketModel(const std::string& a_dir);
+
 	// One loaded voice model. Several can be alive at once; each is used from
 	// one thread at a time (the plugin's worker owns them all).
 	//
