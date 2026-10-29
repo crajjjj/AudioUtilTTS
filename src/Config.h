@@ -136,7 +136,7 @@ namespace Config
 
 		// [skyrimnet]: SkyrimNet's lines, through the XTTS endpoint it talks to
 		// (XttsServer.h). SkyrimNet plays them itself; the plugin only makes them.
-		bool        skyrimnet = true;                   // enable: answer, while SkyrimNet is installed
+		bool        skyrimnet = false;                  // enable: answer, while SkyrimNet is installed
 		int         skyrimnetPort = 8020;               // port: SkyrimNet's default XTTS address
 		bool        skyrimnetCloning = false;           // voice_cloning: take the voice samples it sends
 		std::string skyrimnetCloneModel = "pocket-tts";  // clone_model: the Pocket model those are spoken with
