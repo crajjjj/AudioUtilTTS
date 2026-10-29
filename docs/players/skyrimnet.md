@@ -5,11 +5,12 @@
 ## Setting it up
 
 1. Install AudioUtilTTS and SkyrimNet.
-2. In SkyrimNet's settings, choose **XTTS** as the voice engine and leave its address as it is, `http://localhost:8020`.
+2. Turn it on: **Speak SkyrimNet's lines** on the menu's **SkyrimNet** page, or `[skyrimnet] enable = true` in `AudioUtilTTS.toml` and then `autts reload`. It is off unless switched on.
+3. In SkyrimNet's settings, choose **XTTS** as the voice engine and leave its address as it is, `http://localhost:8020`.
 
 That is all. `autts status` shows `SkyrimNet answered at http://localhost:8020` once the game has loaded.
 
-Run no other XTTS server on that port at the same time. One that is already running when the game starts keeps the port, and SkyrimNet goes on using it: AudioUtilTTS finds that something answers there, logs it and stays out of the way. To use both, give AudioUtilTTS another port (`[skyrimnet] port`) and point SkyrimNet's XTTS address at the one you want.
+Run no other XTTS server on that port at the same time. One that is already running when the game starts keeps the port, and SkyrimNet goes on using it: AudioUtilTTS finds that something answers there, logs it and stays out of the way. One started after the game finds the port taken while AudioUtilTTS answers. To use both, give AudioUtilTTS another port (`[skyrimnet] port`) and point SkyrimNet's XTTS address at the one you want.
 
 ## Which voice
 
@@ -41,7 +42,7 @@ All under `[skyrimnet]` in `AudioUtilTTS.toml`, and on the menu's **SkyrimNet** 
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enable` | `true` | Answer SkyrimNet, only while it is installed |
+| `enable` | `false` | Answer SkyrimNet, only while it is installed |
 | `port` | `8020` | The port of SkyrimNet's XTTS address, 1024 to 65535 |
 | `voice_cloning` | `false` | Keep SkyrimNet's voice samples and speak like them |
 | `clone_model` | `"pocket-tts"` | The Pocket model folder voice samples are spoken with |

@@ -272,9 +272,11 @@ slots = 4
 # default voice. SkyrimNet plays the line itself. "autts status" shows the
 # state; AudioUtilTTS.log has a line per line.
 [skyrimnet]
-# Answer SkyrimNet, only while it is installed. A port another program holds
-# (another XTTS server) is left to it. Can be switched with "autts reload".
-enable = true
+# Answer SkyrimNet as its XTTS server, only while it is installed. Off unless
+# switched on. A port another program holds when the game starts (another XTTS
+# server) is left to it; one started later finds the port taken while this
+# answers. Can be switched with "autts reload".
+enable = false
 # SkyrimNet's XTTS address names this port. Change it together with that
 # address in SkyrimNet, or when another program uses this one (1024 to 65535).
 port = 8020

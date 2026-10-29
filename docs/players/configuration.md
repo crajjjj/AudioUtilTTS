@@ -97,7 +97,7 @@ SkyrimNet's NPC lines, at the address of its XTTS voice engine. See [SkyrimNet](
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enable` | `true` | Answer SkyrimNet at `http://localhost:<port>`, only while it is installed. A port another program holds is left to it |
+| `enable` | `false` | Answer SkyrimNet at `http://localhost:<port>`, only while it is installed. A port another program holds at game start is left to it |
 | `port` | `8020` | The port of SkyrimNet's XTTS address, 1024 to 65535. Change it together with that address |
 | `voice_cloning` | `false` | Keep the voice samples SkyrimNet sends and speak each of those speakers like its sample, with the Pocket model below. `false`: SkyrimNet names its speakers by voice type and the voices installed here speak |
 | `clone_model` | `"pocket-tts"` | The Pocket model folder voice samples are spoken with |
