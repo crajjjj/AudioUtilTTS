@@ -152,11 +152,6 @@ namespace DialogueHook
 		return t_queued;
 	}
 
-	void Reserve()
-	{
-		SKSE::AllocTrampoline(64);
-	}
-
 	bool Install()
 	{
 		// the response builder; the third number is its place in the VR runtime

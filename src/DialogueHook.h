@@ -20,8 +20,8 @@
 // alone, and it still covers every line whose path was not swapped.
 namespace DialogueHook
 {
-	// SKSEPluginLoad: reserves the trampoline space the patch needs.
-	void Reserve();
+	// The trampoline space the patch needs, reserved by SKSE::Init in SKSEPluginLoad.
+	inline constexpr std::size_t kTrampolineSize = 64;
 
 	// kDataLoaded, once. false = the patch was not applied (the bytes at the
 	// call sites are not what was expected, so nothing was written).

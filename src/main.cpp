@@ -100,9 +100,8 @@ SKSEPluginLoad(const LoadInterface* skse)
 	log::info("{} v{} is loading...", plugin->GetName(), plugin->GetVersion());
 	log::info("Runtime version: {}", REL::Module::get().version().string());
 
-	Init(skse);
+	Init(skse, { .trampoline = true, .trampolineSize = DialogueHook::kTrampolineSize });
 	InitializePapyrus();
-	DialogueHook::Reserve();
 
 	if (const auto* messaging = GetMessagingInterface()) {
 		messaging->RegisterListener(OnMessage);

@@ -32,6 +32,13 @@ CommonLibSSE-NG
     MIT License (MIT-CommonLibSSE.txt in this folder).
     https://github.com/alandtse/CommonLibSSE-NG
 
+Hacker Disassembler Engine 64 (HDE64)
+    Built into CommonLibSSE-NG's hook checks: reads the game code at a patch
+    site before it is changed.
+    Copyright (c) 2008-2009, Vyacheslav Patkov
+    BSD 2-Clause License (BSD-2-Clause-hde64.txt in this folder)
+    https://github.com/TsudaKageyu/minhook
+
 SKSE Menu Framework client header (SKSEMenuFramework.h)
     Draws the in-game menu through SKSE Menu Framework, which is a separate
     download; AudioUtilTTS.dll only calls into it when it is installed.

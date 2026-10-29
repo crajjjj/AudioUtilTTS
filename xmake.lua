@@ -2,7 +2,7 @@ set_xmakever("3.0.0")  -- the commonlibsse-ng submodule requires 3.0
 
 -- Globals
 PROJECT_NAME = "AudioUtilTTS"
-PROJECT_VERSION = "0.7.0"
+PROJECT_VERSION = "0.7.1"
 PROJECT_AUTHOR = "crajjjj"
 
 -- Project
