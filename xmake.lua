@@ -19,6 +19,10 @@ option("copy_to_mod")
 option_end()
 
 -- Dependencies & Includes
+-- CommonLib's patch-site check (HDE64) cannot fire here: DialogueHook::Install
+-- already requires a 5-byte E8 call at both sites. Off, HDE64 stays out of the
+-- DLL and the build does not download it.
+set_config("skse_patch_safety", false)
 includes("lib/commonlibsse-ng")
 
 add_requires("toml++")
@@ -45,7 +49,7 @@ elseif is_mode("release") then
 end
 
 add_defines("_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING")
-add_defines("NOMINMAX")  -- CommonLib v7 headers pull in Windows.h
+add_defines("NOMINMAX")  -- CommonLib headers (since v7) pull in Windows.h
 
 -- sherpa-onnx + onnxruntime, linked statically on purpose: a separate
 -- onnxruntime.dll would share its module name with the copy other mods load,

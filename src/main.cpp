@@ -101,6 +101,14 @@ SKSEPluginLoad(const LoadInterface* skse)
 	log::info("Runtime version: {}", REL::Module::get().version().string());
 
 	Init(skse, { .trampoline = true, .trampolineSize = DialogueHook::kTrampolineSize });
+	// Init reserves only through SKSE's trampoline interface (SKSE 2.0.18 and
+	// later); without one, allocate our own, as the old AllocTrampoline did
+	if (auto& trampoline = GetTrampoline(); trampoline.empty()) {
+		trampoline.create(DialogueHook::kTrampolineSize);
+	}
+	// CommonLib loads the Address Library at the first relocation; load it here
+	// so a missing one fails at game start, not mid-session
+	(void)REL::IDDB::get();
 	InitializePapyrus();
 
 	if (const auto* messaging = GetMessagingInterface()) {
